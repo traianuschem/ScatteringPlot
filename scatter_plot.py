@@ -268,7 +268,7 @@ class ScatterPlotApp:
             rowheight = 24
 
         if dark_mode:
-            # Dark Theme
+            # Dark Theme (nur GUI-Elemente, nicht Plots)
             bg_color = '#2b2b2b'
             fg_color = '#ffffff'
             select_bg = '#404040'
@@ -296,15 +296,29 @@ class ScatterPlotApp:
                           selectforeground=select_fg, rowheight=rowheight)
             style.configure('Treeview.Heading', background='#404040', foreground=fg_color)
             style.map('Treeview.Heading', background=[('active', '#505050')])
+            style.configure('TPanedwindow', background=bg_color)
 
-            # Matplotlib Style
-            plt.style.use('dark_background')
+            # Menüs stylen (tk.Menu)
+            self.root.option_add('*Menu.background', bg_color)
+            self.root.option_add('*Menu.foreground', fg_color)
+            self.root.option_add('*Menu.activeBackground', select_bg)
+            self.root.option_add('*Menu.activeForeground', fg_color)
+            self.root.option_add('*Menu.selectColor', fg_color)  # Für Checkbuttons
+
+            # Matplotlib bleibt im Light Mode (für bessere Lesbarkeit der Plots)
+            plt.style.use('default')
         else:
             # Light Theme (Standard)
             style.theme_use('clam')
             style.configure('Treeview', rowheight=rowheight)
 
-            # Matplotlib auf Standard zurücksetzen
+            # Menüs zurücksetzen
+            self.root.option_add('*Menu.background', 'SystemMenu')
+            self.root.option_add('*Menu.foreground', 'SystemMenuText')
+            self.root.option_add('*Menu.activeBackground', 'SystemHighlight')
+            self.root.option_add('*Menu.activeForeground', 'SystemHighlightText')
+
+            # Matplotlib im Standard
             plt.style.use('default')
 
         # Plot neu zeichnen
