@@ -305,7 +305,9 @@ class ScatterPlotApp:
         
         self.tree.heading("#0", text="Name")
         self.tree.heading("info", text="Info")
-        self.tree.column("info", width=100)
+        # DPI-Fix: Dynamische Spaltenbreiten für High-DPI Displays
+        self.tree.column("#0", minwidth=200, width=300, stretch=True)
+        self.tree.column("info", minwidth=80, width=100, stretch=False)
         
         # Tree Events
         self.tree.bind("<ButtonPress-1>", self.on_tree_press)
@@ -362,15 +364,20 @@ class ScatterPlotApp:
         ttk.Button(left_frame, text="🔄 Plot aktualisieren", command=self.update_plot).pack(fill=tk.X, padx=5, pady=5)
         
         # === Rechte Seite: Plot ===
-        
+
         self.fig = Figure(figsize=(12, 9), dpi=100)
         self.ax_main = None
         self.ax_pddf = None
-        
+
+        # DPI-Fix: Toolbar in separatem Frame mit fester Höhe
+        toolbar_frame = ttk.Frame(right_frame, height=50)
+        toolbar_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        toolbar_frame.pack_propagate(False)  # Verhindert Größenänderung
+
         self.canvas = FigureCanvasTkAgg(self.fig, master=right_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        toolbar = NavigationToolbar2Tk(self.canvas, right_frame)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
         toolbar.update()
         
         self.setup_plot_axes()
@@ -1260,6 +1267,7 @@ class DesignManagerDialog:
         btn_frame = ttk.Frame(tab)
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
         ttk.Button(btn_frame, text="Neuer Stil...", command=self.create_new_style).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="Bearbeiten...", command=self.edit_style).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="Löschen", command=self.delete_style).pack(side=tk.LEFT, padx=2)
     
     def create_colors_tab(self, notebook):
@@ -1286,6 +1294,7 @@ class DesignManagerDialog:
         btn_frame = ttk.Frame(tab)
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
         ttk.Button(btn_frame, text="Neues Schema...", command=self.create_new_scheme).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="Bearbeiten...", command=self.edit_scheme).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="Löschen", command=self.delete_scheme).pack(side=tk.LEFT, padx=2)
     
     def create_autodetect_tab(self, notebook):
@@ -1426,6 +1435,275 @@ class DesignManagerDialog:
     def toggle_autodetect(self):
         self.config.auto_detection_enabled = self.autodetect_enabled_var.get()
         self.config.save_config()
+
+    def edit_style(self):
+        """Bearbeitet einen Stil"""
+        sel = self.styles_listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Info", "Bitte wählen Sie einen Stil aus")
+            return
+
+        name = self.styles_listbox.get(sel[0]).split(':')[0]
+        if name in self.config.style_presets:
+            StylePresetEditDialog(self.dialog, name, self.config, self.refresh_styles_list, self.callback)
+
+    def edit_scheme(self):
+        """Bearbeitet ein Farbschema"""
+        sel = self.colors_listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Info", "Bitte wählen Sie ein Schema aus")
+            return
+
+        name = self.colors_listbox.get(sel[0])
+
+        # Nur User-Schemata und TUBAF bearbeitbar
+        from user_config import get_matplotlib_colormaps
+        matplotlib_maps = list(get_matplotlib_colormaps().keys())
+
+        if name in matplotlib_maps:
+            messagebox.showinfo("Info",
+                "Matplotlib-Schemata können nicht bearbeitet werden.\n"
+                "Sie können aber ein neues Schema erstellen und dieses als Vorlage verwenden.")
+            return
+
+        if name in self.config.color_schemes:
+            ColorSchemeEditDialog(self.dialog, name, self.config, self.refresh_colors_list, self.callback)
+
+
+class StylePresetEditDialog:
+    """Dialog zum Bearbeiten von Stil-Vorlagen"""
+    def __init__(self, parent, style_name, config, refresh_callback, plot_callback):
+        self.style_name = style_name
+        self.config = config
+        self.refresh_callback = refresh_callback
+        self.plot_callback = plot_callback
+        self.style = config.style_presets[style_name].copy()
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"Stil bearbeiten: {style_name}")
+        self.dialog.geometry("450x400")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        row = 0
+
+        # Name
+        ttk.Label(self.dialog, text="Name:").grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+        self.name_var = tk.StringVar(value=style_name)
+        ttk.Entry(self.dialog, textvariable=self.name_var, width=30).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
+        row += 1
+
+        # Description
+        ttk.Label(self.dialog, text="Beschreibung:").grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+        self.desc_var = tk.StringVar(value=self.style.get('description', ''))
+        ttk.Entry(self.dialog, textvariable=self.desc_var, width=30).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
+        row += 1
+
+        # Linientyp
+        ttk.Label(self.dialog, text="Linientyp:").grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+        self.line_var = tk.StringVar(value=self.style.get('line_style', ''))
+        ttk.Combobox(self.dialog, textvariable=self.line_var,
+                     values=['', '-', '--', '-.', ':'], width=27).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
+        row += 1
+
+        # Marker
+        ttk.Label(self.dialog, text="Marker:").grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+        self.marker_var = tk.StringVar(value=self.style.get('marker_style', ''))
+        ttk.Combobox(self.dialog, textvariable=self.marker_var,
+                     values=['', 'o', 's', '^', 'v', 'D', '*', '+', 'x', 'p', 'h'], width=27).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
+        row += 1
+
+        # Linienbreite
+        ttk.Label(self.dialog, text="Linienbreite:").grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+        self.lw_var = tk.DoubleVar(value=self.style.get('line_width', 2))
+        ttk.Spinbox(self.dialog, from_=0.5, to=10, increment=0.5,
+                    textvariable=self.lw_var, width=27).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
+        row += 1
+
+        # Markergröße
+        ttk.Label(self.dialog, text="Markergröße:").grid(row=row, column=0, sticky=tk.W, padx=10, pady=5)
+        self.ms_var = tk.DoubleVar(value=self.style.get('marker_size', 4))
+        ttk.Spinbox(self.dialog, from_=1, to=20, increment=1,
+                    textvariable=self.ms_var, width=27).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
+        row += 1
+
+        # Buttons
+        btn_frame = ttk.Frame(self.dialog)
+        btn_frame.grid(row=row, column=0, columnspan=2, pady=20)
+        ttk.Button(btn_frame, text="Speichern", command=self.save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Abbrechen", command=self.dialog.destroy).pack(side=tk.LEFT, padx=5)
+
+    def save(self):
+        """Speichert den bearbeiteten Stil"""
+        new_name = self.name_var.get()
+        if not new_name:
+            messagebox.showerror("Fehler", "Name darf nicht leer sein")
+            return
+
+        # Stil aktualisieren
+        new_style = {
+            'line_style': self.line_var.get() or '',
+            'marker_style': self.marker_var.get() or '',
+            'line_width': self.lw_var.get(),
+            'marker_size': self.ms_var.get(),
+            'description': self.desc_var.get()
+        }
+
+        # Wenn Name geändert, alten löschen
+        if new_name != self.style_name and self.style_name in self.config.style_presets:
+            del self.config.style_presets[self.style_name]
+
+        self.config.style_presets[new_name] = new_style
+        self.config.save_style_presets()
+
+        self.refresh_callback()
+        self.plot_callback()
+        self.dialog.destroy()
+
+
+class ColorSchemeEditDialog:
+    """Dialog zum Bearbeiten von Farbschemata"""
+    def __init__(self, parent, scheme_name, config, refresh_callback, plot_callback):
+        self.scheme_name = scheme_name
+        self.config = config
+        self.refresh_callback = refresh_callback
+        self.plot_callback = plot_callback
+        self.colors = config.color_schemes[scheme_name].copy()
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"Farbschema bearbeiten: {scheme_name}")
+        self.dialog.geometry("500x600")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        # Name
+        name_frame = ttk.Frame(self.dialog)
+        name_frame.pack(fill=tk.X, padx=10, pady=10)
+        ttk.Label(name_frame, text="Name:").pack(side=tk.LEFT, padx=5)
+        self.name_var = tk.StringVar(value=scheme_name)
+        ttk.Entry(name_frame, textvariable=self.name_var, width=30).pack(side=tk.LEFT, padx=5)
+
+        # Farbliste
+        ttk.Label(self.dialog, text="Farben:").pack(anchor=tk.W, padx=10, pady=5)
+
+        list_frame = ttk.Frame(self.dialog)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        scroll = ttk.Scrollbar(list_frame)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.color_listbox = tk.Listbox(list_frame, yscrollcommand=scroll.set, height=15)
+        self.color_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.config(command=self.color_listbox.yview)
+
+        self.refresh_color_list()
+
+        # Buttons für Farben
+        color_btn_frame = ttk.Frame(self.dialog)
+        color_btn_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        ttk.Button(color_btn_frame, text="➕ Hinzufügen", command=self.add_color).pack(side=tk.LEFT, padx=2)
+        ttk.Button(color_btn_frame, text="✏️ Ändern", command=self.edit_color).pack(side=tk.LEFT, padx=2)
+        ttk.Button(color_btn_frame, text="↑ Hoch", command=self.move_up).pack(side=tk.LEFT, padx=2)
+        ttk.Button(color_btn_frame, text="↓ Runter", command=self.move_down).pack(side=tk.LEFT, padx=2)
+        ttk.Button(color_btn_frame, text="× Entfernen", command=self.remove_color).pack(side=tk.LEFT, padx=2)
+
+        # Speichern/Abbrechen
+        main_btn_frame = ttk.Frame(self.dialog)
+        main_btn_frame.pack(fill=tk.X, padx=10, pady=10)
+        ttk.Button(main_btn_frame, text="Speichern", command=self.save).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(main_btn_frame, text="Abbrechen", command=self.dialog.destroy).pack(side=tk.RIGHT, padx=5)
+
+    def refresh_color_list(self):
+        """Aktualisiert die Farbliste"""
+        self.color_listbox.delete(0, tk.END)
+        for i, color in enumerate(self.colors, 1):
+            self.color_listbox.insert(tk.END, f"{i}. {color}")
+
+    def add_color(self):
+        """Fügt eine neue Farbe hinzu"""
+        color = colorchooser.askcolor(title="Farbe wählen")
+        if color[1]:
+            self.colors.append(color[1])
+            self.refresh_color_list()
+
+    def edit_color(self):
+        """Ändert die ausgewählte Farbe"""
+        sel = self.color_listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Info", "Bitte wählen Sie eine Farbe aus")
+            return
+
+        idx = sel[0]
+        old_color = self.colors[idx]
+
+        color = colorchooser.askcolor(color=old_color, title="Farbe ändern")
+        if color[1]:
+            self.colors[idx] = color[1]
+            self.refresh_color_list()
+            self.color_listbox.selection_set(idx)
+
+    def move_up(self):
+        """Verschiebt Farbe nach oben"""
+        sel = self.color_listbox.curselection()
+        if not sel or sel[0] == 0:
+            return
+
+        idx = sel[0]
+        self.colors[idx], self.colors[idx-1] = self.colors[idx-1], self.colors[idx]
+        self.refresh_color_list()
+        self.color_listbox.selection_set(idx-1)
+
+    def move_down(self):
+        """Verschiebt Farbe nach unten"""
+        sel = self.color_listbox.curselection()
+        if not sel or sel[0] == len(self.colors) - 1:
+            return
+
+        idx = sel[0]
+        self.colors[idx], self.colors[idx+1] = self.colors[idx+1], self.colors[idx]
+        self.refresh_color_list()
+        self.color_listbox.selection_set(idx+1)
+
+    def remove_color(self):
+        """Entfernt die ausgewählte Farbe"""
+        sel = self.color_listbox.curselection()
+        if not sel:
+            return
+
+        if len(self.colors) <= 2:
+            messagebox.showwarning("Warnung", "Mindestens 2 Farben erforderlich")
+            return
+
+        idx = sel[0]
+        del self.colors[idx]
+        self.refresh_color_list()
+
+    def save(self):
+        """Speichert das Farbschema"""
+        new_name = self.name_var.get()
+        if not new_name:
+            messagebox.showerror("Fehler", "Name darf nicht leer sein")
+            return
+
+        if len(self.colors) < 2:
+            messagebox.showerror("Fehler", "Mindestens 2 Farben erforderlich")
+            return
+
+        # Speichern
+        self.config.save_color_scheme(new_name, self.colors)
+
+        # Wenn Name geändert und nicht TUBAF, altes löschen
+        if new_name != self.scheme_name and self.scheme_name != 'TUBAF':
+            # Prüfe ob es ein User-Schema ist
+            from user_config import get_matplotlib_colormaps
+            if self.scheme_name not in get_matplotlib_colormaps():
+                self.config.delete_color_scheme(self.scheme_name)
+
+        self.refresh_callback()
+        self.plot_callback()
+        messagebox.showinfo("Erfolg", f"Farbschema '{new_name}' gespeichert")
+        self.dialog.destroy()
 
 
 # ============================================================================
