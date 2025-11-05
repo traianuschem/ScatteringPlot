@@ -156,7 +156,8 @@ class UserConfig:
             'export_dpi': 300,
             'window_geometry': '1600x1000',
             'auto_detection_enabled': True,
-            'auto_detection_rules': DEFAULT_AUTO_DETECTION_RULES.copy()
+            'auto_detection_rules': DEFAULT_AUTO_DETECTION_RULES.copy(),
+            'dark_mode': False
         }
 
     def save_config(self):
@@ -328,6 +329,15 @@ class UserConfig:
     def get_export_dpi(self):
         """Gibt die Standard-Export-DPI zurück"""
         return self.config.get('export_dpi', 300)
+
+    def set_dark_mode(self, enabled):
+        """Speichert die Dark Mode Einstellung"""
+        self.config['dark_mode'] = enabled
+        self.save_config()
+
+    def get_dark_mode(self):
+        """Gibt die Dark Mode Einstellung zurück"""
+        return self.config.get('dark_mode', False)
 
 
 # Globale Config-Instanz
