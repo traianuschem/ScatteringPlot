@@ -221,11 +221,35 @@ class ScatterPlotApp:
         
         # Drag & Drop
         self.drag_data = None
-        
+
+        # DPI-Skalierung für Treeview-Zeilenhöhe
+        self.setup_dpi_scaling()
+
         # GUI
         self.create_gui()
         self.create_menu()
-    
+
+    def setup_dpi_scaling(self):
+        """Setzt DPI-abhängige Zeilenhöhe für Treeview"""
+        try:
+            # DPI-Faktor berechnen (96 DPI = 1.0, 192 DPI = 2.0, etc.)
+            dpi = self.root.winfo_fpixels('1i')
+            dpi_scale = dpi / 96.0
+
+            # Zeilenhöhe skalieren (Basis: 24px bei 96 DPI)
+            rowheight = int(24 * dpi_scale)
+
+            # ttk.Style für Treeview konfigurieren
+            style = ttk.Style()
+            style.configure("Treeview", rowheight=rowheight)
+
+            print(f"DPI-Skalierung: {dpi:.0f} DPI, Faktor {dpi_scale:.2f}x, Zeilenhöhe {rowheight}px")
+        except Exception as e:
+            print(f"DPI-Skalierung fehlgeschlagen: {e}")
+            # Fallback auf Standard-Höhe
+            style = ttk.Style()
+            style.configure("Treeview", rowheight=24)
+
     def create_menu(self):
         """Menü"""
         menubar = tk.Menu(self.root)
@@ -1583,18 +1607,32 @@ class ColorSchemeEditDialog:
         self.name_var = tk.StringVar(value=scheme_name)
         ttk.Entry(name_frame, textvariable=self.name_var, width=30).pack(side=tk.LEFT, padx=5)
 
-        # Farbliste
+        # Farbliste mit Farbvorschau
         ttk.Label(self.dialog, text="Farben:").pack(anchor=tk.W, padx=10, pady=5)
 
+        # Canvas mit Scrollbar für Farbliste
         list_frame = ttk.Frame(self.dialog)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        scroll = ttk.Scrollbar(list_frame)
+        scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.color_listbox = tk.Listbox(list_frame, yscrollcommand=scroll.set, height=15)
-        self.color_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scroll.config(command=self.color_listbox.yview)
+        self.canvas = tk.Canvas(list_frame, yscrollcommand=scroll.set, height=300, highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.config(command=self.canvas.yview)
+
+        # Scrollbarer Frame im Canvas
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor='nw')
+
+        # Canvas-Größe an Frame anpassen
+        self.scrollable_frame.bind('<Configure>',
+                                   lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+        self.canvas.bind('<Configure>', self._on_canvas_configure)
+
+        # Ausgewählter Index
+        self.selected_index = None
+        self.color_labels = []
 
         self.refresh_color_list()
 
@@ -1614,11 +1652,54 @@ class ColorSchemeEditDialog:
         ttk.Button(main_btn_frame, text="Speichern", command=self.save).pack(side=tk.RIGHT, padx=5)
         ttk.Button(main_btn_frame, text="Abbrechen", command=self.dialog.destroy).pack(side=tk.RIGHT, padx=5)
 
+    def _on_canvas_configure(self, event):
+        """Passt die Canvas-Breite an"""
+        canvas_width = event.width
+        self.canvas.itemconfig(self.canvas_window, width=canvas_width)
+
+    def _select_color(self, index):
+        """Wählt eine Farbe aus und hebt sie hervor"""
+        # Entferne alte Auswahl
+        for i, label in enumerate(self.color_labels):
+            if i == index:
+                label.configure(relief=tk.RAISED, borderwidth=2)
+            else:
+                label.configure(relief=tk.FLAT, borderwidth=1)
+        self.selected_index = index
+
     def refresh_color_list(self):
-        """Aktualisiert die Farbliste"""
-        self.color_listbox.delete(0, tk.END)
-        for i, color in enumerate(self.colors, 1):
-            self.color_listbox.insert(tk.END, f"{i}. {color}")
+        """Aktualisiert die Farbliste mit Farbvorschau"""
+        # Alte Labels löschen
+        for label in self.color_labels:
+            label.destroy()
+        self.color_labels.clear()
+        self.selected_index = None
+
+        # Neue Labels erstellen
+        for i, color in enumerate(self.colors):
+            # Frame für jede Farbe
+            row_frame = tk.Frame(self.scrollable_frame, relief=tk.FLAT, borderwidth=1,
+                                bg='white', cursor='hand2')
+            row_frame.pack(fill=tk.X, pady=2, padx=2)
+
+            # Farb-Vorschau (20x20 px)
+            color_preview = tk.Label(row_frame, bg=color, width=2, height=1, relief=tk.SOLID,
+                                    borderwidth=1)
+            color_preview.pack(side=tk.LEFT, padx=5, pady=2)
+
+            # Text mit Index und Hex-Code
+            color_text = tk.Label(row_frame, text=f"{i+1}. {color}", bg='white', anchor='w')
+            color_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+
+            # Click-Binding für Auswahl
+            def make_click_handler(idx):
+                return lambda e: self._select_color(idx)
+
+            row_frame.bind('<Button-1>', make_click_handler(i))
+            color_preview.bind('<Button-1>', make_click_handler(i))
+            color_text.bind('<Button-1>', make_click_handler(i))
+
+            self.color_labels.append(row_frame)
 
     def add_color(self):
         """Fügt eine neue Farbe hinzu"""
@@ -1629,53 +1710,49 @@ class ColorSchemeEditDialog:
 
     def edit_color(self):
         """Ändert die ausgewählte Farbe"""
-        sel = self.color_listbox.curselection()
-        if not sel:
+        if self.selected_index is None:
             messagebox.showinfo("Info", "Bitte wählen Sie eine Farbe aus")
             return
 
-        idx = sel[0]
+        idx = self.selected_index
         old_color = self.colors[idx]
 
         color = colorchooser.askcolor(color=old_color, title="Farbe ändern")
         if color[1]:
             self.colors[idx] = color[1]
             self.refresh_color_list()
-            self.color_listbox.selection_set(idx)
+            self._select_color(idx)
 
     def move_up(self):
         """Verschiebt Farbe nach oben"""
-        sel = self.color_listbox.curselection()
-        if not sel or sel[0] == 0:
+        if self.selected_index is None or self.selected_index == 0:
             return
 
-        idx = sel[0]
+        idx = self.selected_index
         self.colors[idx], self.colors[idx-1] = self.colors[idx-1], self.colors[idx]
         self.refresh_color_list()
-        self.color_listbox.selection_set(idx-1)
+        self._select_color(idx-1)
 
     def move_down(self):
         """Verschiebt Farbe nach unten"""
-        sel = self.color_listbox.curselection()
-        if not sel or sel[0] == len(self.colors) - 1:
+        if self.selected_index is None or self.selected_index == len(self.colors) - 1:
             return
 
-        idx = sel[0]
+        idx = self.selected_index
         self.colors[idx], self.colors[idx+1] = self.colors[idx+1], self.colors[idx]
         self.refresh_color_list()
-        self.color_listbox.selection_set(idx+1)
+        self._select_color(idx+1)
 
     def remove_color(self):
         """Entfernt die ausgewählte Farbe"""
-        sel = self.color_listbox.curselection()
-        if not sel:
+        if self.selected_index is None:
             return
 
         if len(self.colors) <= 2:
             messagebox.showwarning("Warnung", "Mindestens 2 Farben erforderlich")
             return
 
-        idx = sel[0]
+        idx = self.selected_index
         del self.colors[idx]
         self.refresh_color_list()
 
