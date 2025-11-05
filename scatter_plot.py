@@ -483,6 +483,7 @@ class ScatterPlotApp(QMainWindow):
         plot_info = PLOT_TYPES[self.plot_type]
         current_offset = 0
 
+        # Gruppen plotten
         for group in self.groups:
             if not group.visible:
                 continue
@@ -529,6 +530,33 @@ class ScatterPlotApp(QMainWindow):
             if self.stack_mode:
                 current_offset += group.stack_factor
 
+        # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
+        for dataset in self.unassigned_datasets:
+            if not dataset.show_in_legend:
+                continue
+
+            # Farbe
+            if dataset.color:
+                color = dataset.color
+            else:
+                color = next(color_cycle)
+                dataset.color = color
+
+            # Daten transformieren
+            x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
+
+            # Plotten
+            plot_style = dataset.get_plot_style()
+
+            if dataset.y_err is not None and self.plot_type == 'Log-Log':
+                # Fehler als transparente Fläche
+                y_err_trans = self.transform_data(dataset.x, dataset.y_err, self.plot_type)[1]
+                self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
+                                          alpha=0.2, color=color)
+
+            self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
+                             linewidth=dataset.line_width, markersize=dataset.marker_size)
+
         # Achsen
         self.ax_main.set_xlabel(plot_info['xlabel'])
         self.ax_main.set_ylabel(plot_info['ylabel'])
@@ -550,7 +578,7 @@ class ScatterPlotApp(QMainWindow):
                 self.ax_main.set_ylim(top=self.axis_limits['ymax'])
 
         # Legende
-        if any(group.visible and group.datasets for group in self.groups):
+        if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
             self.ax_main.legend(loc='best')
 
         self.fig.tight_layout()
@@ -638,18 +666,43 @@ class ScatterPlotApp(QMainWindow):
 
     def on_tree_double_click(self, item, column):
         """Doppelklick auf Tree-Item"""
+        # Prüfen, ob Item Daten hat
+        if not item:
+            return
+
         data = item.data(0, Qt.UserRole)
         if data:
             item_type, obj = data
             if item_type == 'group':
-                # Stack-Faktor ändern
-                new_factor, ok = QInputDialog.getDouble(self, "Stack-Faktor ändern",
-                                                        f"Neuer Stack-Faktor für '{obj.name}':",
-                                                        value=obj.stack_factor, min=0.1, decimals=2)
-                if ok:
-                    obj.stack_factor = new_factor
-                    item.setText(1, f"×{new_factor:.1f}")
+                # Stack-Faktor ändern mit Dialog
+                from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QDoubleSpinBox
+                dialog = QDialog(self)
+                dialog.setWindowTitle("Stack-Faktor ändern")
+                layout = QVBoxLayout(dialog)
+
+                label_layout = QHBoxLayout()
+                label_layout.addWidget(QLabel(f"Neuer Stack-Faktor für '{obj.name}':"))
+                layout.addLayout(label_layout)
+
+                spin = QDoubleSpinBox()
+                spin.setRange(0.1, 10000.0)
+                spin.setValue(obj.stack_factor)
+                spin.setDecimals(2)
+                spin.setSingleStep(0.1)
+                layout.addWidget(spin)
+
+                buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+                buttons.accepted.connect(dialog.accept)
+                buttons.rejected.connect(dialog.reject)
+                layout.addWidget(buttons)
+
+                if dialog.exec():
+                    obj.stack_factor = spin.value()
+                    item.setText(1, f"×{spin.value():.1f}")
                     self.update_plot()
+            elif item_type == 'dataset':
+                # Optional: Dataset-Eigenschaften bearbeiten
+                pass
 
     def show_context_menu(self, position):
         """Kontextmenü für Tree"""
@@ -1174,18 +1227,28 @@ class DesignManagerDialog(QDialog):
         name = current_item.text()
 
         # Matplotlib-Schemata nicht bearbeitbar
-        from user_config import get_matplotlib_colormaps
-        matplotlib_maps = list(get_matplotlib_colormaps().keys())
+        try:
+            from user_config import get_matplotlib_colormaps
+            matplotlib_maps = list(get_matplotlib_colormaps().keys())
 
-        if name in matplotlib_maps:
-            QMessageBox.information(self, "Info",
-                "Matplotlib-Schemata können nicht bearbeitet werden.\n"
-                "Sie können aber ein neues Schema erstellen und dieses als Vorlage verwenden.")
-            return
+            if name in matplotlib_maps:
+                QMessageBox.information(self, "Info",
+                    "Matplotlib-Schemata können nicht bearbeitet werden.\n"
+                    "Sie können aber ein neues Schema erstellen und dieses als Vorlage verwenden.")
+                return
+        except Exception as e:
+            print(f"Warnung: Fehler beim Laden der Matplotlib-Colormaps: {e}")
+            matplotlib_maps = []
 
         if name in self.config.color_schemes:
-            dialog = ColorSchemeEditDialog(self, name, self.config, self.refresh_colors_list, self.parent_app.update_plot)
-            dialog.exec()
+            try:
+                dialog = ColorSchemeEditDialog(self, name, self.config, self.refresh_colors_list, self.parent_app.update_plot)
+                dialog.exec()
+            except Exception as e:
+                QMessageBox.critical(self, "Fehler", f"Fehler beim Öffnen des Dialogs:\n{e}")
+                print(f"Fehler beim Öffnen ColorSchemeEditDialog: {e}")
+                import traceback
+                traceback.print_exc()
 
     def delete_scheme(self):
         """Löscht Farbschema"""
