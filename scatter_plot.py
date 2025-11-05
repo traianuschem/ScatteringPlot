@@ -229,6 +229,9 @@ class ScatterPlotApp:
         self.create_gui()
         self.create_menu()
 
+        # Dark Mode anwenden
+        self.apply_theme()
+
     def setup_dpi_scaling(self):
         """Setzt DPI-abhängige Zeilenhöhe für Treeview"""
         try:
@@ -249,6 +252,74 @@ class ScatterPlotApp:
             # Fallback auf Standard-Höhe
             style = ttk.Style()
             style.configure("Treeview", rowheight=24)
+
+    def apply_theme(self):
+        """Wendet das aktuelle Theme (Light/Dark) an"""
+        dark_mode = self.config.get_dark_mode()
+
+        style = ttk.Style()
+
+        # DPI-Skalierung für Zeilenhöhe (bei Theme-Wechsel beibehalten)
+        try:
+            dpi = self.root.winfo_fpixels('1i')
+            dpi_scale = dpi / 96.0
+            rowheight = int(24 * dpi_scale)
+        except:
+            rowheight = 24
+
+        if dark_mode:
+            # Dark Theme
+            bg_color = '#2b2b2b'
+            fg_color = '#ffffff'
+            select_bg = '#404040'
+            select_fg = '#ffffff'
+            field_bg = '#3c3c3c'
+
+            # Root Window
+            self.root.configure(bg=bg_color)
+
+            # ttk Widgets
+            style.theme_use('clam')
+            style.configure('.', background=bg_color, foreground=fg_color,
+                          fieldbackground=field_bg, bordercolor=bg_color)
+            style.configure('TFrame', background=bg_color)
+            style.configure('TLabel', background=bg_color, foreground=fg_color)
+            style.configure('TLabelframe', background=bg_color, foreground=fg_color)
+            style.configure('TLabelframe.Label', background=bg_color, foreground=fg_color)
+            style.configure('TButton', background='#404040', foreground=fg_color)
+            style.map('TButton', background=[('active', '#505050')])
+            style.configure('TCheckbutton', background=bg_color, foreground=fg_color)
+            style.configure('TCombobox', fieldbackground=field_bg, background=bg_color,
+                          foreground=fg_color, selectbackground=select_bg, selectforeground=select_fg)
+            style.configure('Treeview', background=field_bg, foreground=fg_color,
+                          fieldbackground=field_bg, selectbackground=select_bg,
+                          selectforeground=select_fg, rowheight=rowheight)
+            style.configure('Treeview.Heading', background='#404040', foreground=fg_color)
+            style.map('Treeview.Heading', background=[('active', '#505050')])
+
+            # Matplotlib Style
+            plt.style.use('dark_background')
+        else:
+            # Light Theme (Standard)
+            style.theme_use('clam')
+            style.configure('Treeview', rowheight=rowheight)
+
+            # Matplotlib auf Standard zurücksetzen
+            plt.style.use('default')
+
+        # Plot neu zeichnen
+        if hasattr(self, 'fig') and hasattr(self, 'groups'):
+            self.update_plot()
+
+    def toggle_dark_mode(self):
+        """Schaltet zwischen Light und Dark Mode um"""
+        current_mode = self.config.get_dark_mode()
+        new_mode = not current_mode
+        self.config.set_dark_mode(new_mode)
+        self.apply_theme()
+        messagebox.showinfo("Dark Mode",
+                           f"Dark Mode {'aktiviert' if new_mode else 'deaktiviert'}.\n"
+                           "Die Änderung wird vollständig beim nächsten Start wirksam.")
 
     def create_menu(self):
         """Menü"""
@@ -279,7 +350,9 @@ class ScatterPlotApp:
         menubar.add_cascade(label="Design", menu=design_menu)
         design_menu.add_command(label="Design-Manager...", command=self.show_design_manager)
         design_menu.add_separator()
-        
+        design_menu.add_command(label="🌙 Dark Mode umschalten", command=self.toggle_dark_mode)
+        design_menu.add_separator()
+
         # Schnell-Stile
         for preset_name in self.config.style_presets.keys():
             design_menu.add_command(
