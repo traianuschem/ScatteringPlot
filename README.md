@@ -1,34 +1,42 @@
-# TUBAF Scattering Plot Tool
+# TUBAF Scattering Plot Tool v3.0
 
-Ein Python-basiertes Darstellungsprogramm für Streukurven mit grafischer Benutzeroberfläche.
+Professionelles Python-Tool für Streudaten-Analyse mit erweiterter Funktionalität.
 
 ## Features
 
+### Plot-Typen
+- **Log-Log**: Klassische doppelt-logarithmische Darstellung
+- **Porod-Plot**: I·q⁴ vs q für Porod-Analyse
+- **Kratky-Plot**: I·q² vs q für strukturelle Charakterisierung
+- **Guinier-Plot**: ln(I) vs q² für Radius of Gyration
+- **PDDF-Modus**: Mit separatem Subplot für Pair Distance Distribution Function
+
 ### Datenverwaltung
-- **Grafische Benutzeroberfläche** mit Tkinter
-- **Drag & Drop**: Ziehen Sie Datensätze zwischen Gruppen per Drag & Drop
-- **Flexible Datenformate**: Unterstützt Tab-, Komma- und Semikolon-getrennte ASCII-Dateien
-- **Gruppenverwaltung**: Organisieren Sie Datensätze in Gruppen (z.B. Messdaten + Fitdaten)
-- **Kontextmenü**: Rechtsklick für schnellen Zugriff auf Bearbeitungsfunktionen
+- **"Nicht zugeordnet" Sektion**: Dateien erst laden, dann per Drag & Drop zuordnen
+- **Drag & Drop**: Intuitive Datensatz-Organisation zwischen Gruppen
+- **Flexible Datenformate**: Automatische Erkennung (Tab, Komma, Semikolon)
+- **Gruppenverwaltung**: Mit individuellen Stack-Faktoren für gestackte Darstellung
+- **Kontextmenü**: Rechtsklick für schnellen Zugriff
+
+### Stil-System
+- **Stil-Vorlagen**: Vordefinierte Stile (Messung, Fit, Simulation, Theorie)
+- **Auto-Erkennung**: Automatische Stil-Zuweisung basierend auf Dateinamen
+- **Design-Manager**: Zentrale Verwaltung von Stilen, Farben und Auto-Regeln
+- **Individuelle Anpassung**: Linientyp, Marker, Größen pro Datensatz
+- **Farbschema-Manager**: TUBAF + alle matplotlib colormaps + eigene Schemata
 
 ### Visualisierung
-- **Gestackte Ansicht**: Log-Log-Plots mit vertikalem Stacking mittels Multiplikationsfaktoren
-- **Fehlervisualisierung**: Fehler werden als transparente Flächen um die Daten dargestellt
-- **TUBAF-Farbpalette**: Offizielle TUBAF Corporate Design Farben
-- **Individuelle Anpassung**: Farben, Linientypen und Marker für jeden Datensatz änderbar
-- **Individuelle Labels**: Datensätze können umbenannt werden
-- **4K Display-Unterstützung**: Scharfe Darstellung auf High-DPI Displays
-
-### Stil-Einstellungen
-- **Linientyp**: Durchgezogen, gestrichelt, gepunktet, etc.
-- **Marker**: Kreise, Quadrate, Dreiecke, Kreuze, etc.
-- **Größen**: Linienbreite und Markergröße anpassbar
-- **Grid-Optionen**: Anpassbare Grid-Darstellung
+- **Gruppen-Header in Legende**: Klare Struktur mit Stack-Faktoren
+- **Individuelle Legendeneinträge**: Jeder Datensatz separat sichtbar
+- **Fehlervisualisierung**: Transparente Flächen um Daten
+- **Achsenbereiche**: Manuell oder automatisch einstellbar
+- **Legende-Position**: Frei wählbar
+- **4K Display-Unterstützung**: DPI-Awareness für scharfe Darstellung
 
 ### Export & Session
-- **PNG Export**: Mit einstellbarer DPI (72-1200 dpi)
-- **SVG Export**: Vektorgrafik für hochwertige Publikationen
-- **Session speichern/laden**: Speichern Sie Ihre Arbeit inkl. aller Einstellungen
+- **PNG Export**: Mit DPI-Einstellung (72-1200), Wert wird gespeichert
+- **SVG Export**: Vektorgrafik für Publikationen
+- **Session speichern/laden**: Komplette Arbeitsumgebung inkl. Plot-Typ
 
 ## Installation
 
@@ -53,42 +61,48 @@ python scatter_plot.py
 
 ### Workflow
 
-1. **Neue Gruppe erstellen**
-   - Klicken Sie auf "➕ Neue Gruppe"
-   - Geben Sie einen Namen ein (z.B. "Probe A - Messung")
-   - Geben Sie einen Stack-Faktor ein (z.B. 1, 10, 100)
+1. **Daten laden (vereinfacht!)**
+   - Klicken Sie auf "📁 Laden" oder Menü → Datei → Daten laden
+   - Dateien werden in "Nicht zugeordnet" abgelegt
+   - **Auto-Stil-Erkennung** wendet passende Stile an
 
-2. **Daten laden**
-   - Klicken Sie auf "📁 Daten laden"
-   - Wählen Sie Datendateien aus
-   - Weisen Sie einer Gruppe zu
+2. **Gruppen erstellen**
+   - Klicken Sie auf "➕ Gruppe"
+   - Namen und Stack-Faktor eingeben (z.B. "Probe A", Faktor 1)
 
-3. **Drag & Drop verwenden**
-   - Ziehen Sie Datensätze zwischen Gruppen
-   - Organisieren Sie Ihre Daten intuitiv
+3. **Drag & Drop zuordnen**
+   - Ziehen Sie Dateien aus "Nicht zugeordnet" auf Gruppen
+   - Verschieben Sie zwischen Gruppen
+   - Zurück zu "Nicht zugeordnet" möglich
 
-4. **Anpassungen vornehmen**
-   - **Rechtsklick** auf Gruppe/Datensatz für Kontextmenü
-   - **Farbe ändern**: Individuelle Farben für Gruppen und Datensätze
-   - **Stil ändern**: Linientyp, Marker, Größen anpassen
-   - **Umbenennen**: Labels für bessere Lesbarkeit ändern
-   - **Doppelklick** auf Gruppe: Stack-Faktor ändern
-   - **Doppelklick** auf Datensatz: Schnell umbenennen
+4. **Plot-Typ wählen**
+   - Dropdown: Log-Log, Porod, Kratky, Guinier, PDDF
+   - Achsenbeschriftung passt sich automatisch an
 
-5. **Plot-Einstellungen**
-   - Menü → Plot → Einstellungen
-   - X/Y-Achsen Labels anpassen
-   - Grid-Optionen einstellen
-   - Schriftgrößen ändern
+5. **Farbschema wählen**
+   - Dropdown: TUBAF, viridis, tab10, Set1, ... (über 30 Schemata!)
+   - Oder eigenes Schema im Design-Manager erstellen
 
-6. **Exportieren**
-   - Menü → Datei → Exportieren als PNG (mit DPI-Auswahl)
-   - Menü → Datei → Exportieren als SVG
+6. **Anpassungen**
+   - **Rechtsklick** → Farbe/Stil ändern, Umbenennen
+   - **Doppelklick** Gruppe → Stack-Faktor
+   - **Doppelklick** "Nicht zugeordnet" → Ein-/Ausklappen
+   - Menü → Design → Stil anwenden (Messung/Fit/etc.)
 
-7. **Session speichern**
-   - Menü → Datei → Session speichern
-   - Alle Einstellungen und Gruppierungen werden gespeichert
-   - Später wieder laden mit: Datei → Session laden
+7. **Erweiterte Einstellungen**
+   - Plot → Erweiterte Einstellungen
+     - Achsenbereiche (Min/Max oder Auto)
+     - Legende-Position
+     - Schriftgrößen
+   - Design → Design-Manager
+     - Stil-Vorlagen verwalten
+     - Farbschemata erstellen
+     - Auto-Erkennungs-Regeln anpassen
+
+8. **Speichern**
+   - Session speichern (JSON) → Alles inkl. Plot-Typ
+   - PNG Export (mit DPI-Merken)
+   - SVG Export
 
 ### Datenformat
 
