@@ -54,7 +54,6 @@ from dialogs.font_dialog import FontSettingsDialog
 from dialogs.export_dialog import ExportSettingsDialog
 from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
-from dialogs.log_viewer import LogViewerDialog, LogBuffer
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 
@@ -140,9 +139,6 @@ class ScatterPlotApp(QMainWindow):
         self.annotations = []  # Liste von Annotations
         self.reference_lines = []  # Liste von Referenzlinien
         self.current_plot_design = 'Standard'  # Aktuelles Plot-Design
-
-        # Version 5.3 Features: Debug-Log Buffer
-        self.log_buffer = LogBuffer()
 
         # GUI erstellen
         self.create_menu()
@@ -236,13 +232,6 @@ class ScatterPlotApp(QMainWindow):
             action = QAction(f"Stil '{preset_name}' anwenden", self)
             action.triggered.connect(lambda checked, p=preset_name: self.apply_style_to_selected(p))
             design_menu.addAction(action)
-
-        # Ansicht-Menü (v5.3)
-        view_menu = menubar.addMenu("Ansicht")
-
-        log_viewer_action = QAction("Debug-Log anzeigen...", self)
-        log_viewer_action.triggered.connect(self.show_log_viewer)
-        view_menu.addAction(log_viewer_action)
 
         # Hilfe-Menü
         help_menu = menubar.addMenu("Hilfe")
@@ -403,12 +392,12 @@ class ScatterPlotApp(QMainWindow):
 
     def update_plot(self):
         """Aktualisiert den Plot"""
-        # Debug-Log in Buffer schreiben (v5.3)
+        # Debug-Log direkt in Konsole ausgeben (v5.3)
         from datetime import datetime
 
         def log(msg):
-            """Schreibt in Log-Buffer"""
-            self.log_buffer.write(msg)
+            """Gibt Debug-Info in Konsole aus"""
+            print(msg)
 
         log("=" * 80)
         log(f"DEBUG LOG - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1089,11 +1078,6 @@ class ScatterPlotApp(QMainWindow):
         if dialog.exec():
             self.font_settings = dialog.get_settings()
             self.update_plot()
-
-    def show_log_viewer(self):
-        """Zeigt Debug-Log Viewer (Version 5.3)"""
-        dialog = LogViewerDialog(self, self.log_buffer)
-        dialog.exec()
 
     def update_annotations_tree(self):
         """Aktualisiert Annotations & Referenzlinien im Tree (Version 5.3)"""
