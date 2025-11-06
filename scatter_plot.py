@@ -442,20 +442,18 @@ class ScatterPlotApp(QMainWindow):
 
         # Plotten
         plot_info = PLOT_TYPES[self.plot_type]
-        cumulative_stack_factor = 1.0  # Kumulativer Multiplikator für Stack
 
         # Gruppen plotten
         for group in self.groups:
             if not group.visible:
                 continue
 
-            # Stack-Faktor kumulativ multiplizieren (VOR dem Plotten!)
-            if self.stack_mode:
-                cumulative_stack_factor *= group.stack_factor
+            # Stack-Faktor direkt von der Gruppe verwenden (NICHT kumulativ!)
+            stack_factor = group.stack_factor if self.stack_mode else 1.0
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
-            if self.stack_mode and len(self.groups) > 1:
-                group_label = f"{group.name} (×{cumulative_stack_factor:.1f})"
+            if self.stack_mode and group.stack_factor != 1.0:
+                group_label = f"{group.name} (×{stack_factor:.1f})"
             else:
                 group_label = group.name
 
@@ -463,7 +461,7 @@ class ScatterPlotApp(QMainWindow):
             has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
             if has_visible_datasets:
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, group.stack_factor={group.stack_factor:.1f}, cumulative=×{cumulative_stack_factor:.1f}")
+                log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack-Faktor=×{stack_factor:.1f}")
 
             # Plot je Datensatz
             for dataset in group.datasets:
@@ -481,9 +479,8 @@ class ScatterPlotApp(QMainWindow):
                 # Daten transformieren
                 x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
 
-                # Stack-Multiplikation (für Log-Plots korrekt)
-                if self.stack_mode:
-                    y = y * cumulative_stack_factor
+                # Stack-Multiplikation mit eigenem Gruppen-Faktor
+                y = y * stack_factor
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
@@ -491,8 +488,7 @@ class ScatterPlotApp(QMainWindow):
                 if dataset.y_err is not None and self.plot_type == 'Log-Log':
                     # Fehler als transparente Fläche
                     y_err_trans = self.transform_data(dataset.x, dataset.y_err, self.plot_type)[1]
-                    if self.stack_mode:
-                        y_err_trans = y_err_trans * cumulative_stack_factor
+                    y_err_trans = y_err_trans * stack_factor
                     self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                               alpha=0.2, color=color)
 
