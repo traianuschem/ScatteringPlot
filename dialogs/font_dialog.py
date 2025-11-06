@@ -40,6 +40,10 @@ class FontSettingsDialog(QDialog):
         self.title_italic.setChecked(font_settings.get('title_italic', False))
         title_layout.addWidget(self.title_italic, 1, 1)
 
+        self.title_underline = QCheckBox("Unterstrichen")
+        self.title_underline.setChecked(font_settings.get('title_underline', False))
+        title_layout.addWidget(self.title_underline, 2, 0)
+
         title_group.setLayout(title_layout)
         layout.addWidget(title_group)
 
@@ -62,6 +66,10 @@ class FontSettingsDialog(QDialog):
         self.labels_italic.setChecked(font_settings.get('labels_italic', False))
         labels_layout.addWidget(self.labels_italic, 1, 1)
 
+        self.labels_underline = QCheckBox("Unterstrichen")
+        self.labels_underline.setChecked(font_settings.get('labels_underline', False))
+        labels_layout.addWidget(self.labels_underline, 2, 0)
+
         labels_group.setLayout(labels_layout)
         layout.addWidget(labels_group)
 
@@ -76,6 +84,18 @@ class FontSettingsDialog(QDialog):
         self.ticks_size_spin.setSuffix(" pt")
         ticks_layout.addWidget(self.ticks_size_spin, 0, 1)
 
+        self.ticks_bold = QCheckBox("Fett")
+        self.ticks_bold.setChecked(font_settings.get('ticks_bold', False))
+        ticks_layout.addWidget(self.ticks_bold, 1, 0)
+
+        self.ticks_italic = QCheckBox("Kursiv")
+        self.ticks_italic.setChecked(font_settings.get('ticks_italic', False))
+        ticks_layout.addWidget(self.ticks_italic, 1, 1)
+
+        self.ticks_underline = QCheckBox("Unterstrichen")
+        self.ticks_underline.setChecked(font_settings.get('ticks_underline', False))
+        ticks_layout.addWidget(self.ticks_underline, 2, 0)
+
         ticks_group.setLayout(ticks_layout)
         layout.addWidget(ticks_group)
 
@@ -89,6 +109,18 @@ class FontSettingsDialog(QDialog):
         self.legend_size_spin.setValue(font_settings.get('legend_size', 10))
         self.legend_size_spin.setSuffix(" pt")
         legend_layout.addWidget(self.legend_size_spin, 0, 1)
+
+        self.legend_bold = QCheckBox("Fett")
+        self.legend_bold.setChecked(font_settings.get('legend_bold', False))
+        legend_layout.addWidget(self.legend_bold, 1, 0)
+
+        self.legend_italic = QCheckBox("Kursiv")
+        self.legend_italic.setChecked(font_settings.get('legend_italic', False))
+        legend_layout.addWidget(self.legend_italic, 1, 1)
+
+        self.legend_underline = QCheckBox("Unterstrichen")
+        self.legend_underline.setChecked(font_settings.get('legend_underline', False))
+        legend_layout.addWidget(self.legend_underline, 2, 0)
 
         legend_group.setLayout(legend_layout)
         layout.addWidget(legend_group)
@@ -137,11 +169,19 @@ class FontSettingsDialog(QDialog):
             'title_size': self.title_size_spin.value(),
             'title_bold': self.title_bold.isChecked(),
             'title_italic': self.title_italic.isChecked(),
+            'title_underline': self.title_underline.isChecked(),
             'labels_size': self.labels_size_spin.value(),
             'labels_bold': self.labels_bold.isChecked(),
             'labels_italic': self.labels_italic.isChecked(),
+            'labels_underline': self.labels_underline.isChecked(),
             'ticks_size': self.ticks_size_spin.value(),
+            'ticks_bold': self.ticks_bold.isChecked(),
+            'ticks_italic': self.ticks_italic.isChecked(),
+            'ticks_underline': self.ticks_underline.isChecked(),
             'legend_size': self.legend_size_spin.value(),
+            'legend_bold': self.legend_bold.isChecked(),
+            'legend_italic': self.legend_italic.isChecked(),
+            'legend_underline': self.legend_underline.isChecked(),
             'font_family': self.font_family_combo.currentText(),
             'use_math_text': self.use_math_text.isChecked()
         }
