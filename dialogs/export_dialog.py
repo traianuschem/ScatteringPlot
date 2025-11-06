@@ -51,25 +51,27 @@ class ExportSettingsDialog(QDialog):
         resolution_group.setLayout(resolution_layout)
         layout.addWidget(resolution_group)
 
-        # Größe-Gruppe
+        # Größe-Gruppe (in cm statt inch)
         size_group = QGroupBox("Größe")
         size_layout = QGridLayout()
 
         size_layout.addWidget(QLabel("Breite:"), 0, 0)
         self.width_spin = QDoubleSpinBox()
-        self.width_spin.setRange(1.0, 50.0)
-        self.width_spin.setSingleStep(0.5)
-        self.width_spin.setValue(export_settings.get('width', 10.0))
-        self.width_spin.setSuffix(" inch")
+        self.width_spin.setRange(2.5, 127.0)  # 1-50 inch = 2.5-127 cm
+        self.width_spin.setSingleStep(1.0)
+        # Konvertiere von inch (gespeichert) zu cm (angezeigt)
+        self.width_spin.setValue(export_settings.get('width', 10.0) * 2.54)
+        self.width_spin.setSuffix(" cm")
         self.width_spin.setDecimals(1)
         size_layout.addWidget(self.width_spin, 0, 1)
 
         size_layout.addWidget(QLabel("Höhe:"), 1, 0)
         self.height_spin = QDoubleSpinBox()
-        self.height_spin.setRange(1.0, 50.0)
-        self.height_spin.setSingleStep(0.5)
-        self.height_spin.setValue(export_settings.get('height', 8.0))
-        self.height_spin.setSuffix(" inch")
+        self.height_spin.setRange(2.5, 127.0)  # 1-50 inch = 2.5-127 cm
+        self.height_spin.setSingleStep(1.0)
+        # Konvertiere von inch (gespeichert) zu cm (angezeigt)
+        self.height_spin.setValue(export_settings.get('height', 8.0) * 2.54)
+        self.height_spin.setSuffix(" cm")
         self.height_spin.setDecimals(1)
         size_layout.addWidget(self.height_spin, 1, 1)
 
@@ -112,12 +114,12 @@ class ExportSettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def get_settings(self):
-        """Gibt Einstellungen zurück"""
+        """Gibt Einstellungen zurück (Größe von cm in inch konvertiert)"""
         return {
             'format': self.format_combo.currentText(),
             'dpi': self.dpi_spin.value(),
-            'width': self.width_spin.value(),
-            'height': self.height_spin.value(),
+            'width': self.width_spin.value() / 2.54,  # cm → inch
+            'height': self.height_spin.value() / 2.54,  # cm → inch
             'keep_aspect': self.keep_aspect.isChecked(),
             'transparent': self.transparent_bg.isChecked(),
             'tight_layout': self.tight_layout.isChecked(),
