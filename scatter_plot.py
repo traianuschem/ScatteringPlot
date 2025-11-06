@@ -397,7 +397,7 @@ class ScatterPlotApp(QMainWindow):
 
         # Plotten
         plot_info = PLOT_TYPES[self.plot_type]
-        current_offset = 0
+        cumulative_stack_factor = 1.0  # Kumulativer Multiplikator für Stack
 
         # Gruppen plotten
         for group in self.groups:
@@ -406,7 +406,7 @@ class ScatterPlotApp(QMainWindow):
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
             if self.stack_mode and len(self.groups) > 1:
-                group_label = f"{group.name} (×{group.stack_factor:.1f})"
+                group_label = f"{group.name} (×{cumulative_stack_factor:.1f})"
             else:
                 group_label = group.name
 
@@ -425,9 +425,9 @@ class ScatterPlotApp(QMainWindow):
                 # Daten transformieren
                 x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
 
-                # Stack-Offset
+                # Stack-Multiplikation (für Log-Plots korrekt)
                 if self.stack_mode:
-                    y = y * group.stack_factor + current_offset
+                    y = y * cumulative_stack_factor
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
@@ -436,15 +436,16 @@ class ScatterPlotApp(QMainWindow):
                     # Fehler als transparente Fläche
                     y_err_trans = self.transform_data(dataset.x, dataset.y_err, self.plot_type)[1]
                     if self.stack_mode:
-                        y_err_trans = y_err_trans * group.stack_factor
+                        y_err_trans = y_err_trans * cumulative_stack_factor
                     self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                               alpha=0.2, color=color)
 
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
 
+            # Stack-Faktor kumulativ multiplizieren
             if self.stack_mode:
-                current_offset += group.stack_factor
+                cumulative_stack_factor *= group.stack_factor
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         for dataset in self.unassigned_datasets:
