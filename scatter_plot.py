@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TUBAF Scattering Plot Tool - Version 5.0 (Qt)
+TUBAF Scattering Plot Tool - Version 5.1 (Qt)
 ==============================================
 
 Professionelles Tool für Streudaten-Analyse mit:
@@ -11,6 +11,8 @@ Professionelles Tool für Streudaten-Analyse mit:
 - Farbschema-Manager
 - Drag & Drop
 - Session-Verwaltung
+- Erweiterte Legenden-, Grid- und Font-Einstellungen
+- Verbesserter Export-Dialog
 """
 
 import sys
@@ -43,6 +45,10 @@ from core.constants import PLOT_TYPES
 from dialogs.settings_dialog import PlotSettingsDialog
 from dialogs.group_dialog import CreateGroupDialog
 from dialogs.design_manager import DesignManagerDialog
+from dialogs.legend_dialog import LegendSettingsDialog
+from dialogs.grid_dialog import GridSettingsDialog
+from dialogs.font_dialog import FontSettingsDialog
+from dialogs.export_dialog import ExportSettingsDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 
@@ -53,7 +59,7 @@ class ScatterPlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("TUBAF Scattering Plot Tool v5.0")
+        self.setWindowTitle("TUBAF Scattering Plot Tool v5.1")
         self.resize(1600, 1000)
 
         # Config
@@ -68,6 +74,52 @@ class ScatterPlotApp(QMainWindow):
         self.stack_mode = True
         self.show_grid = True
         self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True}
+
+        # Erweiterte Einstellungen (Version 5.1)
+        self.legend_settings = {
+            'position': 'best',
+            'fontsize': 10,
+            'ncol': 1,
+            'alpha': 0.9,
+            'frameon': True,
+            'shadow': False,
+            'fancybox': True
+        }
+        self.grid_settings = {
+            'major_enable': True,
+            'major_axis': 'both',
+            'major_linestyle': 'solid',
+            'major_linewidth': 0.8,
+            'major_alpha': 0.3,
+            'major_color': '#FFFFFF',
+            'minor_enable': False,
+            'minor_axis': 'both',
+            'minor_linestyle': 'dotted',
+            'minor_linewidth': 0.5,
+            'minor_alpha': 0.2,
+            'minor_color': '#FFFFFF'
+        }
+        self.font_settings = {
+            'title_size': 14,
+            'title_bold': True,
+            'title_italic': False,
+            'labels_size': 12,
+            'labels_bold': False,
+            'labels_italic': False,
+            'ticks_size': 10,
+            'legend_size': 10,
+            'font_family': 'sans-serif'
+        }
+        self.export_settings = {
+            'format': 'PNG',
+            'dpi': 300,
+            'width': 10.0,
+            'height': 8.0,
+            'keep_aspect': True,
+            'transparent': False,
+            'tight_layout': True,
+            'facecolor_white': False
+        }
 
         # GUI erstellen
         self.create_menu()
@@ -102,13 +154,9 @@ class ScatterPlotApp(QMainWindow):
 
         file_menu.addSeparator()
 
-        export_png_action = QAction("PNG Export...", self)
-        export_png_action.triggered.connect(self.export_png)
-        file_menu.addAction(export_png_action)
-
-        export_svg_action = QAction("SVG Export...", self)
-        export_svg_action.triggered.connect(self.export_svg)
-        file_menu.addAction(export_svg_action)
+        export_action = QAction("Exportieren...", self)
+        export_action.triggered.connect(self.show_export_dialog)
+        file_menu.addAction(export_action)
 
         file_menu.addSeparator()
 
@@ -123,9 +171,23 @@ class ScatterPlotApp(QMainWindow):
         update_action.triggered.connect(self.update_plot)
         plot_menu.addAction(update_action)
 
-        settings_action = QAction("Erweiterte Einstellungen...", self)
+        plot_menu.addSeparator()
+
+        settings_action = QAction("Achsenlimits...", self)
         settings_action.triggered.connect(self.show_plot_settings)
         plot_menu.addAction(settings_action)
+
+        legend_action = QAction("Legenden-Einstellungen...", self)
+        legend_action.triggered.connect(self.show_legend_settings)
+        plot_menu.addAction(legend_action)
+
+        grid_action = QAction("Grid-Einstellungen...", self)
+        grid_action.triggered.connect(self.show_grid_settings)
+        plot_menu.addAction(grid_action)
+
+        font_action = QAction("Schriftart-Einstellungen...", self)
+        font_action.triggered.connect(self.show_font_settings)
+        plot_menu.addAction(font_action)
 
         # Design-Menü
         design_menu = menubar.addMenu("Design")
@@ -399,13 +461,37 @@ class ScatterPlotApp(QMainWindow):
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
 
         # Achsen
-        self.ax_main.set_xlabel(plot_info['xlabel'])
-        self.ax_main.set_ylabel(plot_info['ylabel'])
+        self.ax_main.set_xlabel(plot_info['xlabel'], fontsize=self.font_settings['labels_size'],
+                               weight='bold' if self.font_settings['labels_bold'] else 'normal',
+                               style='italic' if self.font_settings['labels_italic'] else 'normal',
+                               fontfamily=self.font_settings['font_family'])
+        self.ax_main.set_ylabel(plot_info['ylabel'], fontsize=self.font_settings['labels_size'],
+                               weight='bold' if self.font_settings['labels_bold'] else 'normal',
+                               style='italic' if self.font_settings['labels_italic'] else 'normal',
+                               fontfamily=self.font_settings['font_family'])
         self.ax_main.set_xscale(plot_info['xscale'])
         self.ax_main.set_yscale(plot_info['yscale'])
 
-        if self.show_grid:
-            self.ax_main.grid(True, alpha=0.3)
+        # Tick-Schriftgröße
+        self.ax_main.tick_params(axis='both', labelsize=self.font_settings['ticks_size'])
+
+        # Grid-Einstellungen (erweitert in v5.1)
+        if self.grid_settings['major_enable']:
+            self.ax_main.grid(True, which='major',
+                            axis=self.grid_settings['major_axis'],
+                            linestyle=self.grid_settings['major_linestyle'],
+                            linewidth=self.grid_settings['major_linewidth'],
+                            color=self.grid_settings['major_color'],
+                            alpha=self.grid_settings['major_alpha'])
+
+        if self.grid_settings['minor_enable']:
+            self.ax_main.minorticks_on()
+            self.ax_main.grid(True, which='minor',
+                            axis=self.grid_settings['minor_axis'],
+                            linestyle=self.grid_settings['minor_linestyle'],
+                            linewidth=self.grid_settings['minor_linewidth'],
+                            color=self.grid_settings['minor_color'],
+                            alpha=self.grid_settings['minor_alpha'])
 
         # Achsenlimits
         if not self.axis_limits['auto']:
@@ -418,9 +504,18 @@ class ScatterPlotApp(QMainWindow):
             if self.axis_limits['ymax'] is not None:
                 self.ax_main.set_ylim(top=self.axis_limits['ymax'])
 
-        # Legende
+        # Legende (erweitert in v5.1)
         if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
-            self.ax_main.legend(loc='best')
+            legend = self.ax_main.legend(
+                loc=self.legend_settings['position'],
+                fontsize=self.legend_settings['fontsize'],
+                ncol=self.legend_settings['ncol'],
+                frameon=self.legend_settings['frameon'],
+                shadow=self.legend_settings['shadow'],
+                fancybox=self.legend_settings['fancybox']
+            )
+            if legend and legend.get_frame():
+                legend.get_frame().set_alpha(self.legend_settings['alpha'])
 
         self.fig.tight_layout()
         self.canvas.draw()
@@ -656,16 +751,107 @@ class ScatterPlotApp(QMainWindow):
         self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
         self.update_plot()
 
+    def show_legend_settings(self):
+        """Zeigt Legenden-Einstellungen Dialog"""
+        dialog = LegendSettingsDialog(self, self.legend_settings)
+        if dialog.exec():
+            self.legend_settings = dialog.get_settings()
+            self.update_plot()
+
+    def show_grid_settings(self):
+        """Zeigt Grid-Einstellungen Dialog"""
+        dialog = GridSettingsDialog(self, self.grid_settings)
+        if dialog.exec():
+            self.grid_settings = dialog.get_settings()
+            self.update_plot()
+
+    def show_font_settings(self):
+        """Zeigt Schriftart-Einstellungen Dialog"""
+        dialog = FontSettingsDialog(self, self.font_settings)
+        if dialog.exec():
+            self.font_settings = dialog.get_settings()
+            self.update_plot()
+
+    def show_export_dialog(self):
+        """Zeigt Export-Dialog mit erweiterten Optionen"""
+        dialog = ExportSettingsDialog(self, self.export_settings)
+        if dialog.exec():
+            self.export_settings = dialog.get_settings()
+            # Nun Export durchführen
+            self.export_with_settings()
+
+    def export_with_settings(self):
+        """Exportiert Plot mit aktuellen Export-Einstellungen"""
+        settings = self.export_settings
+        format_ext = settings['format'].lower()
+
+        if format_ext == 'png':
+            filter_str = "PNG Dateien (*.png)"
+        elif format_ext == 'svg':
+            filter_str = "SVG Dateien (*.svg)"
+        elif format_ext == 'pdf':
+            filter_str = "PDF Dateien (*.pdf)"
+        elif format_ext == 'eps':
+            filter_str = "EPS Dateien (*.eps)"
+        else:
+            filter_str = "Alle Dateien (*.*)"
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            f"Plot als {settings['format']} exportieren",
+            self.config.get_last_directory(),
+            filter_str
+        )
+
+        if filename:
+            try:
+                # Sicherstellen, dass die Dateiendung korrekt ist
+                if not filename.lower().endswith(f'.{format_ext}'):
+                    filename = f"{filename}.{format_ext}"
+
+                # Figure-Größe temporär anpassen
+                original_size = self.fig.get_size_inches()
+                self.fig.set_size_inches(settings['width'], settings['height'])
+
+                # Export-Parameter
+                save_kwargs = {
+                    'dpi': settings['dpi'],
+                    'bbox_inches': 'tight' if settings['tight_layout'] else None
+                }
+
+                if format_ext == 'png':
+                    save_kwargs['transparent'] = settings['transparent']
+                    if settings['facecolor_white'] and not settings['transparent']:
+                        save_kwargs['facecolor'] = 'white'
+
+                # Speichern
+                self.fig.savefig(filename, **save_kwargs)
+
+                # Größe zurücksetzen
+                self.fig.set_size_inches(original_size)
+                self.canvas.draw()
+
+                # Verzeichnis merken
+                self.config.set_last_directory(str(Path(filename).parent))
+
+                QMessageBox.information(self, "Export erfolgreich",
+                                      f"Plot wurde erfolgreich exportiert:\n{filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export-Fehler",
+                                   f"Fehler beim Exportieren:\n{str(e)}")
+
     def show_about(self):
         """Zeigt Über-Dialog"""
         QMessageBox.about(self, "Über TUBAF Scattering Plot Tool",
-                         "TUBAF Scattering Plot Tool - Version 5.0 (Qt)\n\n"
+                         "TUBAF Scattering Plot Tool - Version 5.1 (Qt)\n\n"
                          "Professionelles Tool für Streudaten-Analyse\n\n"
-                         "Neue Features in v5.0:\n"
-                         "• Modulare Architektur für bessere Wartbarkeit\n"
-                         "• Basis für zukünftige Erweiterungen\n\n"
+                         "Neue Features in v5.1:\n"
+                         "• Erweiterte Legenden-Einstellungen\n"
+                         "• Umfassende Grid-Einstellungen (Major/Minor)\n"
+                         "• Schriftart-Anpassung für alle Elemente\n"
+                         "• Verbesserter Export-Dialog\n\n"
                          "Features:\n"
-                         "• Qt6-basierte moderne GUI\n"
+                         "• Qt6-basierte moderne GUI mit modularer Architektur\n"
                          "• Permanenter Dark Mode\n"
                          "• Verschiedene Plot-Typen\n"
                          "• Stil-Vorlagen und Auto-Erkennung\n"
@@ -687,7 +873,11 @@ class ScatterPlotApp(QMainWindow):
                     'stack_mode': self.stack_mode,
                     'show_grid': self.show_grid,
                     'color_scheme': self.color_scheme_combo.currentText(),
-                    'axis_limits': self.axis_limits
+                    'axis_limits': self.axis_limits,
+                    'legend_settings': self.legend_settings,
+                    'grid_settings': self.grid_settings,
+                    'font_settings': self.font_settings,
+                    'export_settings': self.export_settings
                 }
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(session, f, indent=2)
@@ -747,6 +937,16 @@ class ScatterPlotApp(QMainWindow):
 
                 self.axis_limits = session.get('axis_limits', {'xmin': None, 'xmax': None,
                                                                'ymin': None, 'ymax': None, 'auto': True})
+
+                # Erweiterte Einstellungen (v5.1)
+                if 'legend_settings' in session:
+                    self.legend_settings = session['legend_settings']
+                if 'grid_settings' in session:
+                    self.grid_settings = session['grid_settings']
+                if 'font_settings' in session:
+                    self.font_settings = session['font_settings']
+                if 'export_settings' in session:
+                    self.export_settings = session['export_settings']
 
                 self.update_plot()
                 QMessageBox.information(self, "Erfolg", "Session geladen")
