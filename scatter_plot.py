@@ -352,6 +352,11 @@ class ScatterPlotApp(QMainWindow):
         self.fig = Figure(figsize=(12, 9), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.fig)
 
+        # Mouse-Events für Drag-and-Drop (v5.3) - NUR EINMAL registrieren!
+        self.canvas.mpl_connect('button_press_event', self.on_annotation_press)
+        self.canvas.mpl_connect('button_release_event', self.on_annotation_release)
+        self.canvas.mpl_connect('motion_notify_event', self.on_annotation_motion)
+
         # Toolbar
         self.toolbar = NavigationToolbar2QT(self.canvas, widget)
 
@@ -622,11 +627,6 @@ class ScatterPlotApp(QMainWindow):
             text_obj.set_picker(5)  # Pickable mit Toleranz von 5 Pixeln
             text_obj._annotation_idx = idx  # Index speichern
             self.annotation_texts.append(text_obj)
-
-        # Mouse-Event für Drag-and-Drop (v5.3)
-        self.canvas.mpl_connect('button_press_event', self.on_annotation_press)
-        self.canvas.mpl_connect('button_release_event', self.on_annotation_release)
-        self.canvas.mpl_connect('motion_notify_event', self.on_annotation_motion)
 
         self.fig.tight_layout()
         self.canvas.draw()
