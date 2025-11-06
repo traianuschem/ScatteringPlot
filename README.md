@@ -114,18 +114,17 @@ Oder direkt ausführbar (Linux/Mac):
    - Klicken Sie auf "➕ Gruppe"
    - Namen und Stack-Faktor eingeben (z.B. "Probe A", Faktor 1)
 
-3. **Drag & Drop zuordnen**
-   - Ziehen Sie Dateien aus "Nicht zugeordnet" auf Gruppen
-   - Verschieben Sie zwischen Gruppen
-   - Zurück zu "Nicht zugeordnet" möglich
+Professionelles Tool für Streudaten-Analyse mit moderner Qt6-GUI.
 
-4. **Plot-Typ wählen**
-   - Dropdown: Log-Log, Porod, Kratky, Guinier, PDDF
-   - Achsenbeschriftung passt sich automatisch an
+## 🆕 Was ist neu in Version 4.0?
 
-5. **Farbschema wählen**
-   - Dropdown: TUBAF, viridis, tab10, Set1, ... (über 30 Schemata!)
-   - Oder eigenes Schema im Design-Manager erstellen
+**Komplette GUI-Umstellung auf Qt6:**
+- ✅ Moderne, native Qt6-Oberfläche
+- ✅ Professioneller Dark Mode Support (Fusion Style)
+- ✅ Bessere Performance und Stabilität
+- ✅ Natives Look & Feel auf allen Plattformen
+- ✅ Verbesserte High-DPI Support
+- ✅ Modernere Dialoge und Widgets
 
 6. **Anpassungen**
    - **Rechtsklick** → Farbe/Stil ändern, Umbenennen
@@ -133,41 +132,16 @@ Oder direkt ausführbar (Linux/Mac):
    - **Doppelklick** "Nicht zugeordnet" → Ein-/Ausklappen
    - Menü → Design → Stil anwenden (Messung/Fit/etc.)
 
-7. **Erweiterte Einstellungen**
-   - Plot → Erweiterte Einstellungen
-     - Achsenbereiche (Min/Max oder Auto)
-     - Legende-Position
-     - Schriftgrößen
-   - Design → Design-Manager
-     - Stil-Vorlagen verwalten
-     - Farbschemata erstellen
-     - Auto-Erkennungs-Regeln anpassen
+## 📦 Installation
 
-8. **Speichern**
-   - Session speichern (JSON) → Alles inkl. Plot-Typ
-   - PNG Export (mit DPI-Merken)
-   - SVG Export
+### Voraussetzungen
+- Python 3.8 oder höher
+- pip
 
-### Datenformat
+### Dependencies installieren
 
-Die Datendateien sollten folgendes Format haben:
-
-**2 Spalten** (x, y):
-```
-# Kommentarzeilen beginnen mit #
-0.1    100.5
-0.2    85.3
-0.3    72.1
-...
-```
-
-**3 Spalten** (x, y, y_err):
-```
-# q [nm^-1]    Intensität [a.u.]    Fehler [a.u.]
-0.1    100.5    5.2
-0.2    85.3     4.8
-0.3    72.1     3.9
-...
+```bash
+pip install -r requirements.txt
 ```
 
 **Unterstützte Trennzeichen:**
@@ -180,15 +154,15 @@ Kommentarzeilen (beginnend mit `#` oder `%`) werden automatisch übersprungen.
 
 ## Beispieldaten erstellen
 
-Um Beispieldaten zu generieren:
+## 🚀 Start
 
 ```bash
 python utils/data_loader.py
 ```
 
-Dies erstellt einen Ordner `example_data/` mit Testdateien.
+## 🎨 Dark Mode
 
-## TUBAF Farbpalette anpassen
+Dark Mode kann über **Design → 🌙 Dark Mode umschalten** aktiviert/deaktiviert werden.
 
 Die TUBAF-Farben können in der Datei `config/tu_freiberg_colors.py` angepasst werden:
 
@@ -200,30 +174,21 @@ TUBAF_COLORS = [
 ]
 ```
 
-Die offiziellen Farben finden Sie unter:
-https://tu-freiberg.de/zuv/d5/corporate-design/farbdefinition
+## 📂 Migration von Version 3.0
 
-## Beispiel-Workflow
+Sessions, die in Version 3.0 (Tkinter) gespeichert wurden, sind kompatibel mit Version 4.0 (Qt).
 
-1. Gruppe "Probe A - Messung" mit Stack-Faktor 1 erstellen
-2. Messdaten (mit Fehlern) laden
-3. Gruppe "Probe A - Fit" mit Stack-Faktor 1 erstellen
-4. Fit-Daten laden
-5. Gruppe "Probe B - Messung" mit Stack-Faktor 10 erstellen
-6. Weitere Messdaten laden
-7. Plot aktualisieren
+**Backup:** Die alte Tkinter-Version wurde als `scatter_plot_v3_tkinter_backup.py` gesichert.
 
-Resultat: Alle Gruppen werden im selben Log-Log-Plot dargestellt, wobei Probe B um Faktor 10 vertikal verschoben ist.
+## 🔧 Konfiguration
 
-## Shortcuts und Tastenkombinationen
-
-- **Doppelklick** auf Gruppe: Stack-Faktor bearbeiten
-- **Doppelklick** auf Datensatz: Umbenennen
-- **Rechtsklick**: Kontextmenü öffnen
-- **Drag & Drop**: Datensätze zwischen Gruppen verschieben
-- **Matplotlib-Toolbar**: Zoom, Pan, Home, Back, Forward, Save
-
-## Menü-Übersicht
+Alle Einstellungen werden gespeichert in:
+```
+~/.tubaf_scatter_plots/
+├── config.json
+├── color_schemes.json
+└── style_presets.json
+```
 
 ### Datei
 - Daten laden
@@ -242,8 +207,7 @@ Resultat: Alle Gruppen werden im selben Log-Log-Plot dargestellt, wobei Probe B 
 - Farbschema → TUBAF + matplotlib colormaps
 - Design-Manager (Stil-Vorlagen, Farbschemata, Auto-Regeln)
 
-### Hilfe
-- Über
+## 🛠️ Entwicklung
 
 ## Projekt-Struktur
 
@@ -370,9 +334,9 @@ Version 5.x wird erweitert um:
 
 ## Lizenz
 
-Siehe LICENSE-Datei im Repository.
+TU Bergakademie Freiberg
 
-## Kontakt
+---
 
 TU Bergakademie Freiberg
 Institut für Experimentelle Physik
