@@ -54,6 +54,7 @@ from dialogs.font_dialog import FontSettingsDialog
 from dialogs.export_dialog import ExportSettingsDialog
 from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
+from dialogs.log_viewer import LogViewerDialog, LogBuffer
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 
@@ -139,6 +140,9 @@ class ScatterPlotApp(QMainWindow):
         self.annotations = []  # Liste von Annotations
         self.reference_lines = []  # Liste von Referenzlinien
         self.current_plot_design = 'Standard'  # Aktuelles Plot-Design
+
+        # Version 5.3 Features: Debug-Log Buffer
+        self.log_buffer = LogBuffer()
 
         # GUI erstellen
         self.create_menu()
@@ -232,6 +236,13 @@ class ScatterPlotApp(QMainWindow):
             action = QAction(f"Stil '{preset_name}' anwenden", self)
             action.triggered.connect(lambda checked, p=preset_name: self.apply_style_to_selected(p))
             design_menu.addAction(action)
+
+        # Ansicht-Menü (v5.3)
+        view_menu = menubar.addMenu("Ansicht")
+
+        log_viewer_action = QAction("Debug-Log anzeigen...", self)
+        log_viewer_action.triggered.connect(self.show_log_viewer)
+        view_menu.addAction(log_viewer_action)
 
         # Hilfe-Menü
         help_menu = menubar.addMenu("Hilfe")
@@ -392,16 +403,12 @@ class ScatterPlotApp(QMainWindow):
 
     def update_plot(self):
         """Aktualisiert den Plot"""
-        # Debug-Log-Datei öffnen
-        import os
+        # Debug-Log in Buffer schreiben (v5.3)
         from datetime import datetime
-        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'debug_plot.log')
-        log_file = open(log_path, 'w', encoding='utf-8')
 
         def log(msg):
-            """Schreibt in Log-Datei"""
-            log_file.write(msg + '\n')
-            log_file.flush()
+            """Schreibt in Log-Buffer"""
+            self.log_buffer.write(msg)
 
         log("=" * 80)
         log(f"DEBUG LOG - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -702,19 +709,10 @@ class ScatterPlotApp(QMainWindow):
         self.fig.tight_layout()
         self.canvas.draw()
 
-        # Log-Datei schließen und Info anzeigen
+        # Log-Ende markieren
         log("\n" + "=" * 80)
         log("LOG ENDE")
         log("=" * 80)
-        log_file.close()
-
-        # Info-MessageBox beim ersten Mal anzeigen
-        if not hasattr(self, '_log_info_shown'):
-            self._log_info_shown = True
-            QMessageBox.information(self, "Debug-Log erstellt",
-                f"Debug-Informationen wurden geschrieben nach:\n\n{log_path}\n\n"
-                "Diese Datei enthält detaillierte Informationen über Gruppen und Stacking.\n"
-                "Bitte öffne diese Datei und sende den Inhalt zum Debugging.")
 
     def convert_to_mathtext(self, text):
         """Konvertiert Unicode-Exponenten in Math Text (Version 5.2)"""
@@ -1091,6 +1089,11 @@ class ScatterPlotApp(QMainWindow):
         if dialog.exec():
             self.font_settings = dialog.get_settings()
             self.update_plot()
+
+    def show_log_viewer(self):
+        """Zeigt Debug-Log Viewer (Version 5.3)"""
+        dialog = LogViewerDialog(self, self.log_buffer)
+        dialog.exec()
 
     def update_annotations_tree(self):
         """Aktualisiert Annotations & Referenzlinien im Tree (Version 5.3)"""
