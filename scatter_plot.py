@@ -948,6 +948,15 @@ class ScatterPlotApp(QMainWindow):
 
         rename_action = menu.addAction("Umbenennen")
 
+        # Zu Gruppe zuordnen (nur für Datensätze)
+        group_menu = None
+        group_actions = {}
+        if data and data[0] == 'dataset' and self.groups:
+            menu.addSeparator()
+            group_menu = menu.addMenu("Zu Gruppe zuordnen")
+            for group in self.groups:
+                group_actions[group] = group_menu.addAction(group.name)
+
         # Stil anwenden nur für Datensätze (v5.2+)
         style_menu = None
         style_actions = {}
@@ -971,6 +980,12 @@ class ScatterPlotApp(QMainWindow):
             self.edit_annotation_or_refline(item)
         elif action == rename_action:
             self.rename_item(item)
+        elif group_menu and action in group_actions.values():
+            # Dataset zu Gruppe zuordnen
+            for group, group_action in group_actions.items():
+                if action == group_action:
+                    self.move_dataset_to_group(item, group)
+                    break
         elif style_menu and action in style_actions.values():
             # Stil anwenden
             for preset_name, preset_action in style_actions.items():
@@ -1011,6 +1026,64 @@ class ScatterPlotApp(QMainWindow):
             dataset = data[1]
             dataset.apply_style_preset(preset_name)
             self.update_plot()
+
+    def move_dataset_to_group(self, item, target_group):
+        """Verschiebt Dataset zu einer Gruppe"""
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'dataset':
+            return
+
+        dataset = data[1]
+
+        # Aus unassigned_datasets entfernen
+        if dataset in self.unassigned_datasets:
+            self.unassigned_datasets.remove(dataset)
+        else:
+            # Aus anderer Gruppe entfernen
+            for group in self.groups:
+                if dataset in group.datasets:
+                    group.datasets.remove(dataset)
+                    break
+
+        # Zu Zielgruppe hinzufügen
+        target_group.datasets.append(dataset)
+
+        # Tree neu aufbauen
+        self.rebuild_tree()
+        self.update_plot()
+
+        print(f"✓ Dataset '{dataset.name}' zu Gruppe '{target_group.name}' verschoben")
+
+    def rebuild_tree(self):
+        """Baut Tree komplett neu auf"""
+        self.tree.clear()
+
+        # "Nicht zugeordnet" Sektion
+        self.unassigned_item = QTreeWidgetItem(self.tree, ["▼ Nicht zugeordnet", ""])
+        self.unassigned_item.setExpanded(True)
+
+        for dataset in self.unassigned_datasets:
+            item = QTreeWidgetItem(self.unassigned_item, [dataset.display_label, ""])
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
+            item.setData(0, Qt.UserRole, ('dataset', dataset))
+
+        # Gruppen
+        for group in self.groups:
+            group_item = QTreeWidgetItem(self.tree, [group.name, f"×{group.stack_factor:.1f}"])
+            group_item.setExpanded(not group.collapsed)
+            group_item.setData(0, Qt.UserRole, ('group', group))
+
+            for dataset in group.datasets:
+                item = QTreeWidgetItem(group_item, [dataset.display_label, ""])
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
+                item.setData(0, Qt.UserRole, ('dataset', dataset))
+
+        # Annotations & Referenzlinien (v5.3)
+        self.annotations_item = QTreeWidgetItem(self.tree, ["▼ Annotations & Referenzlinien", ""])
+        self.annotations_item.setExpanded(False)
+        self.update_annotations_tree()
 
     def change_plot_type(self):
         """Ändert Plot-Typ"""
