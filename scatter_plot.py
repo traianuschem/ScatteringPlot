@@ -1404,7 +1404,7 @@ class ScatterPlotApp(QMainWindow):
                         item.setData(0, Qt.UserRole, ('dataset', dataset))
 
                 for dataset in self.unassigned_datasets:
-                    item = QTreeWidgetItem(self.unassigned_item, [dataset.name, ""])
+                    item = QTreeWidgetItem(self.unassigned_item, [dataset.display_label, ""])
                     item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                     item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                     item.setData(0, Qt.UserRole, ('dataset', dataset))

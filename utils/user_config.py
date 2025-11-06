@@ -137,6 +137,7 @@ class UserConfig:
         self.config = self.load_config()
         self.color_schemes = self.load_color_schemes()
         self.style_presets = self.load_style_presets()
+        self.plot_designs = self.config.get('plot_designs', {})  # Plot-Designs laden (v5.2+)
         self.auto_detection_rules = self.config.get('auto_detection_rules', DEFAULT_AUTO_DETECTION_RULES.copy())
         self.auto_detection_enabled = self.config.get('auto_detection_enabled', True)
 
@@ -164,6 +165,7 @@ class UserConfig:
         """Speichert die Hauptkonfiguration"""
         self.config['auto_detection_rules'] = self.auto_detection_rules
         self.config['auto_detection_enabled'] = self.auto_detection_enabled
+        self.config['plot_designs'] = self.plot_designs  # Plot-Designs speichern (v5.2+)
 
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
