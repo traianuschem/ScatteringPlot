@@ -1,8 +1,30 @@
-# TUBAF Scattering Plot Tool v5.2
+# TUBAF Scattering Plot Tool v5.3
 
 Professionelles Python-Tool für Streudaten-Analyse mit moderner Qt6-basierter GUI und modularer Architektur.
 
-## Was ist neu in Version 5.2?
+## Was ist neu in Version 5.3?
+
+### Erweiterte Schriftart-Optionen
+- **Bold, Italic, Underline**: Für alle Text-Elemente verfügbar
+- **Titel, Achsenbeschriftungen, Ticks, Legende**: Individuell anpassbar
+- **Font-Dialog erweitert**: Alle Optionen an einem Ort
+- **Konsistente Anwendung**: Font-Familie wird auf alle Elemente angewendet
+
+### Bearbeitbare Standard-Designs
+- **Design-Edit-Dialog**: Standard-Designs können jetzt bearbeitet werden
+- **Überschreiben**: Änderungen an Standard-Designs werden gespeichert
+- **Wiederherstellen**: Durch Löschen des bearbeiteten Designs
+- **Umfassend**: Grid, Schriftarten und Legenden-Einstellungen
+- **3 Tabs**: Übersichtliche Gruppierung der Einstellungen
+
+### Interaktive Annotations & Referenzlinien
+- **Draggable Annotations**: Text-Felder per Maus verschiebbar
+- **Tree-Integration**: Eigene Sektion "Annotations & Referenzlinien"
+- **Context-Menü**: Bearbeiten und Löschen via Rechtsklick
+- **Auto-Labels**: Referenzlinien generieren automatisch Labels (z.B. "x = 0.50")
+- **Visuelles Feedback**: Leichte Hintergrund-Box beim Hovern über Annotations
+
+## Was war neu in Version 5.2?
 
 ### Plot-Designs System
 - **Vordefinierte Designs**: Standard, Publikation, Präsentation, TUBAF, Minimalistisch
@@ -24,9 +46,6 @@ Professionelles Python-Tool für Streudaten-Analyse mit moderner Qt6-basierter G
 ### Verbessertes Kontextmenü
 - **Stil anwenden**: Rechtsklick auf Datensatz → Untermenü mit allen Stil-Vorlagen
 - **Schneller Zugriff**: Keine Umwege mehr über Menüs
-
-### Entfernte Features
-- Grid-Checkbox entfernt (ersetzt durch umfassenden Grid-Dialog)
 
 ## Features
 
@@ -57,13 +76,17 @@ Professionelles Python-Tool für Streudaten-Analyse mit moderner Qt6-basierter G
 - **Fehlervisualisierung**: Transparente Flächen um Daten
 - **Achsenbereiche**: Manuell oder automatisch einstellbar
 - **Legende-Position**: Frei wählbar
+- **Schriftarten**: Bold, Italic, Underline für alle Text-Elemente (v5.3)
+- **Annotations**: Interaktiv verschiebbare Textfelder (v5.3)
+- **Referenzlinien**: Mit automatischen Labels (v5.3)
+- **Plot-Designs**: Vordefinierte und bearbeitbare Designs (v5.2/5.3)
 - **4K Display-Unterstützung**: DPI-Awareness für scharfe Darstellung
 - **Dark Mode**: Permanenter Dark Mode für angenehme Darstellung
 
 ### Export & Session
 - **PNG Export**: Mit DPI-Einstellung (72-1200), Wert wird gespeichert
 - **SVG Export**: Vektorgrafik für Publikationen
-- **Session speichern/laden**: Komplette Arbeitsumgebung inkl. Plot-Typ
+- **Session speichern/laden**: Komplette Arbeitsumgebung inkl. Annotations, Referenzlinien und Plot-Designs
 
 ## Installation
 

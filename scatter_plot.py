@@ -300,6 +300,10 @@ class ScatterPlotApp(QMainWindow):
         self.unassigned_item = QTreeWidgetItem(self.tree, ["▼ Nicht zugeordnet", ""])
         self.unassigned_item.setExpanded(True)
 
+        # Annotations & Referenzlinien Section (Version 5.3)
+        self.annotations_item = QTreeWidgetItem(self.tree, ["▼ Annotations & Referenzlinien", ""])
+        self.annotations_item.setExpanded(True)
+
         layout.addWidget(self.tree)
 
         # Optionen
@@ -599,9 +603,10 @@ class ScatterPlotApp(QMainWindow):
                                      ha='right', va='bottom',
                                      fontsize=10, color=ref_line['color'])
 
-        # Annotations (Version 5.2)
-        for annotation in self.annotations:
-            self.ax_main.text(
+        # Annotations (Version 5.2, erweitert 5.3: draggable)
+        self.annotation_texts = []  # Text-Objekte speichern für draggable
+        for idx, annotation in enumerate(self.annotations):
+            text_obj = self.ax_main.text(
                 annotation['x'],
                 annotation['y'],
                 annotation['text'],
@@ -609,8 +614,19 @@ class ScatterPlotApp(QMainWindow):
                 color=annotation['color'],
                 rotation=annotation['rotation'],
                 ha='left',
-                va='bottom'
+                va='bottom',
+                picker=True,
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.1, edgecolor='none')
             )
+            # Text verschiebbar machen (v5.3)
+            text_obj.set_picker(5)  # Pickable mit Toleranz von 5 Pixeln
+            text_obj._annotation_idx = idx  # Index speichern
+            self.annotation_texts.append(text_obj)
+
+        # Mouse-Event für Drag-and-Drop (v5.3)
+        self.canvas.mpl_connect('button_press_event', self.on_annotation_press)
+        self.canvas.mpl_connect('button_release_event', self.on_annotation_release)
+        self.canvas.mpl_connect('motion_notify_event', self.on_annotation_motion)
 
         self.fig.tight_layout()
         self.canvas.draw()
@@ -668,6 +684,46 @@ class ScatterPlotApp(QMainWindow):
         else:
             return x, y
 
+    def on_annotation_press(self, event):
+        """Maus-Press für Annotation-Drag (Version 5.3)"""
+        if event.inaxes != self.ax_main:
+            return
+
+        # Prüfen, ob ein Text-Objekt angeklickt wurde
+        for text_obj in getattr(self, 'annotation_texts', []):
+            contains, _ = text_obj.contains(event)
+            if contains:
+                self._dragged_annotation = text_obj
+                self._drag_start_pos = (event.xdata, event.ydata)
+                break
+
+    def on_annotation_motion(self, event):
+        """Maus-Motion für Annotation-Drag (Version 5.3)"""
+        if not hasattr(self, '_dragged_annotation') or self._dragged_annotation is None:
+            return
+        if event.inaxes != self.ax_main:
+            return
+
+        # Position aktualisieren
+        self._dragged_annotation.set_position((event.xdata, event.ydata))
+        self.canvas.draw_idle()
+
+    def on_annotation_release(self, event):
+        """Maus-Release für Annotation-Drag (Version 5.3)"""
+        if not hasattr(self, '_dragged_annotation') or self._dragged_annotation is None:
+            return
+
+        # Finale Position in Datenstruktur speichern
+        idx = self._dragged_annotation._annotation_idx
+        if 0 <= idx < len(self.annotations):
+            pos = self._dragged_annotation.get_position()
+            self.annotations[idx]['x'] = pos[0]
+            self.annotations[idx]['y'] = pos[1]
+            self.update_annotations_tree()
+
+        self._dragged_annotation = None
+        self._drag_start_pos = None
+
     def create_group(self):
         """Erstellt eine neue Gruppe"""
         dialog = CreateGroupDialog(self)
@@ -709,7 +765,7 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def delete_selected(self):
-        """Löscht ausgewählte Items"""
+        """Löscht ausgewählte Items (erweitert v5.3 für Annotations/Referenzlinien)"""
         items = self.tree.selectedItems()
         if not items:
             return
@@ -717,25 +773,38 @@ class ScatterPlotApp(QMainWindow):
         for item in items:
             data = item.data(0, Qt.UserRole)
             if data:
-                item_type, obj = data
+                item_type = data[0]
                 if item_type == 'group':
+                    obj = data[1]
                     if obj in self.groups:
                         self.groups.remove(obj)
                 elif item_type == 'dataset':
+                    obj = data[1]
                     # Aus Gruppe oder unassigned entfernen
                     parent_data = item.parent().data(0, Qt.UserRole) if item.parent() else None
                     if parent_data and parent_data[0] == 'group':
                         parent_data[1].remove_dataset(obj)
                     elif obj in self.unassigned_datasets:
                         self.unassigned_datasets.remove(obj)
+                elif item_type == 'annotation':
+                    idx = data[1]
+                    if 0 <= idx < len(self.annotations):
+                        del self.annotations[idx]
+                    self.update_annotations_tree()
+                elif item_type == 'reference_line':
+                    idx = data[1]
+                    if 0 <= idx < len(self.reference_lines):
+                        del self.reference_lines[idx]
+                    self.update_annotations_tree()
 
-            # Aus Tree entfernen
-            if item.parent():
-                item.parent().removeChild(item)
-            else:
-                index = self.tree.indexOfTopLevelItem(item)
-                if index >= 0:
-                    self.tree.takeTopLevelItem(index)
+            # Aus Tree entfernen (nicht bei Annotations/Referenzlinien, die werden neu generiert)
+            if data and data[0] not in ['annotation', 'reference_line']:
+                if item.parent():
+                    item.parent().removeChild(item)
+                else:
+                    index = self.tree.indexOfTopLevelItem(item)
+                    if index >= 0:
+                        self.tree.takeTopLevelItem(index)
 
         self.update_plot()
 
@@ -791,7 +860,7 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_context_menu(self, position):
-        """Kontextmenü für Tree"""
+        """Kontextmenü für Tree (erweitert v5.3 für Annotations/Referenzlinien)"""
         item = self.tree.itemAt(position)
         if not item:
             return
@@ -799,6 +868,11 @@ class ScatterPlotApp(QMainWindow):
         menu = QMenu()
 
         data = item.data(0, Qt.UserRole)
+
+        # Bearbeiten für Annotations/Referenzlinien (v5.3)
+        edit_action = None
+        if data and data[0] in ['annotation', 'reference_line']:
+            edit_action = menu.addAction("Bearbeiten...")
 
         rename_action = menu.addAction("Umbenennen")
 
@@ -821,7 +895,9 @@ class ScatterPlotApp(QMainWindow):
 
         action = menu.exec(self.tree.viewport().mapToGlobal(position))
 
-        if action == rename_action:
+        if action == edit_action and edit_action:
+            self.edit_annotation_or_refline(item)
+        elif action == rename_action:
             self.rename_item(item)
         elif style_menu and action in style_actions.values():
             # Stil anwenden
@@ -931,21 +1007,108 @@ class ScatterPlotApp(QMainWindow):
             self.font_settings = dialog.get_settings()
             self.update_plot()
 
+    def update_annotations_tree(self):
+        """Aktualisiert Annotations & Referenzlinien im Tree (Version 5.3)"""
+        # Alte Items löschen
+        while self.annotations_item.childCount() > 0:
+            self.annotations_item.takeChild(0)
+
+        # Annotations hinzufügen
+        for idx, annotation in enumerate(self.annotations):
+            text_preview = annotation['text'][:20] + '...' if len(annotation['text']) > 20 else annotation['text']
+            item = QTreeWidgetItem(self.annotations_item,
+                                  [f"📝 {text_preview}",
+                                   f"({annotation['x']:.2f}, {annotation['y']:.2f})"])
+            item.setData(0, Qt.UserRole, ('annotation', idx, annotation))
+
+        # Referenzlinien hinzufügen
+        for idx, ref_line in enumerate(self.reference_lines):
+            line_type = "Vertikal" if ref_line['type'] == 'vertical' else 'Horizontal'
+            label = ref_line.get('label', '')
+            label_text = f" '{label}'" if label else ''
+            item = QTreeWidgetItem(self.annotations_item,
+                                  [f"📏 {line_type}{label_text}",
+                                   f"{ref_line['value']:.2f}"])
+            item.setData(0, Qt.UserRole, ('reference_line', idx, ref_line))
+
     def add_annotation(self):
-        """Fügt Annotation hinzu (Version 5.2)"""
+        """Fügt Annotation hinzu (Version 5.2, erweitert 5.3)"""
         dialog = AnnotationsDialog(self)
         if dialog.exec():
             annotation = dialog.get_annotation()
             self.annotations.append(annotation)
+            self.update_annotations_tree()
             self.update_plot()
 
     def add_reference_line(self):
-        """Fügt Referenzlinie hinzu (Version 5.2)"""
+        """Fügt Referenzlinie hinzu (Version 5.2, erweitert 5.3)"""
         dialog = ReferenceLinesDialog(self)
         if dialog.exec():
             ref_line = dialog.get_reference_line()
+
+            # Automatisches Label generieren, falls leer (Version 5.3)
+            if not ref_line.get('label'):
+                if ref_line['type'] == 'vertical':
+                    ref_line['label'] = f"x = {ref_line['value']:.2f}"
+                else:
+                    ref_line['label'] = f"y = {ref_line['value']:.2f}"
+
             self.reference_lines.append(ref_line)
+            self.update_annotations_tree()
             self.update_plot()
+
+    def edit_annotation_or_refline(self, item):
+        """Bearbeitet Annotation oder Referenzlinie (Version 5.3)"""
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+
+        item_type, idx, obj = data
+
+        if item_type == 'annotation':
+            # Annotations-Dialog mit vorausgefüllten Werten
+            from dialogs.annotations_dialog import AnnotationsDialog
+            dialog = AnnotationsDialog(self)
+            dialog.text_edit.setText(obj['text'])
+            dialog.x_spin.setValue(obj['x'])
+            dialog.y_spin.setValue(obj['y'])
+            dialog.fontsize_spin.setValue(obj['fontsize'])
+            dialog.color = obj['color']
+            dialog.color_button.setStyleSheet(f"background-color: {obj['color']}; border: 1px solid #555;")
+            dialog.color_button.setText(obj['color'])
+            dialog.rotation_spin.setValue(obj['rotation'])
+
+            if dialog.exec():
+                updated = dialog.get_annotation()
+                self.annotations[idx] = updated
+                self.update_annotations_tree()
+                self.update_plot()
+
+        elif item_type == 'reference_line':
+            # Referenzlinien-Dialog mit vorausgefüllten Werten
+            from dialogs.reference_lines_dialog import ReferenceLinesDialog
+            dialog = ReferenceLinesDialog(self)
+            dialog.type_combo.setCurrentText('Vertikal' if obj['type'] == 'vertical' else 'Horizontal')
+            dialog.value_spin.setValue(obj['value'])
+            dialog.label_edit.setText(obj.get('label', ''))
+            dialog.linestyle_combo.setCurrentText(obj['linestyle'])
+            dialog.linewidth_spin.setValue(obj['linewidth'])
+            dialog.color = obj['color']
+            dialog.color_button.setStyleSheet(f"background-color: {obj['color']}; border: 1px solid #555;")
+            dialog.color_button.setText(obj['color'])
+            dialog.alpha_spin.setValue(obj['alpha'])
+
+            if dialog.exec():
+                updated = dialog.get_reference_line()
+                # Automatisches Label generieren, falls leer
+                if not updated.get('label'):
+                    if updated['type'] == 'vertical':
+                        updated['label'] = f"x = {updated['value']:.2f}"
+                    else:
+                        updated['label'] = f"y = {updated['value']:.2f}"
+                self.reference_lines[idx] = updated
+                self.update_annotations_tree()
+                self.update_plot()
 
     def show_export_dialog(self):
         """Zeigt Export-Dialog mit erweiterten Optionen"""
@@ -1126,6 +1289,9 @@ class ScatterPlotApp(QMainWindow):
                     self.annotations = session['annotations']
                 if 'reference_lines' in session:
                     self.reference_lines = session['reference_lines']
+
+                # Annotations-Tree aktualisieren (v5.3)
+                self.update_annotations_tree()
 
                 self.update_plot()
                 QMessageBox.information(self, "Erfolg", "Session geladen")

@@ -158,6 +158,10 @@ class DesignManagerDialog(QDialog):
         apply_btn.clicked.connect(self.apply_plot_design)
         btn_layout.addWidget(apply_btn)
 
+        edit_btn = QPushButton("Bearbeiten...")
+        edit_btn.clicked.connect(self.edit_plot_design)
+        btn_layout.addWidget(edit_btn)
+
         save_btn = QPushButton("Aktuelles speichern...")
         save_btn.clicked.connect(self.save_current_as_design)
         btn_layout.addWidget(save_btn)
@@ -413,6 +417,27 @@ class DesignManagerDialog(QDialog):
             del self.config.plot_designs[name]
             self.config.save_config()
             self.refresh_plot_designs_list()
+
+    def edit_plot_design(self):
+        """Bearbeitet Plot-Design (Version 5.3)"""
+        current_item = self.plot_designs_list.currentItem()
+        if not current_item:
+            QMessageBox.information(self, "Info", "Bitte wählen Sie ein Design aus")
+            return
+
+        # Namen extrahieren (ohne Emoji-Prefix)
+        name = current_item.text().split(' ', 1)[1]
+
+        # Design laden
+        design = self.get_design_by_name(name)
+        if not design:
+            QMessageBox.warning(self, "Fehler", f"Design '{name}' nicht gefunden")
+            return
+
+        # Edit-Dialog öffnen
+        dialog = PlotDesignEditDialog(self, name, design, self.config,
+                                      self.refresh_plot_designs_list, self.parent_app.update_plot)
+        dialog.exec()
 
     def get_design_by_name(self, name):
         """Gibt Design-Dict für Namen zurück (Version 5.2)"""
@@ -857,4 +882,402 @@ class ColorSchemeEditDialog(QDialog):
         self.refresh_callback()
         self.plot_callback()
         QMessageBox.information(self, "Erfolg", f"Farbschema '{new_name}' gespeichert")
+        self.accept()
+
+
+class PlotDesignEditDialog(QDialog):
+    """Dialog zum Bearbeiten von Plot-Designs (Version 5.3)"""
+
+    def __init__(self, parent, design_name, design, config, refresh_callback, plot_callback):
+        super().__init__(parent)
+        self.design_name = design_name
+        self.config = config
+        self.refresh_callback = refresh_callback
+        self.plot_callback = plot_callback
+        self.is_predefined = design_name in ['Standard', 'Publikation', 'Präsentation', 'TUBAF', 'Minimalistisch']
+
+        # Deep copy der Settings
+        import copy
+        self.grid_settings = copy.deepcopy(design['grid_settings'])
+        self.font_settings = copy.deepcopy(design['font_settings'])
+        self.legend_settings = copy.deepcopy(design['legend_settings'])
+
+        self.setWindowTitle(f"Plot-Design bearbeiten: {design_name}")
+        self.resize(600, 700)
+
+        layout = QVBoxLayout(self)
+
+        # Name
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Name:"))
+        self.name_edit = QLineEdit(design_name)
+        if self.is_predefined:
+            self.name_edit.setPlaceholderText(f"Neuer Name (leer lassen für '{design_name}')")
+        name_layout.addWidget(self.name_edit)
+        layout.addLayout(name_layout)
+
+        # Info für Standard-Designs
+        if self.is_predefined:
+            info_label = QLabel("ℹ️  Standard-Designs werden beim Speichern überschrieben und können wiederhergestellt werden.")
+            info_label.setStyleSheet("font-style: italic; color: #888; padding: 5px;")
+            layout.addWidget(info_label)
+
+        # Tabs für verschiedene Einstellungs-Kategorien
+        tabs = QTabWidget()
+        tabs.addTab(self.create_grid_tab(), "Grid")
+        tabs.addTab(self.create_font_tab(), "Schriftarten")
+        tabs.addTab(self.create_legend_tab(), "Legende")
+        layout.addWidget(tabs)
+
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.save)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def create_grid_tab(self):
+        """Erstellt Grid-Einstellungen Tab"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Major Grid
+        major_group = QGroupBox("Haupt-Grid")
+        major_layout = QGridLayout()
+
+        self.major_enable = QCheckBox("Aktiviert")
+        self.major_enable.setChecked(self.grid_settings['major_enable'])
+        major_layout.addWidget(self.major_enable, 0, 0, 1, 2)
+
+        major_layout.addWidget(QLabel("Achse:"), 1, 0)
+        self.major_axis = QComboBox()
+        self.major_axis.addItems(['both', 'x', 'y'])
+        self.major_axis.setCurrentText(self.grid_settings['major_axis'])
+        major_layout.addWidget(self.major_axis, 1, 1)
+
+        major_layout.addWidget(QLabel("Linienstil:"), 2, 0)
+        self.major_linestyle = QComboBox()
+        self.major_linestyle.addItems(['solid', 'dashed', 'dotted', 'dashdot'])
+        self.major_linestyle.setCurrentText(self.grid_settings['major_linestyle'])
+        major_layout.addWidget(self.major_linestyle, 2, 1)
+
+        major_layout.addWidget(QLabel("Linienbreite:"), 3, 0)
+        self.major_linewidth = QDoubleSpinBox()
+        self.major_linewidth.setRange(0.1, 5.0)
+        self.major_linewidth.setSingleStep(0.1)
+        self.major_linewidth.setValue(self.grid_settings['major_linewidth'])
+        major_layout.addWidget(self.major_linewidth, 3, 1)
+
+        major_layout.addWidget(QLabel("Alpha:"), 4, 0)
+        self.major_alpha = QDoubleSpinBox()
+        self.major_alpha.setRange(0.0, 1.0)
+        self.major_alpha.setSingleStep(0.05)
+        self.major_alpha.setDecimals(2)
+        self.major_alpha.setValue(self.grid_settings['major_alpha'])
+        major_layout.addWidget(self.major_alpha, 4, 1)
+
+        major_layout.addWidget(QLabel("Farbe:"), 5, 0)
+        self.major_color_btn = QPushButton()
+        self.major_color = self.grid_settings['major_color']
+        self.major_color_btn.setStyleSheet(f"background-color: {self.major_color}; border: 1px solid #555;")
+        self.major_color_btn.setText(self.major_color)
+        self.major_color_btn.clicked.connect(self.choose_major_color)
+        major_layout.addWidget(self.major_color_btn, 5, 1)
+
+        major_group.setLayout(major_layout)
+        layout.addWidget(major_group)
+
+        # Minor Grid
+        minor_group = QGroupBox("Neben-Grid")
+        minor_layout = QGridLayout()
+
+        self.minor_enable = QCheckBox("Aktiviert")
+        self.minor_enable.setChecked(self.grid_settings['minor_enable'])
+        minor_layout.addWidget(self.minor_enable, 0, 0, 1, 2)
+
+        minor_layout.addWidget(QLabel("Achse:"), 1, 0)
+        self.minor_axis = QComboBox()
+        self.minor_axis.addItems(['both', 'x', 'y'])
+        self.minor_axis.setCurrentText(self.grid_settings['minor_axis'])
+        minor_layout.addWidget(self.minor_axis, 1, 1)
+
+        minor_layout.addWidget(QLabel("Linienstil:"), 2, 0)
+        self.minor_linestyle = QComboBox()
+        self.minor_linestyle.addItems(['solid', 'dashed', 'dotted', 'dashdot'])
+        self.minor_linestyle.setCurrentText(self.grid_settings['minor_linestyle'])
+        minor_layout.addWidget(self.minor_linestyle, 2, 1)
+
+        minor_layout.addWidget(QLabel("Linienbreite:"), 3, 0)
+        self.minor_linewidth = QDoubleSpinBox()
+        self.minor_linewidth.setRange(0.1, 5.0)
+        self.minor_linewidth.setSingleStep(0.1)
+        self.minor_linewidth.setValue(self.grid_settings['minor_linewidth'])
+        minor_layout.addWidget(self.minor_linewidth, 3, 1)
+
+        minor_layout.addWidget(QLabel("Alpha:"), 4, 0)
+        self.minor_alpha = QDoubleSpinBox()
+        self.minor_alpha.setRange(0.0, 1.0)
+        self.minor_alpha.setSingleStep(0.05)
+        self.minor_alpha.setDecimals(2)
+        self.minor_alpha.setValue(self.grid_settings['minor_alpha'])
+        minor_layout.addWidget(self.minor_alpha, 4, 1)
+
+        minor_layout.addWidget(QLabel("Farbe:"), 5, 0)
+        self.minor_color_btn = QPushButton()
+        self.minor_color = self.grid_settings['minor_color']
+        self.minor_color_btn.setStyleSheet(f"background-color: {self.minor_color}; border: 1px solid #555;")
+        self.minor_color_btn.setText(self.minor_color)
+        self.minor_color_btn.clicked.connect(self.choose_minor_color)
+        minor_layout.addWidget(self.minor_color_btn, 5, 1)
+
+        minor_group.setLayout(minor_layout)
+        layout.addWidget(minor_group)
+
+        layout.addStretch()
+        return tab
+
+    def create_font_tab(self):
+        """Erstellt Font-Einstellungen Tab"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Font-Familie
+        family_layout = QHBoxLayout()
+        family_layout.addWidget(QLabel("Schriftfamilie:"))
+        self.font_family = QComboBox()
+        self.font_family.addItems(['sans-serif', 'serif', 'monospace'])
+        self.font_family.setCurrentText(self.font_settings.get('font_family', 'sans-serif'))
+        family_layout.addWidget(self.font_family)
+        layout.addLayout(family_layout)
+
+        # Math Text
+        self.use_math_text = QCheckBox("Math Text verwenden (für Exponenten)")
+        self.use_math_text.setChecked(self.font_settings.get('use_math_text', False))
+        layout.addWidget(self.use_math_text)
+
+        # Titel
+        title_group = QGroupBox("Titel")
+        title_layout = QGridLayout()
+
+        title_layout.addWidget(QLabel("Größe:"), 0, 0)
+        self.title_size = QSpinBox()
+        self.title_size.setRange(8, 32)
+        self.title_size.setValue(self.font_settings.get('title_size', 14))
+        title_layout.addWidget(self.title_size, 0, 1)
+
+        self.title_bold = QCheckBox("Fett")
+        self.title_bold.setChecked(self.font_settings.get('title_bold', True))
+        title_layout.addWidget(self.title_bold, 1, 0)
+
+        self.title_italic = QCheckBox("Kursiv")
+        self.title_italic.setChecked(self.font_settings.get('title_italic', False))
+        title_layout.addWidget(self.title_italic, 1, 1)
+
+        title_group.setLayout(title_layout)
+        layout.addWidget(title_group)
+
+        # Labels
+        labels_group = QGroupBox("Achsenbeschriftungen")
+        labels_layout = QGridLayout()
+
+        labels_layout.addWidget(QLabel("Größe:"), 0, 0)
+        self.labels_size = QSpinBox()
+        self.labels_size.setRange(8, 32)
+        self.labels_size.setValue(self.font_settings.get('labels_size', 12))
+        labels_layout.addWidget(self.labels_size, 0, 1)
+
+        self.labels_bold = QCheckBox("Fett")
+        self.labels_bold.setChecked(self.font_settings.get('labels_bold', False))
+        labels_layout.addWidget(self.labels_bold, 1, 0)
+
+        self.labels_italic = QCheckBox("Kursiv")
+        self.labels_italic.setChecked(self.font_settings.get('labels_italic', False))
+        labels_layout.addWidget(self.labels_italic, 1, 1)
+
+        labels_group.setLayout(labels_layout)
+        layout.addWidget(labels_group)
+
+        # Ticks
+        ticks_group = QGroupBox("Tick-Labels")
+        ticks_layout = QGridLayout()
+
+        ticks_layout.addWidget(QLabel("Größe:"), 0, 0)
+        self.ticks_size = QSpinBox()
+        self.ticks_size.setRange(6, 24)
+        self.ticks_size.setValue(self.font_settings.get('ticks_size', 10))
+        ticks_layout.addWidget(self.ticks_size, 0, 1)
+
+        self.ticks_bold = QCheckBox("Fett")
+        self.ticks_bold.setChecked(self.font_settings.get('ticks_bold', False))
+        ticks_layout.addWidget(self.ticks_bold, 1, 0)
+
+        self.ticks_italic = QCheckBox("Kursiv")
+        self.ticks_italic.setChecked(self.font_settings.get('ticks_italic', False))
+        ticks_layout.addWidget(self.ticks_italic, 1, 1)
+
+        ticks_group.setLayout(ticks_layout)
+        layout.addWidget(ticks_group)
+
+        # Legend Size
+        legend_size_group = QGroupBox("Legende")
+        legend_size_layout = QGridLayout()
+
+        legend_size_layout.addWidget(QLabel("Größe:"), 0, 0)
+        self.legend_font_size = QSpinBox()
+        self.legend_font_size.setRange(6, 24)
+        self.legend_font_size.setValue(self.font_settings.get('legend_size', 10))
+        legend_size_layout.addWidget(self.legend_font_size, 0, 1)
+
+        self.legend_bold = QCheckBox("Fett")
+        self.legend_bold.setChecked(self.font_settings.get('legend_bold', False))
+        legend_size_layout.addWidget(self.legend_bold, 1, 0)
+
+        self.legend_italic = QCheckBox("Kursiv")
+        self.legend_italic.setChecked(self.font_settings.get('legend_italic', False))
+        legend_size_layout.addWidget(self.legend_italic, 1, 1)
+
+        legend_size_group.setLayout(legend_size_layout)
+        layout.addWidget(legend_size_group)
+
+        layout.addStretch()
+        return tab
+
+    def create_legend_tab(self):
+        """Erstellt Legenden-Einstellungen Tab"""
+        tab = QWidget()
+        layout = QGridLayout(tab)
+
+        layout.addWidget(QLabel("Position:"), 0, 0)
+        self.legend_position = QComboBox()
+        self.legend_position.addItems(['best', 'upper right', 'upper left', 'lower right', 'lower left',
+                                       'center right', 'center left', 'upper center', 'lower center', 'center'])
+        self.legend_position.setCurrentText(self.legend_settings.get('position', 'best'))
+        layout.addWidget(self.legend_position, 0, 1)
+
+        layout.addWidget(QLabel("Spalten:"), 1, 0)
+        self.legend_ncol = QSpinBox()
+        self.legend_ncol.setRange(1, 5)
+        self.legend_ncol.setValue(self.legend_settings.get('ncol', 1))
+        layout.addWidget(self.legend_ncol, 1, 1)
+
+        layout.addWidget(QLabel("Alpha:"), 2, 0)
+        self.legend_alpha = QDoubleSpinBox()
+        self.legend_alpha.setRange(0.0, 1.0)
+        self.legend_alpha.setSingleStep(0.05)
+        self.legend_alpha.setDecimals(2)
+        self.legend_alpha.setValue(self.legend_settings.get('alpha', 0.9))
+        layout.addWidget(self.legend_alpha, 2, 1)
+
+        self.legend_frameon = QCheckBox("Rahmen anzeigen")
+        self.legend_frameon.setChecked(self.legend_settings.get('frameon', True))
+        layout.addWidget(self.legend_frameon, 3, 0, 1, 2)
+
+        self.legend_shadow = QCheckBox("Schatten")
+        self.legend_shadow.setChecked(self.legend_settings.get('shadow', False))
+        layout.addWidget(self.legend_shadow, 4, 0, 1, 2)
+
+        self.legend_fancybox = QCheckBox("Abgerundete Ecken")
+        self.legend_fancybox.setChecked(self.legend_settings.get('fancybox', True))
+        layout.addWidget(self.legend_fancybox, 5, 0, 1, 2)
+
+        layout.setRowStretch(6, 1)
+        return tab
+
+    def choose_major_color(self):
+        """Wählt Farbe für Haupt-Grid"""
+        color = QColorDialog.getColor(QColor(self.major_color), self, "Haupt-Grid Farbe")
+        if color.isValid():
+            self.major_color = color.name()
+            self.major_color_btn.setStyleSheet(f"background-color: {self.major_color}; border: 1px solid #555;")
+            self.major_color_btn.setText(self.major_color)
+
+    def choose_minor_color(self):
+        """Wählt Farbe für Neben-Grid"""
+        color = QColorDialog.getColor(QColor(self.minor_color), self, "Neben-Grid Farbe")
+        if color.isValid():
+            self.minor_color = color.name()
+            self.minor_color_btn.setStyleSheet(f"background-color: {self.minor_color}; border: 1px solid #555;")
+            self.minor_color_btn.setText(self.minor_color)
+
+    def save(self):
+        """Speichert das Plot-Design"""
+        new_name = self.name_edit.text().strip()
+
+        # Wenn Name leer und es ist ein Standard-Design, verwende Original-Namen
+        if not new_name:
+            if self.is_predefined:
+                new_name = self.design_name
+            else:
+                QMessageBox.critical(self, "Fehler", "Name darf nicht leer sein")
+                return
+
+        # Einstellungen sammeln
+        new_design = {
+            'grid_settings': {
+                'major_enable': self.major_enable.isChecked(),
+                'major_axis': self.major_axis.currentText(),
+                'major_linestyle': self.major_linestyle.currentText(),
+                'major_linewidth': self.major_linewidth.value(),
+                'major_alpha': self.major_alpha.value(),
+                'major_color': self.major_color,
+                'minor_enable': self.minor_enable.isChecked(),
+                'minor_axis': self.minor_axis.currentText(),
+                'minor_linestyle': self.minor_linestyle.currentText(),
+                'minor_linewidth': self.minor_linewidth.value(),
+                'minor_alpha': self.minor_alpha.value(),
+                'minor_color': self.minor_color
+            },
+            'font_settings': {
+                'title_size': self.title_size.value(),
+                'title_bold': self.title_bold.isChecked(),
+                'title_italic': self.title_italic.isChecked(),
+                'title_underline': self.font_settings.get('title_underline', False),
+                'labels_size': self.labels_size.value(),
+                'labels_bold': self.labels_bold.isChecked(),
+                'labels_italic': self.labels_italic.isChecked(),
+                'labels_underline': self.font_settings.get('labels_underline', False),
+                'ticks_size': self.ticks_size.value(),
+                'ticks_bold': self.ticks_bold.isChecked(),
+                'ticks_italic': self.ticks_italic.isChecked(),
+                'ticks_underline': self.font_settings.get('ticks_underline', False),
+                'legend_size': self.legend_font_size.value(),
+                'legend_bold': self.legend_bold.isChecked(),
+                'legend_italic': self.legend_italic.isChecked(),
+                'legend_underline': self.font_settings.get('legend_underline', False),
+                'font_family': self.font_family.currentText(),
+                'use_math_text': self.use_math_text.isChecked()
+            },
+            'legend_settings': {
+                'position': self.legend_position.currentText(),
+                'fontsize': self.legend_font_size.value(),  # Für Kompatibilität
+                'ncol': self.legend_ncol.value(),
+                'alpha': self.legend_alpha.value(),
+                'frameon': self.legend_frameon.isChecked(),
+                'shadow': self.legend_shadow.isChecked(),
+                'fancybox': self.legend_fancybox.isChecked()
+            }
+        }
+
+        # In Config speichern
+        if not hasattr(self.config, 'plot_designs'):
+            self.config.plot_designs = {}
+
+        self.config.plot_designs[new_name] = new_design
+        self.config.save_config()
+
+        # Wenn Name geändert wurde und es kein Standard-Design ist, altes löschen
+        if new_name != self.design_name and not self.is_predefined:
+            if self.design_name in self.config.plot_designs:
+                del self.config.plot_designs[self.design_name]
+                self.config.save_config()
+
+        self.refresh_callback()
+        self.plot_callback()
+
+        if self.is_predefined and new_name == self.design_name:
+            QMessageBox.information(self, "Erfolg",
+                f"Standard-Design '{new_name}' wurde überschrieben.\n\n"
+                "Löschen Sie das Design in der Liste, um die Standardwerte wiederherzustellen.")
+        else:
+            QMessageBox.information(self, "Erfolg", f"Design '{new_name}' wurde gespeichert")
+
         self.accept()
