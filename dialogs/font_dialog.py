@@ -109,6 +109,22 @@ class FontSettingsDialog(QDialog):
         font_group.setLayout(font_layout)
         layout.addWidget(font_group)
 
+        # Math Text Gruppe (Version 5.2)
+        math_group = QGroupBox("Wissenschaftliche Notation")
+        math_layout = QGridLayout()
+
+        self.use_math_text = QCheckBox("Math Text für Exponenten verwenden")
+        self.use_math_text.setChecked(font_settings.get('use_math_text', False))
+        math_layout.addWidget(self.use_math_text, 0, 0, 1, 2)
+
+        hint_label = QLabel("Konvertiert: nm⁻¹ → nm$^{-1}$ für bessere Darstellung")
+        hint_label.setStyleSheet("color: #888; font-style: italic; font-size: 9pt;")
+        hint_label.setWordWrap(True)
+        math_layout.addWidget(hint_label, 1, 0, 1, 2)
+
+        math_group.setLayout(math_layout)
+        layout.addWidget(math_group)
+
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -126,5 +142,6 @@ class FontSettingsDialog(QDialog):
             'labels_italic': self.labels_italic.isChecked(),
             'ticks_size': self.ticks_size_spin.value(),
             'legend_size': self.legend_size_spin.value(),
-            'font_family': self.font_family_combo.currentText()
+            'font_family': self.font_family_combo.currentText(),
+            'use_math_text': self.use_math_text.isChecked()
         }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TUBAF Scattering Plot Tool - Version 5.1 (Qt)
+TUBAF Scattering Plot Tool - Version 5.2 (Qt)
 ==============================================
 
 Professionelles Tool für Streudaten-Analyse mit:
@@ -13,6 +13,9 @@ Professionelles Tool für Streudaten-Analyse mit:
 - Session-Verwaltung
 - Erweiterte Legenden-, Grid- und Font-Einstellungen
 - Verbesserter Export-Dialog
+- Plot-Designs für konsistente Visualisierung
+- Annotations und Referenzlinien
+- Math Text für wissenschaftliche Notation
 """
 
 import sys
@@ -49,6 +52,8 @@ from dialogs.legend_dialog import LegendSettingsDialog
 from dialogs.grid_dialog import GridSettingsDialog
 from dialogs.font_dialog import FontSettingsDialog
 from dialogs.export_dialog import ExportSettingsDialog
+from dialogs.annotations_dialog import AnnotationsDialog
+from dialogs.reference_lines_dialog import ReferenceLinesDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 
@@ -59,7 +64,7 @@ class ScatterPlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("TUBAF Scattering Plot Tool v5.1")
+        self.setWindowTitle("TUBAF Scattering Plot Tool v5.2")
         self.resize(1600, 1000)
 
         # Config
@@ -72,7 +77,6 @@ class ScatterPlotApp(QMainWindow):
         # Plot-Einstellungen
         self.plot_type = 'Log-Log'
         self.stack_mode = True
-        self.show_grid = True
         self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True}
 
         # Erweiterte Einstellungen (Version 5.1)
@@ -108,7 +112,8 @@ class ScatterPlotApp(QMainWindow):
             'labels_italic': False,
             'ticks_size': 10,
             'legend_size': 10,
-            'font_family': 'sans-serif'
+            'font_family': 'sans-serif',
+            'use_math_text': False
         }
         self.export_settings = {
             'format': 'PNG',
@@ -120,6 +125,12 @@ class ScatterPlotApp(QMainWindow):
             'tight_layout': True,
             'facecolor_white': False
         }
+
+        # Version 5.2 Features
+        self.use_math_text = False  # Math Text für Exponenten
+        self.annotations = []  # Liste von Annotations
+        self.reference_lines = []  # Liste von Referenzlinien
+        self.current_plot_design = 'Standard'  # Aktuelles Plot-Design
 
         # GUI erstellen
         self.create_menu()
@@ -188,6 +199,16 @@ class ScatterPlotApp(QMainWindow):
         font_action = QAction("Schriftart-Einstellungen...", self)
         font_action.triggered.connect(self.show_font_settings)
         plot_menu.addAction(font_action)
+
+        plot_menu.addSeparator()
+
+        annotation_action = QAction("Annotation hinzufügen...", self)
+        annotation_action.triggered.connect(self.add_annotation)
+        plot_menu.addAction(annotation_action)
+
+        refline_action = QAction("Referenzlinie hinzufügen...", self)
+        refline_action.triggered.connect(self.add_reference_line)
+        plot_menu.addAction(refline_action)
 
         # Design-Menü
         design_menu = menubar.addMenu("Design")
@@ -291,20 +312,13 @@ class ScatterPlotApp(QMainWindow):
         self.stack_checkbox.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.stack_checkbox, 1, 1)
 
-        # Grid
-        options_layout.addWidget(QLabel("Grid:"), 2, 0)
-        self.grid_checkbox = QCheckBox("Anzeigen")
-        self.grid_checkbox.setChecked(True)
-        self.grid_checkbox.stateChanged.connect(self.update_plot)
-        options_layout.addWidget(self.grid_checkbox, 2, 1)
-
         # Farbschema
-        options_layout.addWidget(QLabel("Farbschema:"), 3, 0)
+        options_layout.addWidget(QLabel("Farbschema:"), 2, 0)
         self.color_scheme_combo = QComboBox()
         self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
         self.color_scheme_combo.setCurrentText('TUBAF')
         self.color_scheme_combo.currentTextChanged.connect(self.change_color_scheme)
-        options_layout.addWidget(self.color_scheme_combo, 3, 1)
+        options_layout.addWidget(self.color_scheme_combo, 2, 1)
 
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
@@ -363,7 +377,6 @@ class ScatterPlotApp(QMainWindow):
         """Aktualisiert den Plot"""
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
-        self.show_grid = self.grid_checkbox.isChecked()
 
         # Figure leeren
         self.fig.clear()
@@ -460,12 +473,15 @@ class ScatterPlotApp(QMainWindow):
             self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Achsen
-        self.ax_main.set_xlabel(plot_info['xlabel'], fontsize=self.font_settings['labels_size'],
+        # Achsen (mit Math Text Support in v5.2)
+        xlabel = self.convert_to_mathtext(plot_info['xlabel'])
+        ylabel = self.convert_to_mathtext(plot_info['ylabel'])
+
+        self.ax_main.set_xlabel(xlabel, fontsize=self.font_settings['labels_size'],
                                weight='bold' if self.font_settings['labels_bold'] else 'normal',
                                style='italic' if self.font_settings['labels_italic'] else 'normal',
                                fontfamily=self.font_settings['font_family'])
-        self.ax_main.set_ylabel(plot_info['ylabel'], fontsize=self.font_settings['labels_size'],
+        self.ax_main.set_ylabel(ylabel, fontsize=self.font_settings['labels_size'],
                                weight='bold' if self.font_settings['labels_bold'] else 'normal',
                                style='italic' if self.font_settings['labels_italic'] else 'normal',
                                fontfamily=self.font_settings['font_family'])
@@ -517,8 +533,94 @@ class ScatterPlotApp(QMainWindow):
             if legend and legend.get_frame():
                 legend.get_frame().set_alpha(self.legend_settings['alpha'])
 
+        # Referenzlinien (Version 5.2)
+        for ref_line in self.reference_lines:
+            if ref_line['type'] == 'vertical':
+                self.ax_main.axvline(
+                    x=ref_line['value'],
+                    linestyle=ref_line['linestyle'],
+                    linewidth=ref_line['linewidth'],
+                    color=ref_line['color'],
+                    alpha=ref_line['alpha']
+                )
+                if ref_line['label']:
+                    # Label oben rechts an der Linie
+                    ylim = self.ax_main.get_ylim()
+                    self.ax_main.text(ref_line['value'], ylim[1] * 0.95, ref_line['label'],
+                                     rotation=90, va='top', ha='right',
+                                     fontsize=10, color=ref_line['color'])
+            else:  # horizontal
+                self.ax_main.axhline(
+                    y=ref_line['value'],
+                    linestyle=ref_line['linestyle'],
+                    linewidth=ref_line['linewidth'],
+                    color=ref_line['color'],
+                    alpha=ref_line['alpha']
+                )
+                if ref_line['label']:
+                    # Label rechts an der Linie
+                    xlim = self.ax_main.get_xlim()
+                    self.ax_main.text(xlim[1] * 0.95, ref_line['value'], ref_line['label'],
+                                     ha='right', va='bottom',
+                                     fontsize=10, color=ref_line['color'])
+
+        # Annotations (Version 5.2)
+        for annotation in self.annotations:
+            self.ax_main.text(
+                annotation['x'],
+                annotation['y'],
+                annotation['text'],
+                fontsize=annotation['fontsize'],
+                color=annotation['color'],
+                rotation=annotation['rotation'],
+                ha='left',
+                va='bottom'
+            )
+
         self.fig.tight_layout()
         self.canvas.draw()
+
+    def convert_to_mathtext(self, text):
+        """Konvertiert Unicode-Exponenten in Math Text (Version 5.2)"""
+        if not self.font_settings.get('use_math_text', False):
+            return text
+
+        # Mapping von Unicode-Zeichen zu Math Text
+        conversions = {
+            '⁰': '$^{0}$',
+            '¹': '$^{1}$',
+            '²': '$^{2}$',
+            '³': '$^{3}$',
+            '⁴': '$^{4}$',
+            '⁵': '$^{5}$',
+            '⁶': '$^{6}$',
+            '⁷': '$^{7}$',
+            '⁸': '$^{8}$',
+            '⁹': '$^{9}$',
+            '⁻': '$^{-}$',
+            '⁺': '$^{+}$',
+            '₀': '$_{0}$',
+            '₁': '$_{1}$',
+            '₂': '$_{2}$',
+            '₃': '$_{3}$',
+            '₄': '$_{4}$',
+            '₅': '$_{5}$',
+            '₆': '$_{6}$',
+            '₇': '$_{7}$',
+            '₈': '$_{8}$',
+            '₉': '$_{9}$',
+        }
+
+        # Spezielle Kombinationen (häufig verwendet)
+        text = text.replace('nm⁻¹', r'nm$^{-1}$')
+        text = text.replace('q⁴', r'q$^{4}$')
+        text = text.replace('q²', r'q$^{2}$')
+
+        # Einzelne Zeichen konvertieren
+        for unicode_char, mathtext in conversions.items():
+            text = text.replace(unicode_char, mathtext)
+
+        return text
 
     def transform_data(self, x, y, plot_type):
         """Transformiert Daten je nach Plot-Typ"""
@@ -665,10 +767,18 @@ class ScatterPlotApp(QMainWindow):
 
         rename_action = menu.addAction("Umbenennen")
 
+        # Stil anwenden nur für Datensätze (v5.2+)
+        style_menu = None
+        style_actions = {}
+        if data and data[0] == 'dataset':
+            menu.addSeparator()
+            style_menu = menu.addMenu("Stil anwenden")
+            for preset_name in self.config.style_presets.keys():
+                style_actions[preset_name] = style_menu.addAction(preset_name)
+
         # Farbe zurücksetzen nur für Datensätze (v4.2+)
         reset_color_action = None
         if data and data[0] == 'dataset':
-            menu.addSeparator()
             reset_color_action = menu.addAction("Farbe zurücksetzen")
 
         menu.addSeparator()
@@ -678,6 +788,12 @@ class ScatterPlotApp(QMainWindow):
 
         if action == rename_action:
             self.rename_item(item)
+        elif style_menu and action in style_actions.values():
+            # Stil anwenden
+            for preset_name, preset_action in style_actions.items():
+                if action == preset_action:
+                    self.apply_style_to_dataset(item, preset_name)
+                    break
         elif action == reset_color_action and reset_color_action:
             self.reset_dataset_color(item)
         elif action == delete_action:
@@ -703,6 +819,14 @@ class ScatterPlotApp(QMainWindow):
         if data and data[0] == 'dataset':
             dataset = data[1]
             dataset.color = None
+            self.update_plot()
+
+    def apply_style_to_dataset(self, item, preset_name):
+        """Wendet Stil-Vorlage auf Datensatz an (v5.2+)"""
+        data = item.data(0, Qt.UserRole)
+        if data and data[0] == 'dataset':
+            dataset = data[1]
+            dataset.apply_style_preset(preset_name)
             self.update_plot()
 
     def change_plot_type(self):
@@ -770,6 +894,22 @@ class ScatterPlotApp(QMainWindow):
         dialog = FontSettingsDialog(self, self.font_settings)
         if dialog.exec():
             self.font_settings = dialog.get_settings()
+            self.update_plot()
+
+    def add_annotation(self):
+        """Fügt Annotation hinzu (Version 5.2)"""
+        dialog = AnnotationsDialog(self)
+        if dialog.exec():
+            annotation = dialog.get_annotation()
+            self.annotations.append(annotation)
+            self.update_plot()
+
+    def add_reference_line(self):
+        """Fügt Referenzlinie hinzu (Version 5.2)"""
+        dialog = ReferenceLinesDialog(self)
+        if dialog.exec():
+            ref_line = dialog.get_reference_line()
+            self.reference_lines.append(ref_line)
             self.update_plot()
 
     def show_export_dialog(self):
@@ -843,21 +983,21 @@ class ScatterPlotApp(QMainWindow):
     def show_about(self):
         """Zeigt Über-Dialog"""
         QMessageBox.about(self, "Über TUBAF Scattering Plot Tool",
-                         "TUBAF Scattering Plot Tool - Version 5.1 (Qt)\n\n"
+                         "TUBAF Scattering Plot Tool - Version 5.2 (Qt)\n\n"
                          "Professionelles Tool für Streudaten-Analyse\n\n"
-                         "Neue Features in v5.1:\n"
-                         "• Erweiterte Legenden-Einstellungen\n"
-                         "• Umfassende Grid-Einstellungen (Major/Minor)\n"
-                         "• Schriftart-Anpassung für alle Elemente\n"
-                         "• Verbesserter Export-Dialog\n\n"
+                         "Neue Features in v5.2:\n"
+                         "• Plot-Designs System (5 vordefinierte + eigene)\n"
+                         "• Annotations und Referenzlinien\n"
+                         "• Math Text für wissenschaftliche Notation\n"
+                         "• Kontextmenü: Stil direkt anwenden\n\n"
                          "Features:\n"
                          "• Qt6-basierte moderne GUI mit modularer Architektur\n"
-                         "• Permanenter Dark Mode\n"
-                         "• Verschiedene Plot-Typen\n"
+                         "• Erweiterte Legenden-, Grid- und Font-Einstellungen\n"
+                         "• Verschiedene Plot-Typen (Log-Log, Porod, Kratky, etc.)\n"
                          "• Stil-Vorlagen und Auto-Erkennung\n"
                          "• Farbschema-Manager\n"
                          "• Drag & Drop\n"
-                         "• Session-Verwaltung")
+                         "• Verbesserter Export-Dialog")
 
     def save_session(self):
         """Speichert Session"""
@@ -871,13 +1011,14 @@ class ScatterPlotApp(QMainWindow):
                     'unassigned': [ds.to_dict() for ds in self.unassigned_datasets],
                     'plot_type': self.plot_type,
                     'stack_mode': self.stack_mode,
-                    'show_grid': self.show_grid,
                     'color_scheme': self.color_scheme_combo.currentText(),
                     'axis_limits': self.axis_limits,
                     'legend_settings': self.legend_settings,
                     'grid_settings': self.grid_settings,
                     'font_settings': self.font_settings,
-                    'export_settings': self.export_settings
+                    'export_settings': self.export_settings,
+                    'annotations': self.annotations,
+                    'reference_lines': self.reference_lines
                 }
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(session, f, indent=2)
@@ -929,9 +1070,6 @@ class ScatterPlotApp(QMainWindow):
                 self.stack_mode = session.get('stack_mode', True)
                 self.stack_checkbox.setChecked(self.stack_mode)
 
-                self.show_grid = session.get('show_grid', True)
-                self.grid_checkbox.setChecked(self.show_grid)
-
                 color_scheme = session.get('color_scheme', 'TUBAF')
                 self.color_scheme_combo.setCurrentText(color_scheme)
 
@@ -947,6 +1085,12 @@ class ScatterPlotApp(QMainWindow):
                     self.font_settings = session['font_settings']
                 if 'export_settings' in session:
                     self.export_settings = session['export_settings']
+
+                # Version 5.2 Features
+                if 'annotations' in session:
+                    self.annotations = session['annotations']
+                if 'reference_lines' in session:
+                    self.reference_lines = session['reference_lines']
 
                 self.update_plot()
                 QMessageBox.information(self, "Erfolg", "Session geladen")

@@ -37,6 +37,7 @@ class DesignManagerDialog(QDialog):
         self.create_styles_tab()
         self.create_colors_tab()
         self.create_autodetect_tab()
+        self.create_plot_designs_tab()  # Version 5.2
 
         # Schließen Button
         close_btn = QPushButton("Schließen")
@@ -131,6 +132,42 @@ class DesignManagerDialog(QDialog):
 
         layout.addLayout(btn_layout)
         self.tabs.addTab(tab, "Auto-Erkennung")
+
+    def create_plot_designs_tab(self):
+        """Erstellt den Plot-Designs Tab (Version 5.2)"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        layout.addWidget(QLabel("Plot-Designs kombinieren Grid-, Font- und Legenden-Einstellungen:"))
+
+        # List Widget
+        self.plot_designs_list = QListWidget()
+        layout.addWidget(self.plot_designs_list)
+        self.refresh_plot_designs_list()
+
+        # Info Label
+        info_label = QLabel("Aktives Design: Standard")
+        info_label.setStyleSheet("font-style: italic; color: #888;")
+        self.plot_design_info_label = info_label
+        layout.addWidget(info_label)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+
+        apply_btn = QPushButton("Design anwenden")
+        apply_btn.clicked.connect(self.apply_plot_design)
+        btn_layout.addWidget(apply_btn)
+
+        save_btn = QPushButton("Aktuelles speichern...")
+        save_btn.clicked.connect(self.save_current_as_design)
+        btn_layout.addWidget(save_btn)
+
+        delete_btn = QPushButton("Löschen")
+        delete_btn.clicked.connect(self.delete_plot_design)
+        btn_layout.addWidget(delete_btn)
+
+        layout.addLayout(btn_layout)
+        self.tabs.addTab(tab, "Plot-Designs")
 
     def refresh_styles_list(self):
         """Aktualisiert Stil-Liste"""
@@ -290,6 +327,290 @@ class DesignManagerDialog(QDialog):
         """Schaltet Auto-Erkennung um"""
         self.config.auto_detection_enabled = self.autodetect_enabled.isChecked()
         self.config.save_config()
+
+    def refresh_plot_designs_list(self):
+        """Aktualisiert Plot-Designs-Liste (Version 5.2)"""
+        self.plot_designs_list.clear()
+
+        # Standard-Designs
+        default_designs = ['Standard', 'Publikation', 'Präsentation', 'TUBAF', 'Minimalistisch']
+        for name in default_designs:
+            self.plot_designs_list.addItem(f"⭐ {name}")
+
+        # Benutzerdefinierte Designs
+        if hasattr(self.config, 'plot_designs'):
+            for name in self.config.plot_designs.keys():
+                if name not in default_designs:
+                    self.plot_designs_list.addItem(f"👤 {name}")
+
+    def apply_plot_design(self):
+        """Wendet ausgewähltes Plot-Design an (Version 5.2)"""
+        current_item = self.plot_designs_list.currentItem()
+        if not current_item:
+            QMessageBox.information(self, "Info", "Bitte wählen Sie ein Design aus")
+            return
+
+        # Namen extrahieren (ohne Emoji-Prefix)
+        name = current_item.text().split(' ', 1)[1]
+
+        # Design laden
+        design = self.get_design_by_name(name)
+        if not design:
+            QMessageBox.warning(self, "Fehler", f"Design '{name}' nicht gefunden")
+            return
+
+        # Design anwenden
+        self.parent_app.grid_settings = design['grid_settings'].copy()
+        self.parent_app.font_settings = design['font_settings'].copy()
+        self.parent_app.legend_settings = design['legend_settings'].copy()
+        self.parent_app.current_plot_design = name
+
+        # Info aktualisieren
+        self.plot_design_info_label.setText(f"Aktives Design: {name}")
+
+        # Plot aktualisieren
+        self.parent_app.update_plot()
+
+        QMessageBox.information(self, "Erfolg", f"Design '{name}' wurde angewendet")
+
+    def save_current_as_design(self):
+        """Speichert aktuelle Einstellungen als neues Design (Version 5.2)"""
+        name, ok = QInputDialog.getText(self, "Design speichern", "Name des neuen Designs:")
+        if not ok or not name:
+            return
+
+        # Design erstellen
+        design = {
+            'grid_settings': self.parent_app.grid_settings.copy(),
+            'font_settings': self.parent_app.font_settings.copy(),
+            'legend_settings': self.parent_app.legend_settings.copy()
+        }
+
+        # In Config speichern
+        if not hasattr(self.config, 'plot_designs'):
+            self.config.plot_designs = {}
+
+        self.config.plot_designs[name] = design
+        self.config.save_config()
+
+        self.refresh_plot_designs_list()
+        QMessageBox.information(self, "Erfolg", f"Design '{name}' wurde gespeichert")
+
+    def delete_plot_design(self):
+        """Löscht benutzerdefiniertes Plot-Design (Version 5.2)"""
+        current_item = self.plot_designs_list.currentItem()
+        if not current_item:
+            return
+
+        text = current_item.text()
+        if text.startswith('⭐'):
+            QMessageBox.information(self, "Info", "Standard-Designs können nicht gelöscht werden")
+            return
+
+        name = text.split(' ', 1)[1]
+
+        if hasattr(self.config, 'plot_designs') and name in self.config.plot_designs:
+            del self.config.plot_designs[name]
+            self.config.save_config()
+            self.refresh_plot_designs_list()
+
+    def get_design_by_name(self, name):
+        """Gibt Design-Dict für Namen zurück (Version 5.2)"""
+        # Vordefinierte Designs
+        predefined = {
+            'Standard': {
+                'grid_settings': {
+                    'major_enable': True,
+                    'major_axis': 'both',
+                    'major_linestyle': 'solid',
+                    'major_linewidth': 0.8,
+                    'major_alpha': 0.3,
+                    'major_color': '#FFFFFF',
+                    'minor_enable': False,
+                    'minor_axis': 'both',
+                    'minor_linestyle': 'dotted',
+                    'minor_linewidth': 0.5,
+                    'minor_alpha': 0.2,
+                    'minor_color': '#FFFFFF'
+                },
+                'font_settings': {
+                    'title_size': 14,
+                    'title_bold': True,
+                    'title_italic': False,
+                    'labels_size': 12,
+                    'labels_bold': False,
+                    'labels_italic': False,
+                    'ticks_size': 10,
+                    'legend_size': 10,
+                    'font_family': 'sans-serif',
+                    'use_math_text': False
+                },
+                'legend_settings': {
+                    'position': 'best',
+                    'fontsize': 10,
+                    'ncol': 1,
+                    'alpha': 0.9,
+                    'frameon': True,
+                    'shadow': False,
+                    'fancybox': True
+                }
+            },
+            'Publikation': {
+                'grid_settings': {
+                    'major_enable': False,
+                    'major_axis': 'both',
+                    'major_linestyle': 'solid',
+                    'major_linewidth': 0.5,
+                    'major_alpha': 0.2,
+                    'major_color': '#888888',
+                    'minor_enable': False,
+                    'minor_axis': 'both',
+                    'minor_linestyle': 'dotted',
+                    'minor_linewidth': 0.3,
+                    'minor_alpha': 0.1,
+                    'minor_color': '#888888'
+                },
+                'font_settings': {
+                    'title_size': 16,
+                    'title_bold': True,
+                    'title_italic': False,
+                    'labels_size': 14,
+                    'labels_bold': True,
+                    'labels_italic': False,
+                    'ticks_size': 12,
+                    'legend_size': 11,
+                    'font_family': 'serif',
+                    'use_math_text': True
+                },
+                'legend_settings': {
+                    'position': 'best',
+                    'fontsize': 11,
+                    'ncol': 1,
+                    'alpha': 0.95,
+                    'frameon': True,
+                    'shadow': False,
+                    'fancybox': False
+                }
+            },
+            'Präsentation': {
+                'grid_settings': {
+                    'major_enable': True,
+                    'major_axis': 'both',
+                    'major_linestyle': 'solid',
+                    'major_linewidth': 1.0,
+                    'major_alpha': 0.4,
+                    'major_color': '#FFFFFF',
+                    'minor_enable': True,
+                    'minor_axis': 'both',
+                    'minor_linestyle': 'dotted',
+                    'minor_linewidth': 0.7,
+                    'minor_alpha': 0.25,
+                    'minor_color': '#FFFFFF'
+                },
+                'font_settings': {
+                    'title_size': 20,
+                    'title_bold': True,
+                    'title_italic': False,
+                    'labels_size': 16,
+                    'labels_bold': True,
+                    'labels_italic': False,
+                    'ticks_size': 14,
+                    'legend_size': 14,
+                    'font_family': 'sans-serif',
+                    'use_math_text': False
+                },
+                'legend_settings': {
+                    'position': 'upper right',
+                    'fontsize': 14,
+                    'ncol': 1,
+                    'alpha': 0.85,
+                    'frameon': True,
+                    'shadow': True,
+                    'fancybox': True
+                }
+            },
+            'TUBAF': {
+                'grid_settings': {
+                    'major_enable': True,
+                    'major_axis': 'both',
+                    'major_linestyle': 'solid',
+                    'major_linewidth': 0.9,
+                    'major_alpha': 0.35,
+                    'major_color': '#003A5D',
+                    'minor_enable': False,
+                    'minor_axis': 'both',
+                    'minor_linestyle': 'dotted',
+                    'minor_linewidth': 0.5,
+                    'minor_alpha': 0.2,
+                    'minor_color': '#003A5D'
+                },
+                'font_settings': {
+                    'title_size': 15,
+                    'title_bold': True,
+                    'title_italic': False,
+                    'labels_size': 13,
+                    'labels_bold': True,
+                    'labels_italic': False,
+                    'ticks_size': 11,
+                    'legend_size': 11,
+                    'font_family': 'sans-serif',
+                    'use_math_text': True
+                },
+                'legend_settings': {
+                    'position': 'best',
+                    'fontsize': 11,
+                    'ncol': 1,
+                    'alpha': 0.9,
+                    'frameon': True,
+                    'shadow': False,
+                    'fancybox': True
+                }
+            },
+            'Minimalistisch': {
+                'grid_settings': {
+                    'major_enable': False,
+                    'major_axis': 'both',
+                    'major_linestyle': 'solid',
+                    'major_linewidth': 0.5,
+                    'major_alpha': 0.15,
+                    'major_color': '#CCCCCC',
+                    'minor_enable': False,
+                    'minor_axis': 'both',
+                    'minor_linestyle': 'dotted',
+                    'minor_linewidth': 0.3,
+                    'minor_alpha': 0.1,
+                    'minor_color': '#CCCCCC'
+                },
+                'font_settings': {
+                    'title_size': 12,
+                    'title_bold': False,
+                    'title_italic': False,
+                    'labels_size': 10,
+                    'labels_bold': False,
+                    'labels_italic': False,
+                    'ticks_size': 9,
+                    'legend_size': 9,
+                    'font_family': 'sans-serif',
+                    'use_math_text': False
+                },
+                'legend_settings': {
+                    'position': 'best',
+                    'fontsize': 9,
+                    'ncol': 1,
+                    'alpha': 0.7,
+                    'frameon': False,
+                    'shadow': False,
+                    'fancybox': False
+                }
+            }
+        }
+
+        if name in predefined:
+            return predefined[name]
+        elif hasattr(self.config, 'plot_designs') and name in self.config.plot_designs:
+            return self.config.plot_designs[name]
+        else:
+            return None
 
 
 class StylePresetEditDialog(QDialog):

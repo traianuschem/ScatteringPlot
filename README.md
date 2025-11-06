@@ -1,26 +1,32 @@
-# TUBAF Scattering Plot Tool v5.0
+# TUBAF Scattering Plot Tool v5.2
 
 Professionelles Python-Tool für Streudaten-Analyse mit moderner Qt6-basierter GUI und modularer Architektur.
 
-## Was ist neu in Version 5.0?
+## Was ist neu in Version 5.2?
 
-### Große Refaktorierung - Modulare Architektur
-Version 5.0 bringt eine komplette Umstrukturierung der Code-Basis für bessere Wartbarkeit und Erweiterbarkeit:
+### Plot-Designs System
+- **Vordefinierte Designs**: Standard, Publikation, Präsentation, TUBAF, Minimalistisch
+- **Benutzerdefinierte Designs**: Aktuelle Einstellungen als Design speichern
+- **Ein-Klick-Anwendung**: Komplette Grid-, Font- und Legenden-Einstellungen auf einmal
+- **Design-Manager**: Neuer Tab im Design-Manager für zentrale Verwaltung
 
-- **Modularisierung**: Hauptprogramm von 1583 auf 799 Zeilen reduziert (50% Reduktion)
-- **Klare Separation**: Code in spezialisierte Module aufgeteilt
-  - `core/` - Datenmodelle und Konstanten
-  - `dialogs/` - Alle Dialog-Fenster
-  - `utils/` - Hilfsfunktionen
-  - `config/` - Konfigurationsdaten
-- **Vorbereitet für Zukunft**: Basis für kommende Features (Undo/Redo, Internationalisierung, etc.)
-- **Repository-Cleanup**: Alte Backup-Dateien entfernt, saubere Struktur
+### Annotations und Referenzlinien
+- **Textfelder**: Annotations mit Position, Schriftgröße, Farbe und Rotation
+- **Referenzlinien**: Vertikale/Horizontale Linien mit Wert-Labels
+- **Für Analysen**: Ideal für Kratky/Porod-Plots zur Bereichsmarkierung
+- **Anpassbar**: Linientyp, Dicke, Farbe und Transparenz
 
-### Technische Verbesserungen
-- Qt6 (PySide6) basierte GUI für moderne, responsive Benutzeroberfläche
-- Permanenter Dark Mode für angenehmes Arbeiten
-- Verbesserte Code-Organisation und Lesbarkeit
-- Optimierte Import-Struktur
+### Math Text für Exponenten
+- **Bessere Darstellung**: Unicode-Exponenten → Math Text (nm⁻¹ → nm$^{-1}$)
+- **Schriftarten-unabhängig**: Funktioniert mit allen Schriftarten
+- **Optional**: Aktivierbar im Font-Dialog
+
+### Verbessertes Kontextmenü
+- **Stil anwenden**: Rechtsklick auf Datensatz → Untermenü mit allen Stil-Vorlagen
+- **Schneller Zugriff**: Keine Umwege mehr über Menüs
+
+### Entfernte Features
+- Grid-Checkbox entfernt (ersetzt durch umfassenden Grid-Dialog)
 
 ## Features
 
