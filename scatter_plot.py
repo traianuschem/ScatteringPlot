@@ -427,12 +427,18 @@ class ScatterPlotApp(QMainWindow):
             else:
                 group_label = group.name
 
-            # Dummy-Plot für Gruppen-Header in Legende
-            if group.datasets:
-                self.ax_main.plot([], [], ' ', label=group_label)
+            # Dummy-Plot für Gruppen-Header in Legende (mit NaN damit es funktioniert)
+            has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
+            if has_visible_datasets:
+                import numpy as np
+                self.ax_main.plot([np.nan], [np.nan], ' ', label=group_label)
 
             # Plot je Datensatz
             for dataset in group.datasets:
+                # Checkbox steuert Sichtbarkeit komplett
+                if not dataset.show_in_legend:
+                    continue
+
                 # Farbe
                 if dataset.color:
                     color = dataset.color
@@ -458,9 +464,8 @@ class ScatterPlotApp(QMainWindow):
                     self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                               alpha=0.2, color=color)
 
-                # Label nur wenn show_in_legend aktiviert
-                label = dataset.display_label if dataset.show_in_legend else None
-                self.ax_main.plot(x, y, plot_style, color=color, label=label,
+                # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
+                self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
 
             # Stack-Faktor kumulativ multiplizieren
@@ -469,6 +474,10 @@ class ScatterPlotApp(QMainWindow):
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         for dataset in self.unassigned_datasets:
+            # Checkbox steuert Sichtbarkeit komplett
+            if not dataset.show_in_legend:
+                continue
+
             # Farbe
             if dataset.color:
                 color = dataset.color
@@ -488,9 +497,8 @@ class ScatterPlotApp(QMainWindow):
                 self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                           alpha=0.2, color=color)
 
-            # Label nur wenn show_in_legend aktiviert
-            label = dataset.display_label if dataset.show_in_legend else None
-            self.ax_main.plot(x, y, plot_style, color=color, label=label,
+            # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
+            self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
 
         # Achsen (mit Math Text Support in v5.2)
