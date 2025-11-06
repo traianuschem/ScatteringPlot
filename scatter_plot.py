@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-TUBAF Scattering Plot Tool - Version 4.0 (Qt)
+TUBAF Scattering Plot Tool - Version 4.2 (Qt)
 ==============================================
 
 Professionelles Tool für Streudaten-Analyse mit:
 - Qt6-basierte moderne GUI
-- Native Dark Mode Support
+- Permanenter Dark Mode
 - Verschiedene Plot-Typen (Log-Log, Porod, Kratky, Guinier, PDDF)
 - Stil-Vorlagen und Auto-Erkennung
 - Farbschema-Manager
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QSplitter, QTreeWidget, QTreeWidgetItem, QPushButton, QLabel,
     QCheckBox, QComboBox, QLineEdit, QFileDialog, QMessageBox,
     QInputDialog, QDialog, QDialogButtonBox, QGroupBox, QGridLayout,
-    QColorDialog, QListWidget, QTextEdit, QScrollArea, QFrame
+    QColorDialog, QListWidget, QListWidgetItem, QTextEdit, QScrollArea, QFrame
 )
 from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QAction, QColor, QPalette, QIcon
@@ -190,7 +190,7 @@ class ScatterPlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("TUBAF Scattering Plot Tool v4.0")
+        self.setWindowTitle("TUBAF Scattering Plot Tool v4.2")
         self.resize(1600, 1000)
 
         # Config
@@ -273,12 +273,6 @@ class ScatterPlotApp(QMainWindow):
 
         design_menu.addSeparator()
 
-        dark_mode_action = QAction("🌙 Dark Mode umschalten", self)
-        dark_mode_action.triggered.connect(self.toggle_dark_mode)
-        design_menu.addAction(dark_mode_action)
-
-        design_menu.addSeparator()
-
         # Schnell-Stile
         for preset_name in self.config.style_presets.keys():
             action = QAction(f"Stil '{preset_name}' anwenden", self)
@@ -344,6 +338,7 @@ class ScatterPlotApp(QMainWindow):
         self.tree.setDragDropMode(QTreeWidget.InternalMove)
         self.tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.tree.itemDoubleClicked.connect(self.on_tree_double_click)
+        self.tree.itemChanged.connect(self.on_tree_item_changed)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.show_context_menu)
 
@@ -415,46 +410,29 @@ class ScatterPlotApp(QMainWindow):
         return widget
 
     def apply_theme(self):
-        """Wendet Dark/Light Theme an"""
-        dark_mode = self.config.get_dark_mode()
+        """Wendet permanentes Dark Theme an (v4.2: Dark Mode ist Standard)"""
+        # Fusion Style mit Dark Palette (permanent)
+        QApplication.setStyle('Fusion')
 
-        if dark_mode:
-            # Fusion Style mit Dark Palette
-            QApplication.setStyle('Fusion')
+        dark_palette = QPalette()
+        dark_palette.setColor(QPalette.Window, QColor(43, 43, 43))
+        dark_palette.setColor(QPalette.WindowText, Qt.white)
+        dark_palette.setColor(QPalette.Base, QColor(60, 60, 60))
+        dark_palette.setColor(QPalette.AlternateBase, QColor(50, 50, 50))
+        dark_palette.setColor(QPalette.ToolTipBase, Qt.white)
+        dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+        dark_palette.setColor(QPalette.Text, Qt.white)
+        dark_palette.setColor(QPalette.Button, QColor(64, 64, 64))
+        dark_palette.setColor(QPalette.ButtonText, Qt.white)
+        dark_palette.setColor(QPalette.BrightText, Qt.red)
+        dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.HighlightedText, Qt.black)
 
-            dark_palette = QPalette()
-            dark_palette.setColor(QPalette.Window, QColor(43, 43, 43))
-            dark_palette.setColor(QPalette.WindowText, Qt.white)
-            dark_palette.setColor(QPalette.Base, QColor(60, 60, 60))
-            dark_palette.setColor(QPalette.AlternateBase, QColor(50, 50, 50))
-            dark_palette.setColor(QPalette.ToolTipBase, Qt.white)
-            dark_palette.setColor(QPalette.ToolTipText, Qt.white)
-            dark_palette.setColor(QPalette.Text, Qt.white)
-            dark_palette.setColor(QPalette.Button, QColor(64, 64, 64))
-            dark_palette.setColor(QPalette.ButtonText, Qt.white)
-            dark_palette.setColor(QPalette.BrightText, Qt.red)
-            dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
-            dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
-            dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+        QApplication.setPalette(dark_palette)
 
-            QApplication.setPalette(dark_palette)
-        else:
-            # Standard Style
-            QApplication.setStyle('Fusion')
-            QApplication.setPalette(QApplication.style().standardPalette())
-
-        # Plot bleibt immer im Light Mode
+        # Plot bleibt im Light Mode (für bessere Lesbarkeit)
         plt.style.use('default')
-
-    def toggle_dark_mode(self):
-        """Schaltet Dark Mode um"""
-        current_mode = self.config.get_dark_mode()
-        new_mode = not current_mode
-        self.config.set_dark_mode(new_mode)
-
-        QMessageBox.information(self, "Dark Mode",
-                               f"Dark Mode {'aktiviert' if new_mode else 'deaktiviert'}.\n"
-                               "Bitte starten Sie die Anwendung neu, damit alle Änderungen wirksam werden.")
 
     def update_plot(self):
         """Aktualisiert den Plot"""
@@ -624,8 +602,10 @@ class ScatterPlotApp(QMainWindow):
                     dataset = DataSet(filepath)
                     self.unassigned_datasets.append(dataset)
 
-                    # In Tree einfügen
+                    # In Tree einfügen mit Checkbox (v4.2)
                     item = QTreeWidgetItem(self.unassigned_item, [dataset.name, ""])
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                     item.setData(0, Qt.UserRole, ('dataset', dataset))
 
                 except Exception as e:
@@ -704,6 +684,18 @@ class ScatterPlotApp(QMainWindow):
                 # Optional: Dataset-Eigenschaften bearbeiten
                 pass
 
+    def on_tree_item_changed(self, item, column):
+        """Behandelt Änderungen an Tree-Items (v4.2: Checkbox für Sichtbarkeit)"""
+        if column != 0:  # Nur Spalte 0 hat Checkboxen
+            return
+
+        data = item.data(0, Qt.UserRole)
+        if data and data[0] == 'dataset':
+            dataset = data[1]
+            # Checkbox-Status mit show_in_legend synchronisieren
+            dataset.show_in_legend = (item.checkState(0) == Qt.Checked)
+            self.update_plot()
+
     def show_context_menu(self, position):
         """Kontextmenü für Tree"""
         item = self.tree.itemAt(position)
@@ -713,7 +705,16 @@ class ScatterPlotApp(QMainWindow):
         from PySide6.QtWidgets import QMenu
         menu = QMenu()
 
+        data = item.data(0, Qt.UserRole)
+
         rename_action = menu.addAction("Umbenennen")
+
+        # Farbe zurücksetzen nur für Datensätze (v4.2)
+        reset_color_action = None
+        if data and data[0] == 'dataset':
+            menu.addSeparator()
+            reset_color_action = menu.addAction("Farbe zurücksetzen")
+
         menu.addSeparator()
         delete_action = menu.addAction("Löschen")
 
@@ -721,6 +722,8 @@ class ScatterPlotApp(QMainWindow):
 
         if action == rename_action:
             self.rename_item(item)
+        elif action == reset_color_action and reset_color_action:
+            self.reset_dataset_color(item)
         elif action == delete_action:
             self.tree.setCurrentItem(item)
             self.delete_selected()
@@ -737,6 +740,14 @@ class ScatterPlotApp(QMainWindow):
                     obj.name = new_name
                 item.setText(0, new_name)
                 self.update_plot()
+
+    def reset_dataset_color(self, item):
+        """Setzt Farbe eines Datensatzes zurück (v4.2)"""
+        data = item.data(0, Qt.UserRole)
+        if data and data[0] == 'dataset':
+            dataset = data[1]
+            dataset.color = None
+            self.update_plot()
 
     def change_plot_type(self):
         """Ändert Plot-Typ"""
@@ -787,11 +798,11 @@ class ScatterPlotApp(QMainWindow):
     def show_about(self):
         """Zeigt Über-Dialog"""
         QMessageBox.about(self, "Über TUBAF Scattering Plot Tool",
-                         "TUBAF Scattering Plot Tool - Version 4.0 (Qt)\n\n"
+                         "TUBAF Scattering Plot Tool - Version 4.2 (Qt)\n\n"
                          "Professionelles Tool für Streudaten-Analyse\n\n"
                          "Features:\n"
                          "• Qt6-basierte moderne GUI\n"
-                         "• Native Dark Mode Support\n"
+                         "• Permanenter Dark Mode\n"
                          "• Verschiedene Plot-Typen\n"
                          "• Stil-Vorlagen und Auto-Erkennung\n"
                          "• Farbschema-Manager\n"
@@ -847,10 +858,14 @@ class ScatterPlotApp(QMainWindow):
 
                     for dataset in group.datasets:
                         item = QTreeWidgetItem(group_item, [dataset.display_label, ""])
+                        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                        item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                         item.setData(0, Qt.UserRole, ('dataset', dataset))
 
                 for dataset in self.unassigned_datasets:
                     item = QTreeWidgetItem(self.unassigned_item, [dataset.name, ""])
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                     item.setData(0, Qt.UserRole, ('dataset', dataset))
 
                 # Einstellungen wiederherstellen
@@ -1555,7 +1570,7 @@ def main():
     # App-Metadaten
     app.setApplicationName("TUBAF Scattering Plot Tool")
     app.setOrganizationName("TU Bergakademie Freiberg")
-    app.setApplicationVersion("4.0")
+    app.setApplicationVersion("4.2")
 
     # Hauptfenster
     window = ScatterPlotApp()
