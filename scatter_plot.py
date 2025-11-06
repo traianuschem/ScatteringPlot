@@ -107,11 +107,19 @@ class ScatterPlotApp(QMainWindow):
             'title_size': 14,
             'title_bold': True,
             'title_italic': False,
+            'title_underline': False,
             'labels_size': 12,
             'labels_bold': False,
             'labels_italic': False,
+            'labels_underline': False,
             'ticks_size': 10,
+            'ticks_bold': False,
+            'ticks_italic': False,
+            'ticks_underline': False,
             'legend_size': 10,
+            'legend_bold': False,
+            'legend_italic': False,
+            'legend_underline': False,
             'font_family': 'sans-serif',
             'use_math_text': False
         }
@@ -397,7 +405,7 @@ class ScatterPlotApp(QMainWindow):
 
         # Plotten
         plot_info = PLOT_TYPES[self.plot_type]
-        current_offset = 0
+        cumulative_stack_factor = 1.0  # Kumulativer Multiplikator für Stack
 
         # Gruppen plotten
         for group in self.groups:
@@ -406,7 +414,7 @@ class ScatterPlotApp(QMainWindow):
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
             if self.stack_mode and len(self.groups) > 1:
-                group_label = f"{group.name} (×{group.stack_factor:.1f})"
+                group_label = f"{group.name} (×{cumulative_stack_factor:.1f})"
             else:
                 group_label = group.name
 
@@ -425,9 +433,9 @@ class ScatterPlotApp(QMainWindow):
                 # Daten transformieren
                 x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
 
-                # Stack-Offset
+                # Stack-Multiplikation (für Log-Plots korrekt)
                 if self.stack_mode:
-                    y = y * group.stack_factor + current_offset
+                    y = y * cumulative_stack_factor
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
@@ -436,15 +444,16 @@ class ScatterPlotApp(QMainWindow):
                     # Fehler als transparente Fläche
                     y_err_trans = self.transform_data(dataset.x, dataset.y_err, self.plot_type)[1]
                     if self.stack_mode:
-                        y_err_trans = y_err_trans * group.stack_factor
+                        y_err_trans = y_err_trans * cumulative_stack_factor
                     self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                               alpha=0.2, color=color)
 
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
 
+            # Stack-Faktor kumulativ multiplizieren
             if self.stack_mode:
-                current_offset += group.stack_factor
+                cumulative_stack_factor *= group.stack_factor
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         for dataset in self.unassigned_datasets:
@@ -477,19 +486,35 @@ class ScatterPlotApp(QMainWindow):
         xlabel = self.convert_to_mathtext(plot_info['xlabel'])
         ylabel = self.convert_to_mathtext(plot_info['ylabel'])
 
+        # Achsenbeschriftungen mit erweiterten Font-Optionen (v5.3)
+        label_weight = 'bold' if self.font_settings['labels_bold'] else 'normal'
+        label_style = 'italic' if self.font_settings['labels_italic'] else 'normal'
+
+        # Unterstrichen wird via LaTeX unterstützt (falls aktiviert)
+        if self.font_settings['labels_underline']:
+            xlabel = r'$\underline{' + xlabel.replace('$', '') + r'}$'
+            ylabel = r'$\underline{' + ylabel.replace('$', '') + r'}$'
+
         self.ax_main.set_xlabel(xlabel, fontsize=self.font_settings['labels_size'],
-                               weight='bold' if self.font_settings['labels_bold'] else 'normal',
-                               style='italic' if self.font_settings['labels_italic'] else 'normal',
+                               weight=label_weight, style=label_style,
                                fontfamily=self.font_settings['font_family'])
         self.ax_main.set_ylabel(ylabel, fontsize=self.font_settings['labels_size'],
-                               weight='bold' if self.font_settings['labels_bold'] else 'normal',
-                               style='italic' if self.font_settings['labels_italic'] else 'normal',
+                               weight=label_weight, style=label_style,
                                fontfamily=self.font_settings['font_family'])
         self.ax_main.set_xscale(plot_info['xscale'])
         self.ax_main.set_yscale(plot_info['yscale'])
 
-        # Tick-Schriftgröße
+        # Tick-Labels mit erweiterten Font-Optionen (v5.3)
+        tick_weight = 'bold' if self.font_settings['ticks_bold'] else 'normal'
+        tick_style = 'italic' if self.font_settings['ticks_italic'] else 'normal'
+
         self.ax_main.tick_params(axis='both', labelsize=self.font_settings['ticks_size'])
+
+        # Font-Eigenschaften für Tick-Labels anwenden
+        for label in self.ax_main.get_xticklabels() + self.ax_main.get_yticklabels():
+            label.set_fontweight(tick_weight)
+            label.set_fontstyle(tick_style)
+            label.set_fontfamily(self.font_settings['font_family'])
 
         # Grid-Einstellungen (erweitert in v5.1)
         if self.grid_settings['major_enable']:
@@ -520,11 +545,11 @@ class ScatterPlotApp(QMainWindow):
             if self.axis_limits['ymax'] is not None:
                 self.ax_main.set_ylim(top=self.axis_limits['ymax'])
 
-        # Legende (erweitert in v5.1)
+        # Legende (erweitert in v5.1, v5.3: Font-Optionen)
         if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
             legend = self.ax_main.legend(
                 loc=self.legend_settings['position'],
-                fontsize=self.legend_settings['fontsize'],
+                fontsize=self.font_settings['legend_size'],  # v5.3: Font-Dialog statt legend_settings
                 ncol=self.legend_settings['ncol'],
                 frameon=self.legend_settings['frameon'],
                 shadow=self.legend_settings['shadow'],
@@ -532,6 +557,16 @@ class ScatterPlotApp(QMainWindow):
             )
             if legend and legend.get_frame():
                 legend.get_frame().set_alpha(self.legend_settings['alpha'])
+
+            # v5.3: Font-Eigenschaften für Legenden-Texte anwenden
+            if legend:
+                legend_weight = 'bold' if self.font_settings['legend_bold'] else 'normal'
+                legend_style = 'italic' if self.font_settings['legend_italic'] else 'normal'
+
+                for text in legend.get_texts():
+                    text.set_fontweight(legend_weight)
+                    text.set_fontstyle(legend_style)
+                    text.set_fontfamily(self.font_settings['font_family'])
 
         # Referenzlinien (Version 5.2)
         for ref_line in self.reference_lines:
