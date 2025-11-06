@@ -449,6 +449,10 @@ class ScatterPlotApp(QMainWindow):
             if not group.visible:
                 continue
 
+            # Stack-Faktor kumulativ multiplizieren (VOR dem Plotten!)
+            if self.stack_mode:
+                cumulative_stack_factor *= group.stack_factor
+
             # Gruppen-Label für Legende (mit Stack-Faktor)
             if self.stack_mode and len(self.groups) > 1:
                 group_label = f"{group.name} (×{cumulative_stack_factor:.1f})"
@@ -495,10 +499,6 @@ class ScatterPlotApp(QMainWindow):
                 # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
-
-            # Stack-Faktor kumulativ multiplizieren
-            if self.stack_mode:
-                cumulative_stack_factor *= group.stack_factor
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
