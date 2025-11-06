@@ -1,4 +1,4 @@
-# TUBAF Scattering Plot Tool - Version 4.0 (Qt)
+# TUBAF Scattering Plot Tool - Version 4.2 (Qt)
 
 Professionelles Tool für Streudaten-Analyse mit moderner Qt6-GUI.
 
