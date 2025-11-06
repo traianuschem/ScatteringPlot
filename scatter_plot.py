@@ -392,8 +392,26 @@ class ScatterPlotApp(QMainWindow):
 
     def update_plot(self):
         """Aktualisiert den Plot"""
+        # Debug-Log-Datei öffnen
+        import os
+        from datetime import datetime
+        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'debug_plot.log')
+        log_file = open(log_path, 'w', encoding='utf-8')
+
+        def log(msg):
+            """Schreibt in Log-Datei"""
+            log_file.write(msg + '\n')
+            log_file.flush()
+
+        log("=" * 80)
+        log(f"DEBUG LOG - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log("=" * 80)
+
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
+        log(f"Stack-Checkbox Status: {self.stack_mode}")
+        log(f"Anzahl Gruppen: {len(self.groups)}")
+        log(f"Anzahl unassigned Datasets: {len(self.unassigned_datasets)}")
 
         # Figure leeren
         self.fig.clear()
@@ -417,38 +435,48 @@ class ScatterPlotApp(QMainWindow):
         cumulative_stack_factor = 1.0  # Kumulativer Multiplikator für Stack
 
         # Gruppen plotten
+        log(f"\n{'='*60}\nGRUPPEN PLOTTEN\n{'='*60}")
         for group in self.groups:
             if not group.visible:
+                log(f"Gruppe '{group.name}' übersprungen (nicht sichtbar)")
                 continue
 
             # Debug: Gruppen-Info ausgeben
-            print(f"DEBUG: Plotte Gruppe '{group.name}' mit Stack-Faktor {group.stack_factor}")
-            print(f"DEBUG: Anzahl Datasets in Gruppe: {len(group.datasets)}")
-            print(f"DEBUG: Stack-Mode aktiv: {self.stack_mode}")
-            print(f"DEBUG: Aktueller cumulative_stack_factor: {cumulative_stack_factor}")
+            log(f"\nGRUPPE: '{group.name}'")
+            log(f"  Stack-Faktor der Gruppe: {group.stack_factor}")
+            log(f"  Anzahl Datasets in Gruppe: {len(group.datasets)}")
+            log(f"  Stack-Mode aktiv: {self.stack_mode}")
+            log(f"  Aktueller cumulative_stack_factor: {cumulative_stack_factor}")
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
             if self.stack_mode and len(self.groups) > 1:
                 group_label = f"{group.name} (×{cumulative_stack_factor:.1f})"
             else:
                 group_label = group.name
+            log(f"  Gruppen-Label: '{group_label}'")
 
             # Dummy-Plot für Gruppen-Header in Legende
             # Verwende unsichtbaren Plot mit Label
             has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
-            print(f"DEBUG: has_visible_datasets = {has_visible_datasets}")
+            log(f"  has_visible_datasets: {has_visible_datasets}")
             if has_visible_datasets:
                 # Unsichtbarer Plot der nur für Legende existiert
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                print(f"DEBUG: Gruppen-Header '{group_label}' zur Legende hinzugefügt")
+                log(f"  ✓ Gruppen-Header '{group_label}' zur Legende hinzugefügt")
+            else:
+                log(f"  ✗ Keine sichtbaren Datasets - Gruppen-Header NICHT hinzugefügt")
 
             # Plot je Datensatz
             for dataset in group.datasets:
+                log(f"\n  Dataset: '{dataset.name}'")
+                log(f"    show_in_legend: {dataset.show_in_legend}")
+
                 # Checkbox steuert Sichtbarkeit komplett
                 if not dataset.show_in_legend:
+                    log(f"    ✗ ÜBERSPRUNGEN (Checkbox deaktiviert)")
                     continue
 
-                print(f"DEBUG: Plotte Dataset '{dataset.name}' mit cumulative_stack_factor {cumulative_stack_factor}")
+                log(f"    ✓ Wird geplottet mit cumulative_stack_factor: {cumulative_stack_factor}")
 
                 # Farbe
                 if dataset.color:
@@ -456,6 +484,7 @@ class ScatterPlotApp(QMainWindow):
                 else:
                     color = next(color_cycle)
                     dataset.color = color
+                log(f"    Farbe: {color}")
 
                 # Daten transformieren
                 x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
@@ -464,7 +493,12 @@ class ScatterPlotApp(QMainWindow):
                 if self.stack_mode:
                     y_before = y.copy() if hasattr(y, 'copy') else y
                     y = y * cumulative_stack_factor
-                    print(f"DEBUG: Stacking angewendet: Faktor {cumulative_stack_factor}, y[0] vorher={y_before[0] if hasattr(y_before, '__getitem__') else y_before:.3e}, nachher={y[0] if hasattr(y, '__getitem__') else y:.3e}")
+                    try:
+                        log(f"    Stacking: y[0] vorher={y_before[0]:.3e}, nachher={y[0]:.3e}, Faktor={cumulative_stack_factor}")
+                    except:
+                        log(f"    Stacking: Faktor={cumulative_stack_factor} angewendet")
+                else:
+                    log(f"    Kein Stacking (Stack-Mode aus)")
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
@@ -480,18 +514,28 @@ class ScatterPlotApp(QMainWindow):
                 # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
+                log(f"    ✓ Erfolgreich geplottet")
 
             # Stack-Faktor kumulativ multiplizieren
             if self.stack_mode:
                 old_factor = cumulative_stack_factor
                 cumulative_stack_factor *= group.stack_factor
-                print(f"DEBUG: Stack-Faktor aktualisiert: {old_factor} * {group.stack_factor} = {cumulative_stack_factor}")
+                log(f"\n  Stack-Faktor aktualisiert: {old_factor} * {group.stack_factor} = {cumulative_stack_factor}")
+            else:
+                log(f"\n  Stack-Faktor NICHT aktualisiert (Stack-Mode aus)")
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
+        log(f"\n{'='*60}\nUNASSIGNED DATASETS PLOTTEN\n{'='*60}")
         for dataset in self.unassigned_datasets:
+            log(f"\nUnassigned Dataset: '{dataset.name}'")
+            log(f"  show_in_legend: {dataset.show_in_legend}")
+
             # Checkbox steuert Sichtbarkeit komplett
             if not dataset.show_in_legend:
+                log(f"  ✗ ÜBERSPRUNGEN (Checkbox deaktiviert)")
                 continue
+
+            log(f"  ✓ Wird geplottet (OHNE Stacking)")
 
             # Farbe
             if dataset.color:
@@ -499,6 +543,7 @@ class ScatterPlotApp(QMainWindow):
             else:
                 color = next(color_cycle)
                 dataset.color = color
+            log(f"  Farbe: {color}")
 
             # Daten transformieren
             x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
@@ -515,6 +560,7 @@ class ScatterPlotApp(QMainWindow):
             # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
             self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
+            log(f"  ✓ Erfolgreich geplottet")
 
         # Achsen (mit Math Text Support in v5.2)
         xlabel = self.convert_to_mathtext(plot_info['xlabel'])
@@ -655,6 +701,20 @@ class ScatterPlotApp(QMainWindow):
 
         self.fig.tight_layout()
         self.canvas.draw()
+
+        # Log-Datei schließen und Info anzeigen
+        log("\n" + "=" * 80)
+        log("LOG ENDE")
+        log("=" * 80)
+        log_file.close()
+
+        # Info-MessageBox beim ersten Mal anzeigen
+        if not hasattr(self, '_log_info_shown'):
+            self._log_info_shown = True
+            QMessageBox.information(self, "Debug-Log erstellt",
+                f"Debug-Informationen wurden geschrieben nach:\n\n{log_path}\n\n"
+                "Diese Datei enthält detaillierte Informationen über Gruppen und Stacking.\n"
+                "Bitte öffne diese Datei und sende den Inhalt zum Debugging.")
 
     def convert_to_mathtext(self, text):
         """Konvertiert Unicode-Exponenten in Math Text (Version 5.2)"""
