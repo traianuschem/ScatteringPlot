@@ -459,7 +459,7 @@ class ScatterPlotApp(QMainWindow):
             has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
             if has_visible_datasets:
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack-Faktor: ×{cumulative_stack_factor:.1f}")
+                log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, group.stack_factor={group.stack_factor:.1f}, cumulative=×{cumulative_stack_factor:.1f}")
 
             # Plot je Datensatz
             for dataset in group.datasets:
