@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QInputDialog, QDialog, QDialogButtonBox, QGroupBox, QGridLayout,
     QMenu, QDoubleSpinBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QColor, QPalette
 
 # Matplotlib mit Qt Backend
@@ -56,6 +56,25 @@ from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
+
+
+class DataTreeWidget(QTreeWidget):
+    """Custom Tree Widget mit Drag & Drop Support"""
+
+    items_dropped = Signal()  # Signal wenn Items verschoben wurden
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.main_app = None  # Wird später gesetzt
+
+    def dropEvent(self, event):
+        """Überschreibt dropEvent um Datenstrukturen zu synchronisieren"""
+        # Standard Drop durchführen (visuell)
+        super().dropEvent(event)
+
+        # Nach Drop die Datenstrukturen synchronisieren
+        if self.main_app:
+            self.main_app.sync_data_from_tree()
 
 
 class ScatterPlotApp(QMainWindow):
@@ -285,8 +304,9 @@ class ScatterPlotApp(QMainWindow):
 
         layout.addLayout(button_layout)
 
-        # Tree Widget
-        self.tree = QTreeWidget()
+        # Tree Widget mit Drag & Drop Support
+        self.tree = DataTreeWidget()
+        self.tree.main_app = self  # Referenz für Drag & Drop
         self.tree.setHeaderLabels(["Name", "Info"])
         self.tree.setColumnWidth(0, 250)
         self.tree.setDragDropMode(QTreeWidget.InternalMove)
@@ -392,22 +412,16 @@ class ScatterPlotApp(QMainWindow):
 
     def update_plot(self):
         """Aktualisiert den Plot"""
-        # Debug-Log direkt in Konsole ausgeben (v5.3)
+        # Debug-Log kompakt in Konsole ausgeben (v5.3)
         from datetime import datetime
 
         def log(msg):
             """Gibt Debug-Info in Konsole aus"""
             print(msg)
 
-        log("=" * 80)
-        log(f"DEBUG LOG - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        log("=" * 80)
-
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
-        log(f"Stack-Checkbox Status: {self.stack_mode}")
-        log(f"Anzahl Gruppen: {len(self.groups)}")
-        log(f"Anzahl unassigned Datasets: {len(self.unassigned_datasets)}")
+        log(f"📊 Plot-Update: Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
 
         # Figure leeren
         self.fig.clear()
@@ -431,48 +445,27 @@ class ScatterPlotApp(QMainWindow):
         cumulative_stack_factor = 1.0  # Kumulativer Multiplikator für Stack
 
         # Gruppen plotten
-        log(f"\n{'='*60}\nGRUPPEN PLOTTEN\n{'='*60}")
         for group in self.groups:
             if not group.visible:
-                log(f"Gruppe '{group.name}' übersprungen (nicht sichtbar)")
                 continue
-
-            # Debug: Gruppen-Info ausgeben
-            log(f"\nGRUPPE: '{group.name}'")
-            log(f"  Stack-Faktor der Gruppe: {group.stack_factor}")
-            log(f"  Anzahl Datasets in Gruppe: {len(group.datasets)}")
-            log(f"  Stack-Mode aktiv: {self.stack_mode}")
-            log(f"  Aktueller cumulative_stack_factor: {cumulative_stack_factor}")
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
             if self.stack_mode and len(self.groups) > 1:
                 group_label = f"{group.name} (×{cumulative_stack_factor:.1f})"
             else:
                 group_label = group.name
-            log(f"  Gruppen-Label: '{group_label}'")
 
             # Dummy-Plot für Gruppen-Header in Legende
-            # Verwende unsichtbaren Plot mit Label
             has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
-            log(f"  has_visible_datasets: {has_visible_datasets}")
             if has_visible_datasets:
-                # Unsichtbarer Plot der nur für Legende existiert
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                log(f"  ✓ Gruppen-Header '{group_label}' zur Legende hinzugefügt")
-            else:
-                log(f"  ✗ Keine sichtbaren Datasets - Gruppen-Header NICHT hinzugefügt")
+                log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack-Faktor: ×{cumulative_stack_factor:.1f}")
 
             # Plot je Datensatz
             for dataset in group.datasets:
-                log(f"\n  Dataset: '{dataset.name}'")
-                log(f"    show_in_legend: {dataset.show_in_legend}")
-
                 # Checkbox steuert Sichtbarkeit komplett
                 if not dataset.show_in_legend:
-                    log(f"    ✗ ÜBERSPRUNGEN (Checkbox deaktiviert)")
                     continue
-
-                log(f"    ✓ Wird geplottet mit cumulative_stack_factor: {cumulative_stack_factor}")
 
                 # Farbe
                 if dataset.color:
@@ -480,21 +473,13 @@ class ScatterPlotApp(QMainWindow):
                 else:
                     color = next(color_cycle)
                     dataset.color = color
-                log(f"    Farbe: {color}")
 
                 # Daten transformieren
                 x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
 
                 # Stack-Multiplikation (für Log-Plots korrekt)
                 if self.stack_mode:
-                    y_before = y.copy() if hasattr(y, 'copy') else y
                     y = y * cumulative_stack_factor
-                    try:
-                        log(f"    Stacking: y[0] vorher={y_before[0]:.3e}, nachher={y[0]:.3e}, Faktor={cumulative_stack_factor}")
-                    except:
-                        log(f"    Stacking: Faktor={cumulative_stack_factor} angewendet")
-                else:
-                    log(f"    Kein Stacking (Stack-Mode aus)")
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
@@ -510,28 +495,20 @@ class ScatterPlotApp(QMainWindow):
                 # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
-                log(f"    ✓ Erfolgreich geplottet")
 
             # Stack-Faktor kumulativ multiplizieren
             if self.stack_mode:
-                old_factor = cumulative_stack_factor
                 cumulative_stack_factor *= group.stack_factor
-                log(f"\n  Stack-Faktor aktualisiert: {old_factor} * {group.stack_factor} = {cumulative_stack_factor}")
-            else:
-                log(f"\n  Stack-Faktor NICHT aktualisiert (Stack-Mode aus)")
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
-        log(f"\n{'='*60}\nUNASSIGNED DATASETS PLOTTEN\n{'='*60}")
-        for dataset in self.unassigned_datasets:
-            log(f"\nUnassigned Dataset: '{dataset.name}'")
-            log(f"  show_in_legend: {dataset.show_in_legend}")
+        unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
+        if unassigned_count > 0:
+            log(f"  📄 Unassigned: {unassigned_count} Datasets (ohne Stacking)")
 
+        for dataset in self.unassigned_datasets:
             # Checkbox steuert Sichtbarkeit komplett
             if not dataset.show_in_legend:
-                log(f"  ✗ ÜBERSPRUNGEN (Checkbox deaktiviert)")
                 continue
-
-            log(f"  ✓ Wird geplottet (OHNE Stacking)")
 
             # Farbe
             if dataset.color:
@@ -539,7 +516,6 @@ class ScatterPlotApp(QMainWindow):
             else:
                 color = next(color_cycle)
                 dataset.color = color
-            log(f"  Farbe: {color}")
 
             # Daten transformieren
             x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
@@ -556,7 +532,6 @@ class ScatterPlotApp(QMainWindow):
             # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
             self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
-            log(f"  ✓ Erfolgreich geplottet")
 
         # Achsen (mit Math Text Support in v5.2)
         xlabel = self.convert_to_mathtext(plot_info['xlabel'])
@@ -697,11 +672,6 @@ class ScatterPlotApp(QMainWindow):
 
         self.fig.tight_layout()
         self.canvas.draw()
-
-        # Log-Ende markieren
-        log("\n" + "=" * 80)
-        log("LOG ENDE")
-        log("=" * 80)
 
     def convert_to_mathtext(self, text):
         """Konvertiert Unicode-Exponenten in Math Text (Version 5.2)"""
@@ -948,6 +918,15 @@ class ScatterPlotApp(QMainWindow):
 
         rename_action = menu.addAction("Umbenennen")
 
+        # Zu Gruppe zuordnen (nur für Datensätze)
+        group_menu = None
+        group_actions = {}
+        if data and data[0] == 'dataset' and self.groups:
+            menu.addSeparator()
+            group_menu = menu.addMenu("Zu Gruppe zuordnen")
+            for group in self.groups:
+                group_actions[group] = group_menu.addAction(group.name)
+
         # Stil anwenden nur für Datensätze (v5.2+)
         style_menu = None
         style_actions = {}
@@ -971,6 +950,12 @@ class ScatterPlotApp(QMainWindow):
             self.edit_annotation_or_refline(item)
         elif action == rename_action:
             self.rename_item(item)
+        elif group_menu and action in group_actions.values():
+            # Dataset zu Gruppe zuordnen
+            for group, group_action in group_actions.items():
+                if action == group_action:
+                    self.move_dataset_to_group(item, group)
+                    break
         elif style_menu and action in style_actions.values():
             # Stil anwenden
             for preset_name, preset_action in style_actions.items():
@@ -1011,6 +996,105 @@ class ScatterPlotApp(QMainWindow):
             dataset = data[1]
             dataset.apply_style_preset(preset_name)
             self.update_plot()
+
+    def move_dataset_to_group(self, item, target_group):
+        """Verschiebt Dataset zu einer Gruppe"""
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'dataset':
+            return
+
+        dataset = data[1]
+
+        # Aus unassigned_datasets entfernen
+        if dataset in self.unassigned_datasets:
+            self.unassigned_datasets.remove(dataset)
+        else:
+            # Aus anderer Gruppe entfernen
+            for group in self.groups:
+                if dataset in group.datasets:
+                    group.datasets.remove(dataset)
+                    break
+
+        # Zu Zielgruppe hinzufügen
+        target_group.datasets.append(dataset)
+
+        # Tree neu aufbauen
+        self.rebuild_tree()
+        self.update_plot()
+
+        print(f"✓ Dataset '{dataset.name}' zu Gruppe '{target_group.name}' verschoben")
+
+    def sync_data_from_tree(self):
+        """Synchronisiert Datenstrukturen nach Drag & Drop im Tree"""
+        print("🔄 Synchronisiere Datenstrukturen nach Drag & Drop...")
+
+        # Alle Gruppen leeren
+        for group in self.groups:
+            group.datasets.clear()
+
+        # Unassigned leeren
+        self.unassigned_datasets.clear()
+
+        # Tree durchlaufen und Datenstrukturen neu aufbauen
+        root = self.tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            parent_item = root.child(i)
+            parent_data = parent_item.data(0, Qt.UserRole)
+
+            # Prüfen ob es eine Gruppe ist
+            if parent_data and parent_data[0] == 'group':
+                group = parent_data[1]
+                # Alle Datasets dieser Gruppe sammeln
+                for j in range(parent_item.childCount()):
+                    child_item = parent_item.child(j)
+                    child_data = child_item.data(0, Qt.UserRole)
+                    if child_data and child_data[0] == 'dataset':
+                        dataset = child_data[1]
+                        group.datasets.append(dataset)
+
+            # "Nicht zugeordnet" Items
+            elif parent_item == self.unassigned_item:
+                for j in range(parent_item.childCount()):
+                    child_item = parent_item.child(j)
+                    child_data = child_item.data(0, Qt.UserRole)
+                    if child_data and child_data[0] == 'dataset':
+                        dataset = child_data[1]
+                        self.unassigned_datasets.append(dataset)
+
+        # Plot aktualisieren
+        self.update_plot()
+        print(f"✓ Synchronisation abgeschlossen: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
+
+    def rebuild_tree(self):
+        """Baut Tree komplett neu auf"""
+        self.tree.clear()
+
+        # "Nicht zugeordnet" Sektion
+        self.unassigned_item = QTreeWidgetItem(self.tree, ["▼ Nicht zugeordnet", ""])
+        self.unassigned_item.setExpanded(True)
+
+        for dataset in self.unassigned_datasets:
+            item = QTreeWidgetItem(self.unassigned_item, [dataset.display_label, ""])
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
+            item.setData(0, Qt.UserRole, ('dataset', dataset))
+
+        # Gruppen
+        for group in self.groups:
+            group_item = QTreeWidgetItem(self.tree, [group.name, f"×{group.stack_factor:.1f}"])
+            group_item.setExpanded(not group.collapsed)
+            group_item.setData(0, Qt.UserRole, ('group', group))
+
+            for dataset in group.datasets:
+                item = QTreeWidgetItem(group_item, [dataset.display_label, ""])
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
+                item.setData(0, Qt.UserRole, ('dataset', dataset))
+
+        # Annotations & Referenzlinien (v5.3)
+        self.annotations_item = QTreeWidgetItem(self.tree, ["▼ Annotations & Referenzlinien", ""])
+        self.annotations_item.setExpanded(False)
+        self.update_annotations_tree()
 
     def change_plot_type(self):
         """Ändert Plot-Typ"""
