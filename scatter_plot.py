@@ -113,14 +113,14 @@ class ScatterPlotApp(QMainWindow):
             'major_axis': 'both',
             'major_linestyle': 'solid',
             'major_linewidth': 0.8,
-            'major_alpha': 0.3,
-            'major_color': '#FFFFFF',
-            'minor_enable': False,
+            'major_alpha': 0.5,
+            'major_color': '#CCCCCC',  # Hellgrau für hellen Plot-Hintergrund
+            'minor_enable': True,
             'minor_axis': 'both',
             'minor_linestyle': 'dotted',
             'minor_linewidth': 0.5,
-            'minor_alpha': 0.2,
-            'minor_color': '#FFFFFF'
+            'minor_alpha': 0.3,
+            'minor_color': '#E0E0E0'  # Sehr hellgrau für Minor-Grid
         }
         self.font_settings = {
             'title_size': 14,
@@ -210,10 +210,6 @@ class ScatterPlotApp(QMainWindow):
         plot_menu.addAction(update_action)
 
         plot_menu.addSeparator()
-
-        settings_action = QAction("Achsenlimits...", self)
-        settings_action.triggered.connect(self.show_plot_settings)
-        plot_menu.addAction(settings_action)
 
         legend_action = QAction("Legenden-Einstellungen...", self)
         legend_action.triggered.connect(self.show_legend_settings)
@@ -1408,7 +1404,7 @@ class ScatterPlotApp(QMainWindow):
                         item.setData(0, Qt.UserRole, ('dataset', dataset))
 
                 for dataset in self.unassigned_datasets:
-                    item = QTreeWidgetItem(self.unassigned_item, [dataset.name, ""])
+                    item = QTreeWidgetItem(self.unassigned_item, [dataset.display_label, ""])
                     item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                     item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                     item.setData(0, Qt.UserRole, ('dataset', dataset))
