@@ -145,8 +145,8 @@ class ScatterPlotApp(QMainWindow):
         self.export_settings = {
             'format': 'PNG',
             'dpi': 300,
-            'width': 10.0,
-            'height': 8.0,
+            'width': 10.0,  # 10 inch = 25.4 cm
+            'height': 6.25,  # 6.25 inch = 15.875 cm (16:10 Format)
             'keep_aspect': True,
             'transparent': False,
             'tight_layout': True,
@@ -290,6 +290,11 @@ class ScatterPlotApp(QMainWindow):
         add_group_btn.clicked.connect(self.create_group)
         button_layout.addWidget(add_group_btn)
 
+        auto_group_btn = QPushButton("🔢 Auto-Gruppieren")
+        auto_group_btn.clicked.connect(self.auto_group_by_magnitude)
+        auto_group_btn.setToolTip("Automatische Gruppierung nach Größenordnung mit Stack-Faktoren")
+        button_layout.addWidget(auto_group_btn)
+
         load_btn = QPushButton("📁 Laden")
         load_btn.clicked.connect(self.load_data_to_unassigned)
         button_layout.addWidget(load_btn)
@@ -431,7 +436,7 @@ class ScatterPlotApp(QMainWindow):
             self.ax_main = self.fig.add_subplot(111)
             self.ax_pddf = None
 
-        # Farben holen
+        # Farben holen (global)
         color_scheme = self.color_scheme_combo.currentText()
         colors = self.config.color_schemes.get(color_scheme, self.config.color_schemes['TUBAF'])
         color_cycle = iter(colors * 10)  # Genug Farben
@@ -459,6 +464,14 @@ class ScatterPlotApp(QMainWindow):
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
                 log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack-Faktor=×{stack_factor:.1f}")
 
+            # Gruppenspezifische Farbpalette (v5.4)
+            if group.color_scheme:
+                group_colors = self.config.color_schemes.get(group.color_scheme, colors)
+                group_color_cycle = iter(group_colors * 10)
+                log(f"    🎨 Farbpalette: {group.color_scheme}")
+            else:
+                group_color_cycle = color_cycle
+
             # Plot je Datensatz
             for dataset in group.datasets:
                 # Checkbox steuert Sichtbarkeit komplett
@@ -469,7 +482,7 @@ class ScatterPlotApp(QMainWindow):
                 if dataset.color:
                     color = dataset.color
                 else:
-                    color = next(color_cycle)
+                    color = next(group_color_cycle)
                     dataset.color = color
 
                 # Daten transformieren
@@ -774,6 +787,81 @@ class ScatterPlotApp(QMainWindow):
 
             QMessageBox.information(self, "Erfolg", f"Gruppe '{name}' erstellt")
 
+    def auto_group_by_magnitude(self):
+        """
+        Automatische Gruppierung nach Größenordnung (v5.4)
+
+        Gruppiert alle unassigned Datasets basierend auf ihrer Y-Wert-Größenordnung
+        und setzt automatische Stack-Faktoren für optimale Trennung im Log-Log-Plot.
+        """
+        if not self.unassigned_datasets:
+            QMessageBox.information(self, "Info", "Keine nicht zugeordneten Datasets vorhanden.")
+            return
+
+        # 1. Größenordnung für jedes Dataset berechnen
+        dataset_magnitudes = []
+        for dataset in self.unassigned_datasets:
+            # Mittelwert der Y-Werte (log10)
+            valid_y = dataset.y[dataset.y > 0]  # Nur positive Werte für log
+            if len(valid_y) == 0:
+                continue  # Skip datasets ohne gültige Werte
+
+            mean_y = np.mean(valid_y)
+            magnitude = int(np.round(np.log10(mean_y)))
+            dataset_magnitudes.append((dataset, magnitude))
+
+        if not dataset_magnitudes:
+            QMessageBox.warning(self, "Fehler", "Keine Datasets mit gültigen Werten gefunden.")
+            return
+
+        # 2. Gruppiere nach Größenordnung
+        from collections import defaultdict
+        magnitude_groups = defaultdict(list)
+        for dataset, magnitude in dataset_magnitudes:
+            magnitude_groups[magnitude].append(dataset)
+
+        # 3. Sortiere Größenordnungen (kleinste zuerst)
+        sorted_magnitudes = sorted(magnitude_groups.keys())
+
+        # 4. Erstelle Gruppen mit automatischen Stack-Faktoren
+        created_groups = []
+        for idx, magnitude in enumerate(sorted_magnitudes):
+            datasets = magnitude_groups[magnitude]
+
+            # Gruppen-Name basierend auf Größenordnung
+            if magnitude >= 0:
+                group_name = f"10^{magnitude}"
+            else:
+                group_name = f"10^({magnitude})"
+
+            # Stack-Faktor: Jede Gruppe wird um ihre Position * 1 Dekade verschoben
+            # Gruppe 0: 10^0 = 1, Gruppe 1: 10^1 = 10, Gruppe 2: 10^2 = 100, etc.
+            stack_factor = 10.0 ** idx
+
+            # Gruppe erstellen
+            group = DataGroup(group_name, stack_factor)
+            for dataset in datasets:
+                group.add_dataset(dataset)
+
+            self.groups.append(group)
+            created_groups.append((group_name, len(datasets), stack_factor))
+
+            # Datasets aus unassigned entfernen
+            for dataset in datasets:
+                if dataset in self.unassigned_datasets:
+                    self.unassigned_datasets.remove(dataset)
+
+        # 5. Tree aktualisieren
+        self.rebuild_tree()
+        self.update_plot()
+
+        # 6. Erfolgs-Meldung
+        msg = f"✓ {len(created_groups)} Gruppen erstellt:\n\n"
+        for name, count, factor in created_groups:
+            msg += f"• {name}: {count} Dataset(s), Stack-Faktor ×{factor:.1f}\n"
+
+        QMessageBox.information(self, "Auto-Gruppierung erfolgreich", msg)
+
     def load_data_to_unassigned(self):
         """Lädt Daten in Nicht zugeordnet"""
         files, _ = QFileDialog.getOpenFileNames(self, "Daten laden",
@@ -894,7 +982,7 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_context_menu(self, position):
-        """Kontextmenü für Tree (erweitert v5.3 für Annotations/Referenzlinien)"""
+        """Kontextmenü für Tree (erweitert v5.3 für Annotations/Referenzlinien, v5.4 für Gruppen-Farbpaletten)"""
         item = self.tree.itemAt(position)
         if not item:
             return
@@ -909,6 +997,19 @@ class ScatterPlotApp(QMainWindow):
             edit_action = menu.addAction("Bearbeiten...")
 
         rename_action = menu.addAction("Umbenennen")
+
+        # Farbpalette für Gruppen (v5.4)
+        color_scheme_menu = None
+        color_scheme_actions = {}
+        if data and data[0] == 'group':
+            menu.addSeparator()
+            color_scheme_menu = menu.addMenu("Farbpalette wählen")
+            # Option zum Zurücksetzen (globale Farbpalette verwenden)
+            color_scheme_actions[None] = color_scheme_menu.addAction("(Global verwenden)")
+            color_scheme_menu.addSeparator()
+            # Alle verfügbaren Farbpaletten
+            for scheme_name in sorted(self.config.color_schemes.keys()):
+                color_scheme_actions[scheme_name] = color_scheme_menu.addAction(scheme_name)
 
         # Zu Gruppe zuordnen (nur für Datensätze)
         group_menu = None
@@ -942,6 +1043,12 @@ class ScatterPlotApp(QMainWindow):
             self.edit_annotation_or_refline(item)
         elif action == rename_action:
             self.rename_item(item)
+        elif color_scheme_menu and action in color_scheme_actions.values():
+            # Farbpalette für Gruppe setzen
+            for scheme_name, scheme_action in color_scheme_actions.items():
+                if action == scheme_action:
+                    self.set_group_color_scheme(item, scheme_name)
+                    break
         elif group_menu and action in group_actions.values():
             # Dataset zu Gruppe zuordnen
             for group, group_action in group_actions.items():
@@ -979,6 +1086,17 @@ class ScatterPlotApp(QMainWindow):
         if data and data[0] == 'dataset':
             dataset = data[1]
             dataset.color = None
+            self.update_plot()
+
+    def set_group_color_scheme(self, item, scheme_name):
+        """Setzt Farbpalette für eine Gruppe (v5.4)"""
+        data = item.data(0, Qt.UserRole)
+        if data and data[0] == 'group':
+            group = data[1]
+            group.color_scheme = scheme_name
+            # Farben aller Datasets in der Gruppe zurücksetzen, damit neue Palette angewendet wird
+            for dataset in group.datasets:
+                dataset.color = None
             self.update_plot()
 
     def apply_style_to_dataset(self, item, preset_name):

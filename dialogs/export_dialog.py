@@ -60,6 +60,7 @@ class ExportSettingsDialog(QDialog):
         self.width_spin.setRange(2.5, 127.0)  # 1-50 inch = 2.5-127 cm
         self.width_spin.setSingleStep(1.0)
         # Konvertiere von inch (gespeichert) zu cm (angezeigt)
+        # Standard 16:10 Format: 25.4 cm × 15.875 cm
         self.width_spin.setValue(export_settings.get('width', 10.0) * 2.54)
         self.width_spin.setSuffix(" cm")
         self.width_spin.setDecimals(1)
@@ -70,7 +71,8 @@ class ExportSettingsDialog(QDialog):
         self.height_spin.setRange(2.5, 127.0)  # 1-50 inch = 2.5-127 cm
         self.height_spin.setSingleStep(1.0)
         # Konvertiere von inch (gespeichert) zu cm (angezeigt)
-        self.height_spin.setValue(export_settings.get('height', 8.0) * 2.54)
+        # Standard 16:10 Format: 25.4 cm × 15.875 cm
+        self.height_spin.setValue(export_settings.get('height', 6.25) * 2.54)
         self.height_spin.setSuffix(" cm")
         self.height_spin.setDecimals(1)
         size_layout.addWidget(self.height_spin, 1, 1)
