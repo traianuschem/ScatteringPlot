@@ -292,7 +292,7 @@ class ScatterPlotApp(QMainWindow):
 
         auto_group_btn = QPushButton("🔢 Auto-Gruppieren")
         auto_group_btn.clicked.connect(self.auto_group_by_magnitude)
-        auto_group_btn.setToolTip("Automatische Gruppierung nach Größenordnung mit Stack-Faktoren")
+        auto_group_btn.setToolTip("Erstellt für jedes ausgewählte Dataset eine eigene Gruppe mit automatischen Stack-Faktoren (10^0, 10^1, ...)")
         button_layout.addWidget(auto_group_btn)
 
         load_btn = QPushButton("📁 Laden")
@@ -413,16 +413,20 @@ class ScatterPlotApp(QMainWindow):
 
     def update_plot(self):
         """Aktualisiert den Plot"""
-        # Debug-Log kompakt in Konsole ausgeben (v5.3)
+        # Debug-Log kompakt in Konsole ausgeben (v5.4)
         from datetime import datetime
 
-        def log(msg):
-            """Gibt Debug-Info in Konsole aus"""
-            print(msg)
+        def log(action, msg=""):
+            """Gibt Debug-Info mit Timestamp in Konsole aus"""
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            if msg:
+                print(f"[{timestamp}] {action}: {msg}")
+            else:
+                print(f"[{timestamp}] {action}")
 
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
-        log(f"📊 Plot-Update: Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
+        log("Plot-Update", f"Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
 
         # Figure leeren
         self.fig.clear()
@@ -462,13 +466,13 @@ class ScatterPlotApp(QMainWindow):
             has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
             if has_visible_datasets:
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                log(f"  📁 Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack-Faktor=×{stack_factor:.1f}")
+                log("Gruppe", f"'{group.name}': {len(group.datasets)} Datasets, Stack=×{stack_factor:.1f}")
 
             # Gruppenspezifische Farbpalette (v5.4)
             if group.color_scheme:
                 group_colors = self.config.color_schemes.get(group.color_scheme, colors)
                 group_color_cycle = iter(group_colors * 10)
-                log(f"    🎨 Farbpalette: {group.color_scheme}")
+                log("Farbpalette", f"Gruppe '{group.name}' → {group.color_scheme}")
             else:
                 group_color_cycle = color_cycle
 
@@ -508,7 +512,7 @@ class ScatterPlotApp(QMainWindow):
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
         if unassigned_count > 0:
-            log(f"  📄 Unassigned: {unassigned_count} Datasets (ohne Stacking)")
+            log("Unassigned", f"{unassigned_count} Datasets (ohne Stacking)")
 
         for dataset in self.unassigned_datasets:
             # Checkbox steuert Sichtbarkeit komplett
@@ -789,76 +793,62 @@ class ScatterPlotApp(QMainWindow):
 
     def auto_group_by_magnitude(self):
         """
-        Automatische Gruppierung nach Größenordnung (v5.4)
+        Automatische Gruppierung (v5.4)
 
-        Gruppiert alle unassigned Datasets basierend auf ihrer Y-Wert-Größenordnung
-        und setzt automatische Stack-Faktoren für optimale Trennung im Log-Log-Plot.
+        Erstellt für jedes ausgewählte Dataset eine eigene Gruppe mit automatischen
+        Stack-Faktoren (10^0, 10^1, 10^2, ...) für optimale Trennung im Log-Log-Plot.
         """
-        if not self.unassigned_datasets:
-            QMessageBox.information(self, "Info", "Keine nicht zugeordneten Datasets vorhanden.")
+        # Ausgewählte Items holen
+        selected_items = self.tree.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "Info",
+                "Bitte wählen Sie Datasets aus der 'Nicht zugeordnet'-Liste aus.")
             return
 
-        # 1. Größenordnung für jedes Dataset berechnen
-        dataset_magnitudes = []
-        for dataset in self.unassigned_datasets:
-            # Mittelwert der Y-Werte (log10)
-            valid_y = dataset.y[dataset.y > 0]  # Nur positive Werte für log
-            if len(valid_y) == 0:
-                continue  # Skip datasets ohne gültige Werte
+        # Nur Datasets aus selected_items extrahieren
+        selected_datasets = []
+        for item in selected_items:
+            data = item.data(0, Qt.UserRole)
+            if data and data[0] == 'dataset':
+                dataset = data[1]
+                # Nur Datasets aus unassigned_datasets
+                if dataset in self.unassigned_datasets:
+                    selected_datasets.append(dataset)
 
-            mean_y = np.mean(valid_y)
-            magnitude = int(np.round(np.log10(mean_y)))
-            dataset_magnitudes.append((dataset, magnitude))
-
-        if not dataset_magnitudes:
-            QMessageBox.warning(self, "Fehler", "Keine Datasets mit gültigen Werten gefunden.")
+        if not selected_datasets:
+            QMessageBox.information(self, "Info",
+                "Bitte wählen Sie Datasets aus der 'Nicht zugeordnet'-Liste aus.")
             return
 
-        # 2. Gruppiere nach Größenordnung
-        from collections import defaultdict
-        magnitude_groups = defaultdict(list)
-        for dataset, magnitude in dataset_magnitudes:
-            magnitude_groups[magnitude].append(dataset)
-
-        # 3. Sortiere Größenordnungen (kleinste zuerst)
-        sorted_magnitudes = sorted(magnitude_groups.keys())
-
-        # 4. Erstelle Gruppen mit automatischen Stack-Faktoren
+        # Für jedes Dataset eine eigene Gruppe erstellen
         created_groups = []
-        for idx, magnitude in enumerate(sorted_magnitudes):
-            datasets = magnitude_groups[magnitude]
+        for idx, dataset in enumerate(selected_datasets):
+            # Gruppen-Name = Dataset-Name
+            group_name = dataset.name
 
-            # Gruppen-Name basierend auf Größenordnung
-            if magnitude >= 0:
-                group_name = f"10^{magnitude}"
-            else:
-                group_name = f"10^({magnitude})"
-
-            # Stack-Faktor: Jede Gruppe wird um ihre Position * 1 Dekade verschoben
+            # Stack-Faktor: Jede Gruppe wird um Position * 1 Dekade verschoben
             # Gruppe 0: 10^0 = 1, Gruppe 1: 10^1 = 10, Gruppe 2: 10^2 = 100, etc.
             stack_factor = 10.0 ** idx
 
             # Gruppe erstellen
             group = DataGroup(group_name, stack_factor)
-            for dataset in datasets:
-                group.add_dataset(dataset)
+            group.add_dataset(dataset)
 
             self.groups.append(group)
-            created_groups.append((group_name, len(datasets), stack_factor))
+            created_groups.append((group_name, stack_factor))
 
-            # Datasets aus unassigned entfernen
-            for dataset in datasets:
-                if dataset in self.unassigned_datasets:
-                    self.unassigned_datasets.remove(dataset)
+            # Dataset aus unassigned entfernen
+            if dataset in self.unassigned_datasets:
+                self.unassigned_datasets.remove(dataset)
 
-        # 5. Tree aktualisieren
+        # Tree aktualisieren
         self.rebuild_tree()
         self.update_plot()
 
-        # 6. Erfolgs-Meldung
+        # Erfolgs-Meldung
         msg = f"✓ {len(created_groups)} Gruppen erstellt:\n\n"
-        for name, count, factor in created_groups:
-            msg += f"• {name}: {count} Dataset(s), Stack-Faktor ×{factor:.1f}\n"
+        for name, factor in created_groups:
+            msg += f"• {name}: Stack-Faktor ×{factor:.1f}\n"
 
         QMessageBox.information(self, "Auto-Gruppierung erfolgreich", msg)
 
@@ -1212,9 +1202,11 @@ class ScatterPlotApp(QMainWindow):
         self.update_plot()
 
     def change_color_scheme(self):
-        """Ändert Farbschema"""
-        # Farben zurücksetzen
+        """Ändert Farbschema (v5.4: setzt auch Gruppen-Farbpaletten zurück)"""
+        # Gruppen-Farbpaletten zurücksetzen (v5.4)
         for group in self.groups:
+            group.color_scheme = None  # Globale Palette verwenden
+            # Farben zurücksetzen
             for dataset in group.datasets:
                 dataset.color = None
         for dataset in self.unassigned_datasets:
@@ -1482,7 +1474,8 @@ class ScatterPlotApp(QMainWindow):
                     'font_settings': self.font_settings,
                     'export_settings': self.export_settings,
                     'annotations': self.annotations,
-                    'reference_lines': self.reference_lines
+                    'reference_lines': self.reference_lines,
+                    'current_plot_design': self.current_plot_design  # v5.4
                 }
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(session, f, indent=2)
@@ -1555,6 +1548,10 @@ class ScatterPlotApp(QMainWindow):
                     self.annotations = session['annotations']
                 if 'reference_lines' in session:
                     self.reference_lines = session['reference_lines']
+
+                # Version 5.4: Plot Design wiederherstellen
+                if 'current_plot_design' in session:
+                    self.current_plot_design = session['current_plot_design']
 
                 # Annotations-Tree aktualisieren (v5.3)
                 self.update_annotations_tree()
