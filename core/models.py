@@ -108,12 +108,13 @@ class DataSet:
 
 class DataGroup:
     """Datengruppe"""
-    def __init__(self, name, stack_factor=1.0):
+    def __init__(self, name, stack_factor=1.0, color_scheme=None):
         self.name = name
         self.datasets = []
         self.stack_factor = stack_factor
         self.visible = True
         self.collapsed = False
+        self.color_scheme = color_scheme  # Optional: Gruppenspezifische Farbpalette
 
     def add_dataset(self, dataset):
         """Datensatz hinzufügen"""
@@ -131,13 +132,14 @@ class DataGroup:
             'stack_factor': self.stack_factor,
             'visible': self.visible,
             'collapsed': self.collapsed,
+            'color_scheme': self.color_scheme,
             'datasets': [ds.to_dict() for ds in self.datasets]
         }
 
     @classmethod
     def from_dict(cls, data):
         """Deserialisierung"""
-        group = cls(data['name'], data.get('stack_factor', 1.0))
+        group = cls(data['name'], data.get('stack_factor', 1.0), data.get('color_scheme'))
         group.visible = data.get('visible', True)
         group.collapsed = data.get('collapsed', False)
         group.datasets = [DataSet.from_dict(ds_data) for ds_data in data.get('datasets', [])]
