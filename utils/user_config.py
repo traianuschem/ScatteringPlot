@@ -179,13 +179,18 @@ class UserConfig:
 
     def save_default_plot_settings(self, legend_settings, grid_settings, font_settings, current_design='Standard'):
         """Speichert aktuelle Plot-Einstellungen als Standard (v5.4)"""
+        from utils.logger import get_logger
+        logger = get_logger()
+
         self.default_plot_settings = {
             'legend_settings': legend_settings.copy(),
             'grid_settings': grid_settings.copy(),
             'font_settings': font_settings.copy(),
             'current_plot_design': current_design
         }
+        logger.debug(f"UserConfig: Speichere default_plot_settings (Design: {current_design})")
         self.save_config()
+        logger.debug("UserConfig: default_plot_settings in config.json gespeichert")
 
     def get_default_plot_settings(self):
         """Gibt Default-Plot-Settings zurück, oder None falls nicht gesetzt (v5.4)"""

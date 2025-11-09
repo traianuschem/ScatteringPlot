@@ -56,6 +56,7 @@ from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
+from utils.logger import setup_logger, get_logger
 
 
 class DataTreeWidget(QTreeWidget):
@@ -83,11 +84,19 @@ class ScatterPlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        # Logger initialisieren (v5.4)
+        self.logger = setup_logger()
+        self.logger.info("=" * 60)
+        self.logger.info("TUBAF Scattering Plot Tool v5.4 gestartet")
+        self.logger.info("=" * 60)
+
         self.setWindowTitle("TUBAF Scattering Plot Tool v5.2")
         self.resize(1600, 1000)
 
         # Config
+        self.logger.debug("Lade User-Config...")
         self.config = get_user_config()
+        self.logger.info("User-Config geladen")
 
         # Datenverwaltung
         self.groups = []
@@ -160,12 +169,22 @@ class ScatterPlotApp(QMainWindow):
         self.current_plot_design = 'Standard'  # Aktuelles Plot-Design
 
         # Default Plot-Settings aus Config laden (v5.4)
+        self.logger.debug("Prüfe auf gespeicherte Standard-Plot-Einstellungen...")
         default_settings = self.config.get_default_plot_settings()
         if default_settings:
+            self.logger.info("Lade gespeicherte Standard-Plot-Einstellungen")
+            self.logger.debug(f"  - Legend Settings: {list(default_settings.get('legend_settings', {}).keys())}")
+            self.logger.debug(f"  - Grid Settings: {list(default_settings.get('grid_settings', {}).keys())}")
+            self.logger.debug(f"  - Font Settings: {list(default_settings.get('font_settings', {}).keys())}")
+            self.logger.debug(f"  - Plot Design: {default_settings.get('current_plot_design', 'Standard')}")
+
             self.legend_settings = default_settings.get('legend_settings', self.legend_settings)
             self.grid_settings = default_settings.get('grid_settings', self.grid_settings)
             self.font_settings = default_settings.get('font_settings', self.font_settings)
             self.current_plot_design = default_settings.get('current_plot_design', 'Standard')
+            self.logger.info("Standard-Einstellungen erfolgreich angewendet")
+        else:
+            self.logger.info("Keine gespeicherten Standard-Einstellungen gefunden, verwende Defaults")
 
         # GUI erstellen
         self.create_menu()
@@ -421,20 +440,9 @@ class ScatterPlotApp(QMainWindow):
 
     def update_plot(self):
         """Aktualisiert den Plot"""
-        # Debug-Log kompakt in Konsole ausgeben (v5.4)
-        from datetime import datetime
-
-        def log(action, msg=""):
-            """Gibt Debug-Info mit Timestamp in Konsole aus"""
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            if msg:
-                print(f"[{timestamp}] {action}: {msg}")
-            else:
-                print(f"[{timestamp}] {action}")
-
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
-        log("Plot-Update", f"Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
+        self.logger.debug(f"Plot-Update: Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
 
         # Figure leeren
         self.fig.clear()
@@ -474,13 +482,13 @@ class ScatterPlotApp(QMainWindow):
             has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
             if has_visible_datasets:
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                log("Gruppe", f"'{group.name}': {len(group.datasets)} Datasets, Stack=×{stack_factor:.1f}")
+                self.logger.debug(f"  Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack=×{stack_factor:.1f}")
 
             # Gruppenspezifische Farbpalette (v5.4)
             if group.color_scheme:
                 group_colors = self.config.color_schemes.get(group.color_scheme, colors)
                 group_color_cycle = iter(group_colors * 10)
-                log("Farbpalette", f"Gruppe '{group.name}' → {group.color_scheme}")
+                self.logger.debug(f"  Farbpalette: Gruppe '{group.name}' → {group.color_scheme}")
             else:
                 group_color_cycle = color_cycle
 
@@ -520,7 +528,7 @@ class ScatterPlotApp(QMainWindow):
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
         if unassigned_count > 0:
-            log("Unassigned", f"{unassigned_count} Datasets (ohne Stacking)")
+            self.logger.debug(f"  Unassigned: {unassigned_count} Datasets (ohne Stacking)")
 
         for dataset in self.unassigned_datasets:
             # Checkbox steuert Sichtbarkeit komplett
@@ -785,12 +793,14 @@ class ScatterPlotApp(QMainWindow):
 
     def create_group(self):
         """Erstellt eine neue Gruppe"""
+        self.logger.debug("Öffne Gruppen-Dialog...")
         dialog = CreateGroupDialog(self)
         if dialog.exec():
             name, stack_factor = dialog.get_values()
 
             group = DataGroup(name, stack_factor)
             self.groups.append(group)
+            self.logger.info(f"Gruppe erstellt: '{name}' (Stack-Faktor: ×{stack_factor:.1f})")
 
             # In Tree einfügen
             group_item = QTreeWidgetItem(self.tree, [name, f"×{stack_factor:.1f}"])
@@ -798,6 +808,8 @@ class ScatterPlotApp(QMainWindow):
             group_item.setData(0, Qt.UserRole, ('group', group))
 
             QMessageBox.information(self, "Erfolg", f"Gruppe '{name}' erstellt")
+        else:
+            self.logger.debug("Gruppen-Dialog abgebrochen")
 
     def auto_group_by_magnitude(self):
         """
@@ -806,9 +818,11 @@ class ScatterPlotApp(QMainWindow):
         Erstellt für jedes ausgewählte Dataset eine eigene Gruppe mit automatischen
         Stack-Faktoren (10^0, 10^1, 10^2, ...) für optimale Trennung im Log-Log-Plot.
         """
+        self.logger.info("Starte Auto-Gruppierung...")
         # Ausgewählte Items holen
         selected_items = self.tree.selectedItems()
         if not selected_items:
+            self.logger.warning("Auto-Gruppierung: Keine Datasets ausgewählt")
             QMessageBox.information(self, "Info",
                 "Bitte wählen Sie Datasets aus der 'Nicht zugeordnet'-Liste aus.")
             return
@@ -824,9 +838,12 @@ class ScatterPlotApp(QMainWindow):
                     selected_datasets.append(dataset)
 
         if not selected_datasets:
+            self.logger.warning("Auto-Gruppierung: Keine gültigen Datasets ausgewählt")
             QMessageBox.information(self, "Info",
                 "Bitte wählen Sie Datasets aus der 'Nicht zugeordnet'-Liste aus.")
             return
+
+        self.logger.info(f"Auto-Gruppierung: {len(selected_datasets)} Datasets ausgewählt")
 
         # Für jedes Dataset eine eigene Gruppe erstellen
         created_groups = []
@@ -844,6 +861,7 @@ class ScatterPlotApp(QMainWindow):
 
             self.groups.append(group)
             created_groups.append((group_name, stack_factor))
+            self.logger.debug(f"  Gruppe '{group_name}' erstellt (Stack: ×{stack_factor:.1f})")
 
             # Dataset aus unassigned entfernen
             if dataset in self.unassigned_datasets:
@@ -852,6 +870,8 @@ class ScatterPlotApp(QMainWindow):
         # Tree aktualisieren
         self.rebuild_tree()
         self.update_plot()
+
+        self.logger.info(f"Auto-Gruppierung erfolgreich: {len(created_groups)} Gruppen erstellt")
 
         # Erfolgs-Meldung
         msg = f"✓ {len(created_groups)} Gruppen erstellt:\n\n"
@@ -862,16 +882,21 @@ class ScatterPlotApp(QMainWindow):
 
     def load_data_to_unassigned(self):
         """Lädt Daten in Nicht zugeordnet"""
+        self.logger.debug("Öffne Datei-Dialog zum Laden...")
         files, _ = QFileDialog.getOpenFileNames(self, "Daten laden",
                                                 self.config.get_last_directory(),
                                                 "Datendateien (*.dat *.txt *.csv);;Alle Dateien (*)")
         if files:
+            self.logger.info(f"Lade {len(files)} Datei(en)...")
             self.config.set_last_directory(str(Path(files[0]).parent))
 
+            loaded_count = 0
             for filepath in files:
                 try:
                     dataset = DataSet(filepath)
                     self.unassigned_datasets.append(dataset)
+                    loaded_count += 1
+                    self.logger.debug(f"  Geladen: {dataset.name} ({len(dataset.x)} Datenpunkte)")
 
                     # In Tree einfügen mit Checkbox (v4.2+)
                     item = QTreeWidgetItem(self.unassigned_item, [dataset.name, ""])
@@ -880,9 +905,13 @@ class ScatterPlotApp(QMainWindow):
                     item.setData(0, Qt.UserRole, ('dataset', dataset))
 
                 except Exception as e:
+                    self.logger.error(f"Fehler beim Laden von {Path(filepath).name}: {e}")
                     QMessageBox.warning(self, "Fehler", f"Fehler beim Laden von {filepath}:\n{e}")
 
+            self.logger.info(f"Erfolgreich {loaded_count}/{len(files)} Datei(en) geladen")
             self.update_plot()
+        else:
+            self.logger.debug("Datei-Dialog abgebrochen")
 
     def delete_selected(self):
         """Löscht ausgewählte Items (erweitert v5.3 für Annotations/Referenzlinien)"""
@@ -1465,10 +1494,12 @@ class ScatterPlotApp(QMainWindow):
 
     def save_session(self):
         """Speichert Session"""
+        self.logger.debug("Öffne Session-Speicher-Dialog...")
         filename, _ = QFileDialog.getSaveFileName(self, "Session speichern",
                                                   self.config.get_last_directory(),
                                                   "JSON Dateien (*.json)")
         if filename:
+            self.logger.info(f"Speichere Session nach: {Path(filename).name}")
             try:
                 session = {
                     'groups': [g.to_dict() for g in self.groups],
@@ -1485,18 +1516,25 @@ class ScatterPlotApp(QMainWindow):
                     'reference_lines': self.reference_lines,
                     'current_plot_design': self.current_plot_design  # v5.4
                 }
+                self.logger.debug(f"  Gruppen: {len(self.groups)}, Unassigned: {len(self.unassigned_datasets)}")
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(session, f, indent=2)
+                self.logger.info("Session erfolgreich gespeichert")
                 QMessageBox.information(self, "Erfolg", "Session gespeichert")
             except Exception as e:
+                self.logger.error(f"Fehler beim Speichern der Session: {e}")
                 QMessageBox.critical(self, "Fehler", f"Fehler beim Speichern:\n{e}")
+        else:
+            self.logger.debug("Session-Speicher-Dialog abgebrochen")
 
     def load_session(self):
         """Lädt Session"""
+        self.logger.debug("Öffne Session-Lade-Dialog...")
         filename, _ = QFileDialog.getOpenFileName(self, "Session laden",
                                                   self.config.get_last_directory(),
                                                   "JSON Dateien (*.json)")
         if filename:
+            self.logger.info(f"Lade Session von: {Path(filename).name}")
             try:
                 with open(filename, 'r', encoding='utf-8') as f:
                     session = json.load(f)
@@ -1509,6 +1547,7 @@ class ScatterPlotApp(QMainWindow):
                 # Daten laden
                 self.groups = [DataGroup.from_dict(g) for g in session.get('groups', [])]
                 self.unassigned_datasets = [DataSet.from_dict(ds) for ds in session.get('unassigned', [])]
+                self.logger.debug(f"  Gruppen: {len(self.groups)}, Unassigned: {len(self.unassigned_datasets)}")
 
                 # Tree neu aufbauen
                 for group in self.groups:
@@ -1560,14 +1599,19 @@ class ScatterPlotApp(QMainWindow):
                 # Version 5.4: Plot Design wiederherstellen
                 if 'current_plot_design' in session:
                     self.current_plot_design = session['current_plot_design']
+                    self.logger.debug(f"  Plot Design: {self.current_plot_design}")
 
                 # Annotations-Tree aktualisieren (v5.3)
                 self.update_annotations_tree()
 
+                self.logger.info("Session erfolgreich geladen")
                 self.update_plot()
                 QMessageBox.information(self, "Erfolg", "Session geladen")
             except Exception as e:
+                self.logger.error(f"Fehler beim Laden der Session: {e}")
                 QMessageBox.critical(self, "Fehler", f"Fehler beim Laden:\n{e}")
+        else:
+            self.logger.debug("Session-Lade-Dialog abgebrochen")
 
     def export_png(self):
         """Exportiert als PNG"""
