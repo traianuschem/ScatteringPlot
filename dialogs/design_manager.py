@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QGroupBox
 )
 from PySide6.QtGui import QColor, QPixmap, QIcon
+from utils.logger import get_logger
 
 
 class DesignManagerDialog(QDialog):
@@ -412,6 +413,9 @@ class DesignManagerDialog(QDialog):
 
     def save_as_default(self):
         """Speichert aktuelle Einstellungen als Programmstandard (Version 5.4)"""
+        logger = get_logger()
+        logger.info("Speichere aktuelle Einstellungen als Programmstandard...")
+
         reply = QMessageBox.question(
             self,
             "Als Standard speichern",
@@ -421,18 +425,26 @@ class DesignManagerDialog(QDialog):
         )
 
         if reply == QMessageBox.Yes:
+            logger.debug(f"  Legend Settings: {list(self.parent_app.legend_settings.keys())}")
+            logger.debug(f"  Grid Settings: {list(self.parent_app.grid_settings.keys())}")
+            logger.debug(f"  Font Settings: {list(self.parent_app.font_settings.keys())}")
+            logger.debug(f"  Plot Design: {self.parent_app.current_plot_design}")
+
             self.config.save_default_plot_settings(
                 self.parent_app.legend_settings,
                 self.parent_app.grid_settings,
                 self.parent_app.font_settings,
                 self.parent_app.current_plot_design
             )
+            logger.info("Standard-Einstellungen erfolgreich gespeichert")
             QMessageBox.information(
                 self,
                 "Erfolg",
                 "Die aktuellen Plot-Einstellungen wurden als Programmstandard gespeichert.\n\n"
                 "Beim nächsten Start werden diese Einstellungen automatisch geladen."
             )
+        else:
+            logger.debug("Speichern als Standard abgebrochen")
 
     def delete_plot_design(self):
         """Löscht benutzerdefiniertes Plot-Design (Version 5.2)"""
