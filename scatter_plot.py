@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """
-TUBAF Scattering Plot Tool - Version 5.2 (Qt)
-==============================================
+ScatterForge Plot - Version 5.6
+================================
 
 Professionelles Tool für Streudaten-Analyse mit:
 - Qt6-basierte moderne GUI mit modularer Architektur
 - Permanenter Dark Mode
 - Verschiedene Plot-Typen (Log-Log, Porod, Kratky, Guinier, PDDF)
 - Stil-Vorlagen und Auto-Erkennung
-- Farbschema-Manager
+- Farbschema-Manager mit gruppenspezifischen Farbpaletten
 - Drag & Drop
 - Session-Verwaltung
 - Erweiterte Legenden-, Grid- und Font-Einstellungen
-- Verbesserter Export-Dialog
+- Optimierter Export-Dialog (16:10 Format)
 - Plot-Designs für konsistente Visualisierung
+- Programmweite Standard-Plot-Einstellungen
 - Annotations und Referenzlinien
 - Math Text für wissenschaftliche Notation
+- Auto-Gruppierung mit Stack-Faktoren
+- Umfassendes Logging-System
 """
 
 import sys
@@ -84,13 +87,13 @@ class ScatterPlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Logger initialisieren (v5.4)
-        self.logger = setup_logger()
+        # Logger initialisieren (v5.6)
+        self.logger = setup_logger('ScatterForge')
         self.logger.info("=" * 60)
-        self.logger.info("TUBAF Scattering Plot Tool v5.4 gestartet")
+        self.logger.info("ScatterForge Plot v5.6 gestartet")
         self.logger.info("=" * 60)
 
-        self.setWindowTitle("TUBAF Scattering Plot Tool v5.2")
+        self.setWindowTitle("ScatterForge Plot v5.6")
         self.resize(1600, 1000)
 
         # Config
@@ -1475,22 +1478,24 @@ class ScatterPlotApp(QMainWindow):
 
     def show_about(self):
         """Zeigt Über-Dialog"""
-        QMessageBox.about(self, "Über TUBAF Scattering Plot Tool",
-                         "TUBAF Scattering Plot Tool - Version 5.2 (Qt)\n\n"
+        QMessageBox.about(self, "Über ScatterForge Plot",
+                         "ScatterForge Plot - Version 5.6\n\n"
                          "Professionelles Tool für Streudaten-Analyse\n\n"
-                         "Neue Features in v5.2:\n"
-                         "• Plot-Designs System (5 vordefinierte + eigene)\n"
-                         "• Annotations und Referenzlinien\n"
-                         "• Math Text für wissenschaftliche Notation\n"
-                         "• Kontextmenü: Stil direkt anwenden\n\n"
+                         "Neue Features in v5.6:\n"
+                         "• Export-Optimierung (16:10 Standard-Format)\n"
+                         "• Gruppenspezifische Farbpaletten\n"
+                         "• Auto-Gruppierung mit automatischen Stack-Faktoren\n"
+                         "• Programmweite Standard-Plot-Einstellungen\n"
+                         "• Umfassendes Logging-System für Debugging\n\n"
                          "Features:\n"
                          "• Qt6-basierte moderne GUI mit modularer Architektur\n"
                          "• Erweiterte Legenden-, Grid- und Font-Einstellungen\n"
                          "• Verschiedene Plot-Typen (Log-Log, Porod, Kratky, etc.)\n"
+                         "• Plot-Designs System mit Vorlagen\n"
+                         "• Annotations und Referenzlinien\n"
                          "• Stil-Vorlagen und Auto-Erkennung\n"
-                         "• Farbschema-Manager\n"
-                         "• Drag & Drop\n"
-                         "• Verbesserter Export-Dialog")
+                         "• Drag & Drop Support\n"
+                         "• Session-Verwaltung")
 
     def save_session(self):
         """Speichert Session"""
