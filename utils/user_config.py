@@ -141,6 +141,9 @@ class UserConfig:
         self.auto_detection_rules = self.config.get('auto_detection_rules', DEFAULT_AUTO_DETECTION_RULES.copy())
         self.auto_detection_enabled = self.config.get('auto_detection_enabled', True)
 
+        # Default Plot-Settings (v5.4) - werden beim Programmstart geladen
+        self.default_plot_settings = self.config.get('default_plot_settings', {})
+
     def load_config(self):
         """Lädt die Hauptkonfiguration"""
         if CONFIG_FILE.exists():
@@ -166,12 +169,27 @@ class UserConfig:
         self.config['auto_detection_rules'] = self.auto_detection_rules
         self.config['auto_detection_enabled'] = self.auto_detection_enabled
         self.config['plot_designs'] = self.plot_designs  # Plot-Designs speichern (v5.2+)
+        self.config['default_plot_settings'] = self.default_plot_settings  # Default-Settings speichern (v5.4+)
 
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2)
         except Exception as e:
             print(f"Fehler beim Speichern der Config: {e}")
+
+    def save_default_plot_settings(self, legend_settings, grid_settings, font_settings, current_design='Standard'):
+        """Speichert aktuelle Plot-Einstellungen als Standard (v5.4)"""
+        self.default_plot_settings = {
+            'legend_settings': legend_settings.copy(),
+            'grid_settings': grid_settings.copy(),
+            'font_settings': font_settings.copy(),
+            'current_plot_design': current_design
+        }
+        self.save_config()
+
+    def get_default_plot_settings(self):
+        """Gibt Default-Plot-Settings zurück, oder None falls nicht gesetzt (v5.4)"""
+        return self.default_plot_settings if self.default_plot_settings else None
 
     def load_color_schemes(self):
         """Lädt gespeicherte Farbschemata"""
