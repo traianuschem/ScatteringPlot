@@ -171,6 +171,16 @@ class DesignManagerDialog(QDialog):
         btn_layout.addWidget(delete_btn)
 
         layout.addLayout(btn_layout)
+
+        # Zweite Button-Reihe für Standard-Einstellungen (v5.4)
+        default_layout = QHBoxLayout()
+
+        save_default_btn = QPushButton("⭐ Als Programmstandard speichern")
+        save_default_btn.setToolTip("Speichert aktuelle Einstellungen als Standard für alle neuen Sitzungen")
+        save_default_btn.clicked.connect(self.save_as_default)
+        default_layout.addWidget(save_default_btn)
+
+        layout.addLayout(default_layout)
         self.tabs.addTab(tab, "Plot-Designs")
 
     def refresh_styles_list(self):
@@ -399,6 +409,30 @@ class DesignManagerDialog(QDialog):
 
         self.refresh_plot_designs_list()
         QMessageBox.information(self, "Erfolg", f"Design '{name}' wurde gespeichert")
+
+    def save_as_default(self):
+        """Speichert aktuelle Einstellungen als Programmstandard (Version 5.4)"""
+        reply = QMessageBox.question(
+            self,
+            "Als Standard speichern",
+            "Möchten Sie die aktuellen Plot-Einstellungen als Programmstandard speichern?\n\n"
+            "Diese Einstellungen werden beim nächsten Start automatisch geladen.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.config.save_default_plot_settings(
+                self.parent_app.legend_settings,
+                self.parent_app.grid_settings,
+                self.parent_app.font_settings,
+                self.parent_app.current_plot_design
+            )
+            QMessageBox.information(
+                self,
+                "Erfolg",
+                "Die aktuellen Plot-Einstellungen wurden als Programmstandard gespeichert.\n\n"
+                "Beim nächsten Start werden diese Einstellungen automatisch geladen."
+            )
 
     def delete_plot_design(self):
         """Löscht benutzerdefiniertes Plot-Design (Version 5.2)"""

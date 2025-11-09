@@ -159,6 +159,14 @@ class ScatterPlotApp(QMainWindow):
         self.reference_lines = []  # Liste von Referenzlinien
         self.current_plot_design = 'Standard'  # Aktuelles Plot-Design
 
+        # Default Plot-Settings aus Config laden (v5.4)
+        default_settings = self.config.get_default_plot_settings()
+        if default_settings:
+            self.legend_settings = default_settings.get('legend_settings', self.legend_settings)
+            self.grid_settings = default_settings.get('grid_settings', self.grid_settings)
+            self.font_settings = default_settings.get('font_settings', self.font_settings)
+            self.current_plot_design = default_settings.get('current_plot_design', 'Standard')
+
         # GUI erstellen
         self.create_menu()
         self.create_main_widget()
