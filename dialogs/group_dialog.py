@@ -32,9 +32,9 @@ class CreateGroupDialog(QDialog):
         factor_layout = QHBoxLayout()
         factor_layout.addWidget(QLabel("Stack-Faktor:"))
         self.factor_spin = QDoubleSpinBox()
-        self.factor_spin.setRange(0.1, 10000.0)
+        self.factor_spin.setRange(0.0001, 1e15)  # Praktisch unbegrenzt
         self.factor_spin.setValue(1.0)
-        self.factor_spin.setDecimals(2)
+        self.factor_spin.setDecimals(4)
         self.factor_spin.setSingleStep(0.1)
         factor_layout.addWidget(self.factor_spin)
         layout.addLayout(factor_layout)
