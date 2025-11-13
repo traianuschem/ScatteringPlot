@@ -634,8 +634,7 @@ class ScatterPlotApp(QMainWindow):
 
         # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung)
         if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
-            # Handles und Labels sammeln
-            handles, labels = self.ax_main.get_legend_handles_labels()
+            from matplotlib.lines import Line2D
 
             # Map für Formatierungen erstellen (Label -> (bold, italic))
             format_map = {}
@@ -649,8 +648,7 @@ class ScatterPlotApp(QMainWindow):
                     # Gruppe als Label hinzufügen, falls gewünscht
                     if getattr(group, 'show_in_legend', True):
                         # Dummy-Handle für Gruppen-Label (unsichtbare Linie)
-                        from matplotlib.lines import Line2D
-                        dummy_handle = Line2D([0], [0], color='none')
+                        dummy_handle = Line2D([0], [0], color='none', marker='', linestyle='')
                         new_handles.append(dummy_handle)
                         group_label = getattr(group, 'display_label', group.name)
                         new_labels.append(group_label)
@@ -661,9 +659,28 @@ class ScatterPlotApp(QMainWindow):
 
                     # Datasets der Gruppe
                     for dataset in group.datasets:
-                        if dataset.show_in_legend and dataset.display_label in labels:
-                            idx = labels.index(dataset.display_label)
-                            new_handles.append(handles[idx])
+                        if dataset.show_in_legend:
+                            # Handle explizit mit korrekter Farbe und Stil erstellen
+                            plot_style = dataset.get_plot_style()
+                            marker = dataset.marker_style if dataset.marker_style else 'o'
+                            linestyle = dataset.line_style if dataset.line_style else ''
+
+                            # Wenn kein expliziter Stil, dann aus plot_style ableiten
+                            if not dataset.marker_style and not dataset.line_style:
+                                if 'fit' in dataset.name.lower():
+                                    linestyle = '-'
+                                    marker = ''
+                                else:
+                                    marker = 'o'
+                                    linestyle = ''
+
+                            handle = Line2D([0], [0],
+                                          color=dataset.color,
+                                          marker=marker,
+                                          linestyle=linestyle,
+                                          linewidth=dataset.line_width,
+                                          markersize=dataset.marker_size)
+                            new_handles.append(handle)
                             new_labels.append(dataset.display_label)
                             format_map[dataset.display_label] = (
                                 getattr(dataset, 'legend_bold', False),
@@ -672,9 +689,28 @@ class ScatterPlotApp(QMainWindow):
 
             # Unassigned Datasets
             for dataset in self.unassigned_datasets:
-                if dataset.show_in_legend and dataset.display_label in labels:
-                    idx = labels.index(dataset.display_label)
-                    new_handles.append(handles[idx])
+                if dataset.show_in_legend:
+                    # Handle explizit mit korrekter Farbe und Stil erstellen
+                    plot_style = dataset.get_plot_style()
+                    marker = dataset.marker_style if dataset.marker_style else 'o'
+                    linestyle = dataset.line_style if dataset.line_style else ''
+
+                    # Wenn kein expliziter Stil, dann aus plot_style ableiten
+                    if not dataset.marker_style and not dataset.line_style:
+                        if 'fit' in dataset.name.lower():
+                            linestyle = '-'
+                            marker = ''
+                        else:
+                            marker = 'o'
+                            linestyle = ''
+
+                    handle = Line2D([0], [0],
+                                  color=dataset.color,
+                                  marker=marker,
+                                  linestyle=linestyle,
+                                  linewidth=dataset.line_width,
+                                  markersize=dataset.marker_size)
+                    new_handles.append(handle)
                     new_labels.append(dataset.display_label)
                     format_map[dataset.display_label] = (
                         getattr(dataset, 'legend_bold', False),
@@ -1443,8 +1479,71 @@ class ScatterPlotApp(QMainWindow):
         dialog = LegendEditorDialog(self, self.groups, self.unassigned_datasets)
         if dialog.exec():
             # Die Änderungen wurden direkt an den Objekten vorgenommen
+            # Reihenfolge aktualisieren (falls geändert)
+            new_order = dialog.get_legend_order()
+            self.apply_legend_order(new_order)
             self.update_plot()
             self.rebuild_tree()
+
+    def apply_legend_order(self, legend_order):
+        """Wendet die neue Legendenreihenfolge auf die Datenstrukturen an (v5.7)"""
+        # Gruppen und Datasets neu organisieren basierend auf der Legendenreihenfolge
+        new_groups = []
+        new_unassigned = []
+
+        # Sammle alle Gruppen aus der neuen Reihenfolge
+        seen_groups = set()
+        seen_datasets = set()
+
+        for item_data in legend_order:
+            item_type = item_data[0]
+            obj = item_data[1]
+
+            if item_type == 'group':
+                if obj not in seen_groups:
+                    seen_groups.add(obj)
+                    new_groups.append(obj)
+            elif item_type == 'dataset':
+                # Dataset aus item_data[2] (parent group) oder None
+                parent_group = item_data[2] if len(item_data) > 2 else None
+                seen_datasets.add(obj)
+
+                if parent_group:
+                    # Dataset gehört zu einer Gruppe
+                    if parent_group not in seen_groups:
+                        seen_groups.add(parent_group)
+                        new_groups.append(parent_group)
+                else:
+                    # Unassigned dataset
+                    if obj not in new_unassigned:
+                        new_unassigned.append(obj)
+
+        # Jetzt die Gruppen-Inhalte neu ordnen
+        for item_data in legend_order:
+            item_type = item_data[0]
+
+            if item_type == 'dataset':
+                obj = item_data[1]
+                parent_group = item_data[2] if len(item_data) > 2 else None
+
+                if parent_group and parent_group in new_groups:
+                    # Stelle sicher, dass das Dataset in der richtigen Gruppe ist
+                    if obj not in parent_group.datasets:
+                        # Dataset aus alter Position entfernen
+                        for group in self.groups:
+                            if obj in group.datasets:
+                                group.datasets.remove(obj)
+                        if obj in self.unassigned_datasets:
+                            self.unassigned_datasets.remove(obj)
+
+                        # Zu neuer Gruppe hinzufügen
+                        parent_group.datasets.append(obj)
+
+        # Aktualisiere die Hauptlisten
+        self.groups = new_groups
+        self.unassigned_datasets = new_unassigned
+
+        print(f"✓ Legendenreihenfolge angewendet: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
 
     def show_grid_settings(self):
         """Zeigt Grid-Einstellungen Dialog"""
