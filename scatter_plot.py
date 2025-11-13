@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 5.6
+ScatterForge Plot - Version 5.7
 ================================
 
 Professionelles Tool für Streudaten-Analyse mit:
@@ -19,6 +19,9 @@ Professionelles Tool für Streudaten-Analyse mit:
 - Math Text für wissenschaftliche Notation
 - Auto-Gruppierung mit Stack-Faktoren
 - Umfassendes Logging-System
+- Legendeneditor mit individueller Formatierung (v5.7)
+- Unbegrenzte Skalierungsfaktoren (v5.7)
+- Automatische Farbvereinheitlichung bei Gruppierung (v5.7)
 """
 
 import sys
@@ -52,6 +55,7 @@ from dialogs.settings_dialog import PlotSettingsDialog
 from dialogs.group_dialog import CreateGroupDialog
 from dialogs.design_manager import DesignManagerDialog
 from dialogs.legend_dialog import LegendSettingsDialog
+from dialogs.legend_editor_dialog import LegendEditorDialog
 from dialogs.grid_dialog import GridSettingsDialog
 from dialogs.font_dialog import FontSettingsDialog
 from dialogs.export_dialog import ExportSettingsDialog
@@ -244,6 +248,10 @@ class ScatterPlotApp(QMainWindow):
         legend_action = QAction("Legenden-Einstellungen...", self)
         legend_action.triggered.connect(self.show_legend_settings)
         plot_menu.addAction(legend_action)
+
+        legend_editor_action = QAction("Legenden-Editor...", self)
+        legend_editor_action.triggered.connect(self.show_legend_editor)
+        plot_menu.addAction(legend_editor_action)
 
         grid_action = QAction("Grid-Einstellungen...", self)
         grid_action.triggered.connect(self.show_grid_settings)
@@ -624,9 +632,58 @@ class ScatterPlotApp(QMainWindow):
             if self.axis_limits['ymax'] is not None:
                 self.ax_main.set_ylim(top=self.axis_limits['ymax'])
 
-        # Legende (erweitert in v5.1, v5.3: Font-Optionen)
+        # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung)
         if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
+            # Handles und Labels sammeln
+            handles, labels = self.ax_main.get_legend_handles_labels()
+
+            # Map für Formatierungen erstellen (Label -> (bold, italic))
+            format_map = {}
+
+            # Gruppen-Labels hinzufügen (wenn show_in_legend=True)
+            new_handles = []
+            new_labels = []
+
+            for group in self.groups:
+                if group.visible and group.datasets:
+                    # Gruppe als Label hinzufügen, falls gewünscht
+                    if getattr(group, 'show_in_legend', True):
+                        # Dummy-Handle für Gruppen-Label (unsichtbare Linie)
+                        from matplotlib.lines import Line2D
+                        dummy_handle = Line2D([0], [0], color='none')
+                        new_handles.append(dummy_handle)
+                        group_label = getattr(group, 'display_label', group.name)
+                        new_labels.append(group_label)
+                        format_map[group_label] = (
+                            getattr(group, 'legend_bold', False),
+                            getattr(group, 'legend_italic', False)
+                        )
+
+                    # Datasets der Gruppe
+                    for dataset in group.datasets:
+                        if dataset.show_in_legend and dataset.display_label in labels:
+                            idx = labels.index(dataset.display_label)
+                            new_handles.append(handles[idx])
+                            new_labels.append(dataset.display_label)
+                            format_map[dataset.display_label] = (
+                                getattr(dataset, 'legend_bold', False),
+                                getattr(dataset, 'legend_italic', False)
+                            )
+
+            # Unassigned Datasets
+            for dataset in self.unassigned_datasets:
+                if dataset.show_in_legend and dataset.display_label in labels:
+                    idx = labels.index(dataset.display_label)
+                    new_handles.append(handles[idx])
+                    new_labels.append(dataset.display_label)
+                    format_map[dataset.display_label] = (
+                        getattr(dataset, 'legend_bold', False),
+                        getattr(dataset, 'legend_italic', False)
+                    )
+
+            # Legende erstellen
             legend = self.ax_main.legend(
+                new_handles, new_labels,
                 loc=self.legend_settings['position'],
                 fontsize=self.font_settings.get('legend_size', self.legend_settings.get('fontsize', 10)),
                 ncol=self.legend_settings['ncol'],
@@ -638,14 +695,27 @@ class ScatterPlotApp(QMainWindow):
                 legend.get_frame().set_alpha(self.legend_settings['alpha'])
 
             # v5.3: Font-Eigenschaften für Legenden-Texte anwenden
+            # v5.7: Individuelle Formatierung pro Eintrag
             if legend:
-                legend_weight = 'bold' if self.font_settings.get('legend_bold', False) else 'normal'
-                legend_style = 'italic' if self.font_settings.get('legend_italic', False) else 'normal'
+                legend_texts = legend.get_texts()
 
-                for text in legend.get_texts():
-                    text.set_fontweight(legend_weight)
-                    text.set_fontstyle(legend_style)
-                    text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
+                for i, text in enumerate(legend_texts):
+                    if i < len(new_labels):
+                        label = new_labels[i]
+
+                        # Individuelle Formatierung aus format_map
+                        if label in format_map:
+                            is_bold, is_italic = format_map[label]
+                            weight = 'bold' if is_bold else 'normal'
+                            style = 'italic' if is_italic else 'normal'
+                        else:
+                            # Fallback auf globale Einstellungen
+                            weight = 'bold' if self.font_settings.get('legend_bold', False) else 'normal'
+                            style = 'italic' if self.font_settings.get('legend_italic', False) else 'normal'
+
+                        text.set_fontweight(weight)
+                        text.set_fontstyle(style)
+                        text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
 
         # Referenzlinien (Version 5.2)
         for ref_line in self.reference_lines:
@@ -980,9 +1050,9 @@ class ScatterPlotApp(QMainWindow):
                 layout.addLayout(label_layout)
 
                 spin = QDoubleSpinBox()
-                spin.setRange(0.1, 10000.0)
+                spin.setRange(0.0001, 1e15)  # Praktisch unbegrenzt
                 spin.setValue(obj.stack_factor)
-                spin.setDecimals(2)
+                spin.setDecimals(4)
                 spin.setSingleStep(0.1)
                 layout.addWidget(spin)
 
@@ -1028,9 +1098,10 @@ class ScatterPlotApp(QMainWindow):
 
         rename_action = menu.addAction("Umbenennen")
 
-        # Farbpalette für Gruppen (v5.4)
+        # Farbpalette für Gruppen (v5.4, v5.7: Erweitert um einheitliche Farbe)
         color_scheme_menu = None
         color_scheme_actions = {}
+        set_group_color_action = None
         if data and data[0] == 'group':
             menu.addSeparator()
             color_scheme_menu = menu.addMenu("Farbpalette wählen")
@@ -1040,6 +1111,9 @@ class ScatterPlotApp(QMainWindow):
             # Alle verfügbaren Farbpaletten
             for scheme_name in sorted(self.config.color_schemes.keys()):
                 color_scheme_actions[scheme_name] = color_scheme_menu.addAction(scheme_name)
+
+            # Einheitliche Farbe für Gruppe setzen (v5.7)
+            set_group_color_action = menu.addAction("Einheitliche Farbe setzen...")
 
         # Zu Gruppe zuordnen (nur für Datensätze)
         group_menu = None
@@ -1073,6 +1147,9 @@ class ScatterPlotApp(QMainWindow):
             self.edit_annotation_or_refline(item)
         elif action == rename_action:
             self.rename_item(item)
+        elif action == set_group_color_action and set_group_color_action:
+            # Einheitliche Farbe für Gruppe setzen (v5.7)
+            self.set_unified_group_color(item)
         elif color_scheme_menu and action in color_scheme_actions.values():
             # Farbpalette für Gruppe setzen
             for scheme_name, scheme_action in color_scheme_actions.items():
@@ -1129,6 +1206,69 @@ class ScatterPlotApp(QMainWindow):
                 dataset.color = None
             self.update_plot()
 
+    def set_unified_group_color(self, item):
+        """Setzt eine einheitliche Farbe für alle Datasets in einer Gruppe (v5.7)"""
+        from PySide6.QtWidgets import QColorDialog
+
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'group':
+            return
+
+        group = data[1]
+
+        # Aktuelle Farbe ermitteln (von erstem Dataset, falls vorhanden)
+        initial_color = QColor('#1f77b4')  # Default
+        if group.datasets:
+            for dataset in group.datasets:
+                if dataset.color:
+                    initial_color = QColor(dataset.color)
+                    break
+
+        # Farbauswahl-Dialog
+        color = QColorDialog.getColor(initial_color, self, f"Farbe für Gruppe '{group.name}' wählen")
+
+        if color.isValid():
+            # Farbe auf alle Datasets in der Gruppe anwenden
+            color_hex = color.name()
+            for dataset in group.datasets:
+                dataset.color = color_hex
+
+            self.update_plot()
+            print(f"✓ Einheitliche Farbe für Gruppe '{group.name}' gesetzt: {color_hex}")
+
+    def unify_group_colors(self, group):
+        """Vereinheitlicht die Farben aller Datasets in einer Gruppe (v5.7)"""
+        if not group.datasets:
+            return
+
+        # Erste verfügbare Farbe finden (von bereits gesetzten Datasets)
+        unified_color = None
+        for dataset in group.datasets:
+            if dataset.color:
+                unified_color = dataset.color
+                break
+
+        # Wenn keine Farbe gesetzt ist, eine neue aus der Palette holen
+        if not unified_color:
+            # Farbpalette für diese Gruppe
+            if group.color_scheme and group.color_scheme in self.config.color_schemes:
+                colors = self.config.color_schemes[group.color_scheme]
+            else:
+                # Standard-Farbpalette
+                scheme_name = self.color_scheme_combo.currentText()
+                colors = self.config.color_schemes.get(scheme_name, ['#1f77b4'])
+
+            # Erste Farbe aus der Palette nehmen
+            from itertools import cycle
+            color_cycle = cycle(colors)
+            unified_color = next(color_cycle)
+
+        # Alle Datasets in der Gruppe auf diese Farbe setzen
+        for dataset in group.datasets:
+            dataset.color = unified_color
+
+        print(f"✓ Farben in Gruppe '{group.name}' vereinheitlicht: {unified_color}")
+
     def apply_style_to_dataset(self, item, preset_name):
         """Wendet Stil-Vorlage auf Datensatz an (v5.2+)"""
         data = item.data(0, Qt.UserRole)
@@ -1157,6 +1297,9 @@ class ScatterPlotApp(QMainWindow):
 
         # Zu Zielgruppe hinzufügen
         target_group.datasets.append(dataset)
+
+        # Automatische Farbvereinheitlichung (v5.7)
+        self.unify_group_colors(target_group)
 
         # Tree neu aufbauen
         self.rebuild_tree()
@@ -1191,6 +1334,10 @@ class ScatterPlotApp(QMainWindow):
                     if child_data and child_data[0] == 'dataset':
                         dataset = child_data[1]
                         group.datasets.append(dataset)
+
+                # Automatische Farbvereinheitlichung nach Drag & Drop (v5.7)
+                if group.datasets:
+                    self.unify_group_colors(group)
 
             # "Nicht zugeordnet" Items
             elif parent_item == self.unassigned_item:
@@ -1290,6 +1437,14 @@ class ScatterPlotApp(QMainWindow):
         if dialog.exec():
             self.legend_settings = dialog.get_settings()
             self.update_plot()
+
+    def show_legend_editor(self):
+        """Zeigt erweiterten Legenden-Editor Dialog"""
+        dialog = LegendEditorDialog(self, self.groups, self.unassigned_datasets)
+        if dialog.exec():
+            # Die Änderungen wurden direkt an den Objekten vorgenommen
+            self.update_plot()
+            self.rebuild_tree()
 
     def show_grid_settings(self):
         """Zeigt Grid-Einstellungen Dialog"""

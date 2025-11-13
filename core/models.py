@@ -29,6 +29,8 @@ class DataSet:
         self.line_width = 2
         self.marker_size = 4
         self.show_in_legend = True
+        self.legend_bold = False
+        self.legend_italic = False
 
         self.load_data()
 
@@ -89,7 +91,9 @@ class DataSet:
             'color': self.color,
             'line_width': self.line_width,
             'marker_size': self.marker_size,
-            'show_in_legend': self.show_in_legend
+            'show_in_legend': self.show_in_legend,
+            'legend_bold': self.legend_bold,
+            'legend_italic': self.legend_italic
         }
 
     @classmethod
@@ -103,6 +107,8 @@ class DataSet:
         ds.line_width = data.get('line_width', 2)
         ds.marker_size = data.get('marker_size', 4)
         ds.show_in_legend = data.get('show_in_legend', True)
+        ds.legend_bold = data.get('legend_bold', False)
+        ds.legend_italic = data.get('legend_italic', False)
         return ds
 
 
@@ -115,6 +121,10 @@ class DataGroup:
         self.visible = True
         self.collapsed = False
         self.color_scheme = color_scheme  # Optional: Gruppenspezifische Farbpalette
+        self.show_in_legend = True
+        self.legend_bold = False
+        self.legend_italic = False
+        self.display_label = name
 
     def add_dataset(self, dataset):
         """Datensatz hinzufügen"""
@@ -133,6 +143,10 @@ class DataGroup:
             'visible': self.visible,
             'collapsed': self.collapsed,
             'color_scheme': self.color_scheme,
+            'show_in_legend': self.show_in_legend,
+            'legend_bold': self.legend_bold,
+            'legend_italic': self.legend_italic,
+            'display_label': self.display_label,
             'datasets': [ds.to_dict() for ds in self.datasets]
         }
 
@@ -142,5 +156,9 @@ class DataGroup:
         group = cls(data['name'], data.get('stack_factor', 1.0), data.get('color_scheme'))
         group.visible = data.get('visible', True)
         group.collapsed = data.get('collapsed', False)
+        group.show_in_legend = data.get('show_in_legend', True)
+        group.legend_bold = data.get('legend_bold', False)
+        group.legend_italic = data.get('legend_italic', False)
+        group.display_label = data.get('display_label', group.name)
         group.datasets = [DataSet.from_dict(ds_data) for ds_data in data.get('datasets', [])]
         return group
