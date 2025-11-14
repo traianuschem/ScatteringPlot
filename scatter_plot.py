@@ -62,6 +62,7 @@ from dialogs.export_dialog import ExportSettingsDialog
 from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
 from dialogs.plot_limits_dialog import PlotLimitsDialog
+from dialogs.axes_dialog import AxesSettingsDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
@@ -176,6 +177,10 @@ class ScatterPlotApp(QMainWindow):
         self.reference_lines = []  # Liste von Referenzlinien
         self.current_plot_design = 'Standard'  # Aktuelles Plot-Design
 
+        # Version 5.7 Features
+        self.custom_xlabel = None  # Custom X-Achsenbeschriftung
+        self.custom_ylabel = None  # Custom Y-Achsenbeschriftung
+
         # Default Plot-Settings aus Config laden (v5.4)
         self.logger.debug("Prüfe auf gespeicherte Standard-Plot-Einstellungen...")
         default_settings = self.config.get_default_plot_settings()
@@ -254,9 +259,13 @@ class ScatterPlotApp(QMainWindow):
         legend_editor_action.triggered.connect(self.show_legend_editor)
         plot_menu.addAction(legend_editor_action)
 
-        grid_action = QAction("Grid-Einstellungen...", self)
+        grid_action = QAction("Grid- und Tick-Einstellungen...", self)
         grid_action.triggered.connect(self.show_grid_settings)
         plot_menu.addAction(grid_action)
+
+        axes_action = QAction("Achsenbeschriftungen...", self)
+        axes_action.triggered.connect(self.show_axes_settings)
+        plot_menu.addAction(axes_action)
 
         font_action = QAction("Schriftart-Einstellungen...", self)
         font_action.triggered.connect(self.show_font_settings)
@@ -616,9 +625,16 @@ class ScatterPlotApp(QMainWindow):
             self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Achsen (mit Math Text Support in v5.2)
-        xlabel = self.convert_to_mathtext(plot_info['xlabel'])
-        ylabel = self.convert_to_mathtext(plot_info['ylabel'])
+        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7)
+        if self.custom_xlabel:
+            xlabel = self.custom_xlabel
+        else:
+            xlabel = self.convert_to_mathtext(plot_info['xlabel'])
+
+        if self.custom_ylabel:
+            ylabel = self.custom_ylabel
+        else:
+            ylabel = self.convert_to_mathtext(plot_info['ylabel'])
 
         # Achsenbeschriftungen mit erweiterten Font-Optionen (v5.3)
         label_weight = 'bold' if self.font_settings.get('labels_bold', False) else 'normal'
@@ -638,17 +654,46 @@ class ScatterPlotApp(QMainWindow):
         self.ax_main.set_xscale(plot_info['xscale'])
         self.ax_main.set_yscale(plot_info['yscale'])
 
-        # Tick-Labels mit erweiterten Font-Optionen (v5.3)
+        # Tick-Einstellungen (v5.7: Erweitert um Länge, Breite, Richtung)
         tick_weight = 'bold' if self.font_settings.get('ticks_bold', False) else 'normal'
         tick_style = 'italic' if self.font_settings.get('ticks_italic', False) else 'normal'
 
-        self.ax_main.tick_params(axis='both', labelsize=self.font_settings.get('ticks_size', 10))
+        # Tick-Parameter aus grid_settings
+        tick_labelsize = self.grid_settings.get('tick_labelsize', self.font_settings.get('ticks_size', 10))
+
+        # Major Ticks
+        self.ax_main.tick_params(
+            axis='both',
+            which='major',
+            direction=self.grid_settings.get('major_tick_direction', 'in'),
+            length=self.grid_settings.get('major_tick_length', 6.0),
+            width=self.grid_settings.get('major_tick_width', 1.0),
+            labelsize=tick_labelsize
+        )
+
+        # Minor Ticks
+        if self.grid_settings.get('minor_ticks_enable', True):
+            self.ax_main.tick_params(
+                axis='both',
+                which='minor',
+                direction=self.grid_settings.get('minor_tick_direction', 'in'),
+                length=self.grid_settings.get('minor_tick_length', 3.0),
+                width=self.grid_settings.get('minor_tick_width', 0.5)
+            )
 
         # Font-Eigenschaften für Tick-Labels anwenden
         for label in self.ax_main.get_xticklabels() + self.ax_main.get_yticklabels():
             label.set_fontweight(tick_weight)
             label.set_fontstyle(tick_style)
             label.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
+
+        # Tick-Label-Rotation (v5.7)
+        x_rotation = self.grid_settings.get('x_tick_rotation', 0)
+        y_rotation = self.grid_settings.get('y_tick_rotation', 0)
+        if x_rotation != 0:
+            self.ax_main.tick_params(axis='x', rotation=x_rotation)
+        if y_rotation != 0:
+            self.ax_main.tick_params(axis='y', rotation=y_rotation)
 
         # Grid-Einstellungen (erweitert in v5.1)
         if self.grid_settings['major_enable']:
@@ -1623,10 +1668,17 @@ class ScatterPlotApp(QMainWindow):
         print(f"✓ Legendenreihenfolge angewendet: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
 
     def show_grid_settings(self):
-        """Zeigt Grid-Einstellungen Dialog"""
+        """Zeigt Grid- und Tick-Einstellungen Dialog"""
         dialog = GridSettingsDialog(self, self.grid_settings)
         if dialog.exec():
             self.grid_settings = dialog.get_settings()
+            self.update_plot()
+
+    def show_axes_settings(self):
+        """Zeigt Achsenbeschriftungen Dialog (v5.7)"""
+        dialog = AxesSettingsDialog(self, self.custom_xlabel, self.custom_ylabel, self.plot_type)
+        if dialog.exec():
+            self.custom_xlabel, self.custom_ylabel = dialog.get_labels()
             self.update_plot()
 
     def show_font_settings(self):
@@ -1850,7 +1902,9 @@ class ScatterPlotApp(QMainWindow):
                     'export_settings': self.export_settings,
                     'annotations': self.annotations,
                     'reference_lines': self.reference_lines,
-                    'current_plot_design': self.current_plot_design  # v5.4
+                    'current_plot_design': self.current_plot_design,  # v5.4
+                    'custom_xlabel': self.custom_xlabel,  # v5.7
+                    'custom_ylabel': self.custom_ylabel   # v5.7
                 }
                 self.logger.debug(f"  Gruppen: {len(self.groups)}, Unassigned: {len(self.unassigned_datasets)}")
                 with open(filename, 'w', encoding='utf-8') as f:
@@ -1936,6 +1990,12 @@ class ScatterPlotApp(QMainWindow):
                 if 'current_plot_design' in session:
                     self.current_plot_design = session['current_plot_design']
                     self.logger.debug(f"  Plot Design: {self.current_plot_design}")
+
+                # Version 5.7: Custom Achsenbeschriftungen
+                if 'custom_xlabel' in session:
+                    self.custom_xlabel = session['custom_xlabel']
+                if 'custom_ylabel' in session:
+                    self.custom_ylabel = session['custom_ylabel']
 
                 # Annotations-Tree aktualisieren (v5.3)
                 self.update_annotations_tree()
