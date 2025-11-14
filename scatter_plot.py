@@ -61,6 +61,7 @@ from dialogs.font_dialog import FontSettingsDialog
 from dialogs.export_dialog import ExportSettingsDialog
 from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
+from dialogs.plot_limits_dialog import PlotLimitsDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
@@ -516,8 +517,31 @@ class ScatterPlotApp(QMainWindow):
                     color = next(group_color_cycle)
                     dataset.color = color
 
+                # Daten mit individuellen Grenzen filtern (v5.7)
+                x_data = dataset.x.copy()
+                y_data = dataset.y.copy()
+                y_err_data = dataset.y_err.copy() if dataset.y_err is not None else None
+
+                # Maske für Grenzen erstellen
+                mask = np.ones(len(x_data), dtype=bool)
+
+                if dataset.x_min is not None:
+                    mask &= (x_data >= dataset.x_min)
+                if dataset.x_max is not None:
+                    mask &= (x_data <= dataset.x_max)
+                if dataset.y_min is not None:
+                    mask &= (y_data >= dataset.y_min)
+                if dataset.y_max is not None:
+                    mask &= (y_data <= dataset.y_max)
+
+                # Daten filtern
+                x_data = x_data[mask]
+                y_data = y_data[mask]
+                if y_err_data is not None:
+                    y_err_data = y_err_data[mask]
+
                 # Daten transformieren
-                x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
+                x, y = self.transform_data(x_data, y_data, self.plot_type)
 
                 # Stack-Multiplikation mit eigenem Gruppen-Faktor
                 y = y * stack_factor
@@ -525,9 +549,9 @@ class ScatterPlotApp(QMainWindow):
                 # Plotten
                 plot_style = dataset.get_plot_style()
 
-                if dataset.y_err is not None and self.plot_type == 'Log-Log':
+                if y_err_data is not None and self.plot_type == 'Log-Log':
                     # Fehler als transparente Fläche
-                    y_err_trans = self.transform_data(dataset.x, dataset.y_err, self.plot_type)[1]
+                    y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
                     self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                               alpha=0.2, color=color)
@@ -553,15 +577,38 @@ class ScatterPlotApp(QMainWindow):
                 color = next(color_cycle)
                 dataset.color = color
 
+            # Daten mit individuellen Grenzen filtern (v5.7)
+            x_data = dataset.x.copy()
+            y_data = dataset.y.copy()
+            y_err_data = dataset.y_err.copy() if dataset.y_err is not None else None
+
+            # Maske für Grenzen erstellen
+            mask = np.ones(len(x_data), dtype=bool)
+
+            if dataset.x_min is not None:
+                mask &= (x_data >= dataset.x_min)
+            if dataset.x_max is not None:
+                mask &= (x_data <= dataset.x_max)
+            if dataset.y_min is not None:
+                mask &= (y_data >= dataset.y_min)
+            if dataset.y_max is not None:
+                mask &= (y_data <= dataset.y_max)
+
+            # Daten filtern
+            x_data = x_data[mask]
+            y_data = y_data[mask]
+            if y_err_data is not None:
+                y_err_data = y_err_data[mask]
+
             # Daten transformieren
-            x, y = self.transform_data(dataset.x, dataset.y, self.plot_type)
+            x, y = self.transform_data(x_data, y_data, self.plot_type)
 
             # Plotten
             plot_style = dataset.get_plot_style()
 
-            if dataset.y_err is not None and self.plot_type == 'Log-Log':
+            if y_err_data is not None and self.plot_type == 'Log-Log':
                 # Fehler als transparente Fläche
-                y_err_trans = self.transform_data(dataset.x, dataset.y_err, self.plot_type)[1]
+                y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                 self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
                                           alpha=0.2, color=color)
 
@@ -1174,6 +1221,11 @@ class ScatterPlotApp(QMainWindow):
         if data and data[0] == 'dataset':
             reset_color_action = menu.addAction("Farbe zurücksetzen")
 
+        # Plotgrenzen für Datensätze (v5.7)
+        set_limits_action = None
+        if data and data[0] == 'dataset':
+            set_limits_action = menu.addAction("Plotgrenzen setzen...")
+
         menu.addSeparator()
         delete_action = menu.addAction("Löschen")
 
@@ -1206,6 +1258,9 @@ class ScatterPlotApp(QMainWindow):
                     break
         elif action == reset_color_action and reset_color_action:
             self.reset_dataset_color(item)
+        elif action == set_limits_action and set_limits_action:
+            # Plotgrenzen für Dataset setzen (v5.7)
+            self.set_dataset_plot_limits(item)
         elif action == delete_action:
             self.tree.setCurrentItem(item)
             self.delete_selected()
@@ -1230,6 +1285,28 @@ class ScatterPlotApp(QMainWindow):
             dataset = data[1]
             dataset.color = None
             self.update_plot()
+
+    def set_dataset_plot_limits(self, item):
+        """Setzt individuelle Plotgrenzen für einen Datensatz (v5.7)"""
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'dataset':
+            return
+
+        dataset = data[1]
+
+        # Dialog öffnen
+        dialog = PlotLimitsDialog(self, dataset)
+        if dialog.exec():
+            x_min, x_max, y_min, y_max = dialog.get_limits()
+
+            # Grenzen setzen
+            dataset.x_min = x_min
+            dataset.x_max = x_max
+            dataset.y_min = y_min
+            dataset.y_max = y_max
+
+            self.update_plot()
+            print(f"✓ Plotgrenzen für '{dataset.name}' aktualisiert: X=[{x_min}, {x_max}], Y=[{y_min}, {y_max}]")
 
     def set_group_color_scheme(self, item, scheme_name):
         """Setzt Farbpalette für eine Gruppe (v5.4)"""
