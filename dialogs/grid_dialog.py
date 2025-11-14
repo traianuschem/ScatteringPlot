@@ -1,13 +1,13 @@
 """
 Grid Settings Dialog
 
-This dialog allows users to configure grid appearance for plots.
+This dialog allows users to configure grid appearance and tick settings for plots.
 """
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
     QLabel, QComboBox, QDoubleSpinBox, QCheckBox,
-    QDialogButtonBox, QPushButton
+    QDialogButtonBox, QPushButton, QSpinBox, QTabWidget, QWidget
 )
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
@@ -18,10 +18,36 @@ class GridSettingsDialog(QDialog):
 
     def __init__(self, parent, grid_settings):
         super().__init__(parent)
-        self.setWindowTitle("Grid-Einstellungen")
+        self.setWindowTitle("Grid- und Tick-Einstellungen")
+        self.resize(500, 600)
         self.grid_settings = grid_settings.copy()
 
         layout = QVBoxLayout(self)
+
+        # Tab-Widget für Grid und Ticks
+        tabs = QTabWidget()
+
+        # Tab 1: Grid-Einstellungen
+        grid_tab = QWidget()
+        grid_tab_layout = QVBoxLayout(grid_tab)
+        self.setup_grid_tab(grid_tab_layout)
+        tabs.addTab(grid_tab, "Grid")
+
+        # Tab 2: Tick-Einstellungen
+        tick_tab = QWidget()
+        tick_tab_layout = QVBoxLayout(tick_tab)
+        self.setup_tick_tab(tick_tab_layout)
+        tabs.addTab(tick_tab, "Ticks")
+
+        layout.addWidget(tabs)
+
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def setup_grid_tab(self, layout):
 
         # Major Grid Gruppe
         major_group = QGroupBox("Major Grid (Hauptlinien)")
@@ -140,12 +166,117 @@ class GridSettingsDialog(QDialog):
 
         minor_group.setLayout(minor_layout)
         layout.addWidget(minor_group)
+        layout.addStretch()
 
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+    def setup_tick_tab(self, layout):
+        """Tick-Einstellungen Tab"""
+
+        # Major Ticks
+        major_tick_group = QGroupBox("Major Ticks (Hauptmarkierungen)")
+        major_tick_layout = QGridLayout()
+
+        # Tick-Richtung
+        major_tick_layout.addWidget(QLabel("Richtung:"), 0, 0)
+        self.major_tick_direction = QComboBox()
+        self.major_tick_direction.addItems(['in', 'out', 'inout'])
+        current_dir = self.grid_settings.get('major_tick_direction', 'in')
+        index = self.major_tick_direction.findText(current_dir)
+        if index >= 0:
+            self.major_tick_direction.setCurrentIndex(index)
+        major_tick_layout.addWidget(self.major_tick_direction, 0, 1)
+
+        # Tick-Länge
+        major_tick_layout.addWidget(QLabel("Länge:"), 1, 0)
+        self.major_tick_length = QDoubleSpinBox()
+        self.major_tick_length.setRange(0.0, 20.0)
+        self.major_tick_length.setSingleStep(0.5)
+        self.major_tick_length.setValue(self.grid_settings.get('major_tick_length', 6.0))
+        self.major_tick_length.setSuffix(" pt")
+        major_tick_layout.addWidget(self.major_tick_length, 1, 1)
+
+        # Tick-Breite
+        major_tick_layout.addWidget(QLabel("Breite:"), 2, 0)
+        self.major_tick_width = QDoubleSpinBox()
+        self.major_tick_width.setRange(0.1, 5.0)
+        self.major_tick_width.setSingleStep(0.1)
+        self.major_tick_width.setValue(self.grid_settings.get('major_tick_width', 1.0))
+        major_tick_layout.addWidget(self.major_tick_width, 2, 1)
+
+        major_tick_group.setLayout(major_tick_layout)
+        layout.addWidget(major_tick_group)
+
+        # Minor Ticks
+        minor_tick_group = QGroupBox("Minor Ticks (Hilfsmarkierungen)")
+        minor_tick_layout = QGridLayout()
+
+        # Minor Ticks anzeigen
+        self.minor_ticks_enable = QCheckBox("Minor Ticks anzeigen")
+        self.minor_ticks_enable.setChecked(self.grid_settings.get('minor_ticks_enable', True))
+        minor_tick_layout.addWidget(self.minor_ticks_enable, 0, 0, 1, 2)
+
+        # Tick-Richtung
+        minor_tick_layout.addWidget(QLabel("Richtung:"), 1, 0)
+        self.minor_tick_direction = QComboBox()
+        self.minor_tick_direction.addItems(['in', 'out', 'inout'])
+        current_dir = self.grid_settings.get('minor_tick_direction', 'in')
+        index = self.minor_tick_direction.findText(current_dir)
+        if index >= 0:
+            self.minor_tick_direction.setCurrentIndex(index)
+        minor_tick_layout.addWidget(self.minor_tick_direction, 1, 1)
+
+        # Tick-Länge
+        minor_tick_layout.addWidget(QLabel("Länge:"), 2, 0)
+        self.minor_tick_length = QDoubleSpinBox()
+        self.minor_tick_length.setRange(0.0, 20.0)
+        self.minor_tick_length.setSingleStep(0.5)
+        self.minor_tick_length.setValue(self.grid_settings.get('minor_tick_length', 3.0))
+        self.minor_tick_length.setSuffix(" pt")
+        minor_tick_layout.addWidget(self.minor_tick_length, 2, 1)
+
+        # Tick-Breite
+        minor_tick_layout.addWidget(QLabel("Breite:"), 3, 0)
+        self.minor_tick_width = QDoubleSpinBox()
+        self.minor_tick_width.setRange(0.1, 5.0)
+        self.minor_tick_width.setSingleStep(0.1)
+        self.minor_tick_width.setValue(self.grid_settings.get('minor_tick_width', 0.5))
+        minor_tick_layout.addWidget(self.minor_tick_width, 3, 1)
+
+        minor_tick_group.setLayout(minor_tick_layout)
+        layout.addWidget(minor_tick_group)
+
+        # Tick-Label-Einstellungen
+        tick_label_group = QGroupBox("Tick-Label-Einstellungen")
+        tick_label_layout = QGridLayout()
+
+        # Label-Rotation
+        tick_label_layout.addWidget(QLabel("X-Achse Rotation:"), 0, 0)
+        self.x_tick_rotation = QSpinBox()
+        self.x_tick_rotation.setRange(-90, 90)
+        self.x_tick_rotation.setSingleStep(15)
+        self.x_tick_rotation.setValue(self.grid_settings.get('x_tick_rotation', 0))
+        self.x_tick_rotation.setSuffix("°")
+        tick_label_layout.addWidget(self.x_tick_rotation, 0, 1)
+
+        tick_label_layout.addWidget(QLabel("Y-Achse Rotation:"), 1, 0)
+        self.y_tick_rotation = QSpinBox()
+        self.y_tick_rotation.setRange(-90, 90)
+        self.y_tick_rotation.setSingleStep(15)
+        self.y_tick_rotation.setValue(self.grid_settings.get('y_tick_rotation', 0))
+        self.y_tick_rotation.setSuffix("°")
+        tick_label_layout.addWidget(self.y_tick_rotation, 1, 1)
+
+        # Label-Schriftgröße
+        tick_label_layout.addWidget(QLabel("Schriftgröße:"), 2, 0)
+        self.tick_labelsize = QSpinBox()
+        self.tick_labelsize.setRange(4, 32)
+        self.tick_labelsize.setValue(self.grid_settings.get('tick_labelsize', 10))
+        self.tick_labelsize.setSuffix(" pt")
+        tick_label_layout.addWidget(self.tick_labelsize, 2, 1)
+
+        tick_label_group.setLayout(tick_label_layout)
+        layout.addWidget(tick_label_group)
+
+        layout.addStretch()
 
     def choose_color(self, grid_type):
         """Öffnet Farbwahl-Dialog"""
@@ -168,6 +299,7 @@ class GridSettingsDialog(QDialog):
     def get_settings(self):
         """Gibt Einstellungen zurück"""
         return {
+            # Grid-Einstellungen
             'major_enable': self.major_enable.isChecked(),
             'major_axis': self.major_axis_combo.currentText(),
             'major_linestyle': self.major_linestyle_combo.currentText(),
@@ -179,5 +311,16 @@ class GridSettingsDialog(QDialog):
             'minor_linestyle': self.minor_linestyle_combo.currentText(),
             'minor_linewidth': self.minor_linewidth_spin.value(),
             'minor_alpha': self.minor_alpha_spin.value(),
-            'minor_color': self.minor_color_button.text()
+            'minor_color': self.minor_color_button.text(),
+            # Tick-Einstellungen
+            'major_tick_direction': self.major_tick_direction.currentText(),
+            'major_tick_length': self.major_tick_length.value(),
+            'major_tick_width': self.major_tick_width.value(),
+            'minor_ticks_enable': self.minor_ticks_enable.isChecked(),
+            'minor_tick_direction': self.minor_tick_direction.currentText(),
+            'minor_tick_length': self.minor_tick_length.value(),
+            'minor_tick_width': self.minor_tick_width.value(),
+            'x_tick_rotation': self.x_tick_rotation.value(),
+            'y_tick_rotation': self.y_tick_rotation.value(),
+            'tick_labelsize': self.tick_labelsize.value()
         }
