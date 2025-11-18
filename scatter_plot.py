@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 5.7
+ScatterForge Plot - Version 6.0
 ================================
 
 Professionelles Tool für Streudaten-Analyse mit:
@@ -22,6 +22,8 @@ Professionelles Tool für Streudaten-Analyse mit:
 - Legendeneditor mit individueller Formatierung (v5.7)
 - Unbegrenzte Skalierungsfaktoren (v5.7)
 - Automatische Farbvereinheitlichung bei Gruppierung (v5.7)
+- Umfassender Kurven-Editor mit Fehlerbalken-Support (v6.0)
+- Schnellfarben-Menü aus aktueller Farbpalette (v6.0)
 """
 
 import sys
@@ -96,10 +98,10 @@ class ScatterPlotApp(QMainWindow):
         # Logger initialisieren (v5.6)
         self.logger = setup_logger('ScatterForge')
         self.logger.info("=" * 60)
-        self.logger.info("ScatterForge Plot v5.6 gestartet")
+        self.logger.info("ScatterForge Plot v6.0 gestartet")
         self.logger.info("=" * 60)
 
-        self.setWindowTitle("ScatterForge Plot v5.6")
+        self.setWindowTitle("ScatterForge Plot v6.0")
         self.resize(1600, 1000)
 
         # Config
@@ -559,16 +561,32 @@ class ScatterPlotApp(QMainWindow):
                 # Plotten
                 plot_style = dataset.get_plot_style()
 
-                if y_err_data is not None and self.plot_type == 'Log-Log':
-                    # Fehler als transparente Fläche
+                # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
+                if y_err_data is not None and dataset.show_errorbars:
+                    # Fehler transformieren
                     y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
-                    self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
-                                              alpha=0.2, color=color)
 
-                # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
-                self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
-                                 linewidth=dataset.line_width, markersize=dataset.marker_size)
+                    # Mit errorbar plotten
+                    self.ax_main.errorbar(
+                        x, y, yerr=y_err_trans,
+                        fmt=plot_style,
+                        color=color,
+                        label=dataset.display_label,
+                        linewidth=dataset.line_width,
+                        markersize=dataset.marker_size,
+                        capsize=dataset.errorbar_capsize,
+                        elinewidth=dataset.errorbar_linewidth,
+                        alpha=1.0,  # Hauptlinie volle Deckkraft
+                        ecolor=color,  # Fehlerbalken-Farbe
+                        capthick=dataset.errorbar_linewidth
+                    )
+                    # Transparenz nur auf Fehlerbalken anwenden
+                    # (wird durch elinewidth-Parameter gesteuert)
+                else:
+                    # Ohne Fehlerbalken normal plotten
+                    self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
+                                     linewidth=dataset.line_width, markersize=dataset.marker_size)
 
         # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
         unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
@@ -616,15 +634,29 @@ class ScatterPlotApp(QMainWindow):
             # Plotten
             plot_style = dataset.get_plot_style()
 
-            if y_err_data is not None and self.plot_type == 'Log-Log':
-                # Fehler als transparente Fläche
+            # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
+            if y_err_data is not None and dataset.show_errorbars:
+                # Fehler transformieren
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-                self.ax_main.fill_between(x, y - y_err_trans, y + y_err_trans,
-                                          alpha=0.2, color=color)
 
-            # Dataset plotten (immer mit Label, da show_in_legend bereits geprüft)
-            self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
-                             linewidth=dataset.line_width, markersize=dataset.marker_size)
+                # Mit errorbar plotten
+                self.ax_main.errorbar(
+                    x, y, yerr=y_err_trans,
+                    fmt=plot_style,
+                    color=color,
+                    label=dataset.display_label,
+                    linewidth=dataset.line_width,
+                    markersize=dataset.marker_size,
+                    capsize=dataset.errorbar_capsize,
+                    elinewidth=dataset.errorbar_linewidth,
+                    alpha=1.0,
+                    ecolor=color,
+                    capthick=dataset.errorbar_linewidth
+                )
+            else:
+                # Ohne Fehlerbalken normal plotten
+                self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
+                                 linewidth=dataset.line_width, markersize=dataset.marker_size)
 
         # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7)
         if self.custom_xlabel:
@@ -1233,7 +1265,7 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_context_menu(self, position):
-        """Kontextmenü für Tree (erweitert v5.3 für Annotations/Referenzlinien, v5.4 für Gruppen-Farbpaletten)"""
+        """Kontextmenü für Tree (erweitert v5.3 für Annotations/Referenzlinien, v5.4 für Gruppen-Farbpaletten, v6.0 für Kurven-Editor)"""
         item = self.tree.itemAt(position)
         if not item:
             return
@@ -1246,6 +1278,11 @@ class ScatterPlotApp(QMainWindow):
         edit_action = None
         if data and data[0] in ['annotation', 'reference_line']:
             edit_action = menu.addAction("Bearbeiten...")
+
+        # Kurve bearbeiten für Datensätze (v6.0)
+        edit_curve_action = None
+        if data and data[0] == 'dataset':
+            edit_curve_action = menu.addAction("🎨 Kurve bearbeiten...")
 
         rename_action = menu.addAction("Umbenennen")
 
@@ -1284,6 +1321,29 @@ class ScatterPlotApp(QMainWindow):
             for preset_name in self.config.style_presets.keys():
                 style_actions[preset_name] = style_menu.addAction(preset_name)
 
+        # Schnellfarben für Datensätze (v6.0)
+        quick_color_menu = None
+        quick_color_actions = {}
+        if data and data[0] == 'dataset':
+            # Bestimme welche Farbpalette zu verwenden ist (Gruppe oder global)
+            dataset = data[1]
+            active_palette_name = self.color_scheme_combo.currentText()
+
+            # Wenn Dataset zu einer Gruppe gehört, verwende Gruppen-Palette wenn vorhanden
+            for group in self.groups:
+                if dataset in group.datasets and group.color_scheme:
+                    active_palette_name = group.color_scheme
+                    break
+
+            if active_palette_name in self.config.color_schemes:
+                quick_color_menu = menu.addMenu("Schnellfarben")
+                palette_colors = self.config.color_schemes[active_palette_name]
+
+                for i, color in enumerate(palette_colors[:10], 1):  # Max 10 Farben
+                    # Einfaches farbiges Quadrat als Icon-Ersatz
+                    action_text = f"⬤ Farbe {i}"
+                    quick_color_actions[color] = quick_color_menu.addAction(action_text)
+
         # Farbe zurücksetzen nur für Datensätze (v4.2+)
         reset_color_action = None
         if data and data[0] == 'dataset':
@@ -1301,6 +1361,9 @@ class ScatterPlotApp(QMainWindow):
 
         if action == edit_action and edit_action:
             self.edit_annotation_or_refline(item)
+        elif action == edit_curve_action and edit_curve_action:
+            # Kurve bearbeiten (v6.0)
+            self.edit_curve_settings(item)
         elif action == rename_action:
             self.rename_item(item)
         elif action == set_group_color_action and set_group_color_action:
@@ -1323,6 +1386,12 @@ class ScatterPlotApp(QMainWindow):
             for preset_name, preset_action in style_actions.items():
                 if action == preset_action:
                     self.apply_style_to_dataset(item, preset_name)
+                    break
+        elif quick_color_menu and action in quick_color_actions.values():
+            # Schnellfarbe anwenden (v6.0)
+            for color, color_action in quick_color_actions.items():
+                if action == color_action:
+                    self.set_dataset_quick_color(item, color)
                     break
         elif action == reset_color_action and reset_color_action:
             self.reset_dataset_color(item)
@@ -1375,6 +1444,57 @@ class ScatterPlotApp(QMainWindow):
 
             self.update_plot()
             print(f"✓ Plotgrenzen für '{dataset.name}' aktualisiert: X=[{x_min}, {x_max}], Y=[{y_min}, {y_max}]")
+
+    def edit_curve_settings(self, item):
+        """Öffnet den umfassenden Kurven-Editor-Dialog (v6.0)"""
+        from dialogs.curve_settings_dialog import CurveSettingsDialog
+
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'dataset':
+            return
+
+        dataset = data[1]
+
+        # Bestimme aktive Farbpalette (Gruppe oder global)
+        active_palette_name = self.color_scheme_combo.currentText()
+        for group in self.groups:
+            if dataset in group.datasets and group.color_scheme:
+                active_palette_name = group.color_scheme
+                break
+
+        # Dialog öffnen
+        dialog = CurveSettingsDialog(
+            self,
+            dataset,
+            current_color_scheme=active_palette_name,
+            color_schemes=self.config.color_schemes
+        )
+
+        if dialog.exec():
+            settings = dialog.get_settings()
+
+            # Alle Einstellungen auf Dataset anwenden
+            dataset.color = settings['color']
+            dataset.marker_style = settings['marker_style']
+            dataset.marker_size = settings['marker_size']
+            dataset.line_style = settings['line_style']
+            dataset.line_width = settings['line_width']
+            dataset.show_errorbars = settings['show_errorbars']
+            dataset.errorbar_capsize = settings['errorbar_capsize']
+            dataset.errorbar_alpha = settings['errorbar_alpha']
+            dataset.errorbar_linewidth = settings['errorbar_linewidth']
+
+            self.update_plot()
+            self.logger.info(f"Kurveneinstellungen für '{dataset.name}' aktualisiert")
+
+    def set_dataset_quick_color(self, item, color):
+        """Setzt Schnellfarbe für einen Datensatz (v6.0)"""
+        data = item.data(0, Qt.UserRole)
+        if data and data[0] == 'dataset':
+            dataset = data[1]
+            dataset.color = color
+            self.update_plot()
+            self.logger.debug(f"Schnellfarbe {color} für '{dataset.name}' gesetzt")
 
     def set_group_color_scheme(self, item, scheme_name):
         """Setzt Farbpalette für eine Gruppe (v5.4)"""
