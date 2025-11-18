@@ -32,6 +32,12 @@ class DataSet:
         self.legend_bold = False
         self.legend_italic = False
 
+        # Fehlerbalken (v6.0)
+        self.show_errorbars = True
+        self.errorbar_capsize = 3
+        self.errorbar_alpha = 0.7
+        self.errorbar_linewidth = 1.0
+
         # Individuelle Plotgrenzen (v5.7)
         self.x_min = None
         self.x_max = None
@@ -100,6 +106,10 @@ class DataSet:
             'show_in_legend': self.show_in_legend,
             'legend_bold': self.legend_bold,
             'legend_italic': self.legend_italic,
+            'show_errorbars': self.show_errorbars,
+            'errorbar_capsize': self.errorbar_capsize,
+            'errorbar_alpha': self.errorbar_alpha,
+            'errorbar_linewidth': self.errorbar_linewidth,
             'x_min': self.x_min,
             'x_max': self.x_max,
             'y_min': self.y_min,
@@ -119,6 +129,10 @@ class DataSet:
         ds.show_in_legend = data.get('show_in_legend', True)
         ds.legend_bold = data.get('legend_bold', False)
         ds.legend_italic = data.get('legend_italic', False)
+        ds.show_errorbars = data.get('show_errorbars', True)
+        ds.errorbar_capsize = data.get('errorbar_capsize', 3)
+        ds.errorbar_alpha = data.get('errorbar_alpha', 0.7)
+        ds.errorbar_linewidth = data.get('errorbar_linewidth', 1.0)
         ds.x_min = data.get('x_min')
         ds.x_max = data.get('x_max')
         ds.y_min = data.get('y_min')
