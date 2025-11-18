@@ -6,7 +6,7 @@ ScatterForge Plot ist ein leistungsstarkes, benutzerfreundliches Tool zur Visual
 
 ![Version](https://img.shields.io/badge/version-6.1-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 ---
 
@@ -532,7 +532,7 @@ Contributions sind willkommen! Bitte:
 
 ## 📝 Lizenz
 
-Dieses Projekt ist unter der MIT-Lizenz lizenziert.
+Dieses Projekt ist unter der GPL-3.0 Lizenz lizenziert. Siehe [LICENSE](LICENSE) Datei für Details.
 
 ---
 
