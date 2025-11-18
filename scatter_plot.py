@@ -180,6 +180,7 @@ class ScatterPlotApp(QMainWindow):
         # Version 5.7 Features
         self.custom_xlabel = None  # Custom X-Achsenbeschriftung
         self.custom_ylabel = None  # Custom Y-Achsenbeschriftung
+        self.unit_format = 'in'  # Format für Einheiten: 'slash', 'brackets', 'in'
 
         # Default Plot-Settings aus Config laden (v5.4)
         self.logger.debug("Prüfe auf gespeicherte Standard-Plot-Einstellungen...")
@@ -625,16 +626,18 @@ class ScatterPlotApp(QMainWindow):
             self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                              linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7)
+        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7)
         if self.custom_xlabel:
             xlabel = self.custom_xlabel
         else:
-            xlabel = self.convert_to_mathtext(plot_info['xlabel'])
+            xlabel = self.format_axis_label(plot_info['xlabel'])
+            xlabel = self.convert_to_mathtext(xlabel)
 
         if self.custom_ylabel:
             ylabel = self.custom_ylabel
         else:
-            ylabel = self.convert_to_mathtext(plot_info['ylabel'])
+            ylabel = self.format_axis_label(plot_info['ylabel'])
+            ylabel = self.convert_to_mathtext(ylabel)
 
         # Achsenbeschriftungen mit erweiterten Font-Optionen (v5.3)
         label_weight = 'bold' if self.font_settings.get('labels_bold', False) else 'normal'
@@ -940,6 +943,26 @@ class ScatterPlotApp(QMainWindow):
             text = text.replace(unicode_char, mathtext)
 
         return text
+
+    def format_axis_label(self, label):
+        """Konvertiert Achsenbeschriftung je nach Unit-Format (Version 5.7)"""
+        if '/' not in label or self.unit_format == 'slash':
+            return label
+
+        # Trenne Größe und Einheit
+        parts = label.split('/')
+        if len(parts) != 2:
+            return label
+
+        quantity = parts[0].strip()
+        unit = parts[1].strip()
+
+        if self.unit_format == 'brackets':
+            return f"{quantity} [{unit}]"
+        elif self.unit_format == 'in':
+            return f"{quantity} in {unit}"
+
+        return label
 
     def transform_data(self, x, y, plot_type):
         """Transformiert Daten je nach Plot-Typ"""
@@ -1904,7 +1927,8 @@ class ScatterPlotApp(QMainWindow):
                     'reference_lines': self.reference_lines,
                     'current_plot_design': self.current_plot_design,  # v5.4
                     'custom_xlabel': self.custom_xlabel,  # v5.7
-                    'custom_ylabel': self.custom_ylabel   # v5.7
+                    'custom_ylabel': self.custom_ylabel,  # v5.7
+                    'unit_format': self.unit_format  # v5.7
                 }
                 self.logger.debug(f"  Gruppen: {len(self.groups)}, Unassigned: {len(self.unassigned_datasets)}")
                 with open(filename, 'w', encoding='utf-8') as f:
@@ -1996,6 +2020,8 @@ class ScatterPlotApp(QMainWindow):
                     self.custom_xlabel = session['custom_xlabel']
                 if 'custom_ylabel' in session:
                     self.custom_ylabel = session['custom_ylabel']
+                if 'unit_format' in session:
+                    self.unit_format = session['unit_format']
 
                 # Annotations-Tree aktualisieren (v5.3)
                 self.update_annotations_tree()
