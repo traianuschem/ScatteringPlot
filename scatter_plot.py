@@ -567,22 +567,33 @@ class ScatterPlotApp(QMainWindow):
                     y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
 
-                    # Mit errorbar plotten
-                    self.ax_main.errorbar(
-                        x, y, yerr=y_err_trans,
-                        fmt=plot_style,
-                        color=color,
-                        label=dataset.display_label,
-                        linewidth=dataset.line_width,
-                        markersize=dataset.marker_size,
-                        capsize=dataset.errorbar_capsize,
-                        elinewidth=dataset.errorbar_linewidth,
-                        alpha=1.0,  # Hauptlinie volle Deckkraft
-                        ecolor=color,  # Fehlerbalken-Farbe
-                        capthick=dataset.errorbar_linewidth
-                    )
-                    # Transparenz nur auf Fehlerbalken anwenden
-                    # (wird durch elinewidth-Parameter gesteuert)
+                    errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
+
+                    if errorbar_style == 'fill':
+                        # Transparente Fehlerfläche (klassische Methode)
+                        self.ax_main.fill_between(
+                            x, y - y_err_trans, y + y_err_trans,
+                            alpha=dataset.errorbar_alpha,
+                            color=color
+                        )
+                        # Hauptkurve plotten
+                        self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
+                                         linewidth=dataset.line_width, markersize=dataset.marker_size)
+                    else:  # 'bars'
+                        # Fehlerbalken mit Caps
+                        self.ax_main.errorbar(
+                            x, y, yerr=y_err_trans,
+                            fmt=plot_style,
+                            color=color,
+                            label=dataset.display_label,
+                            linewidth=dataset.line_width,
+                            markersize=dataset.marker_size,
+                            capsize=dataset.errorbar_capsize,
+                            elinewidth=dataset.errorbar_linewidth,
+                            alpha=dataset.errorbar_alpha,
+                            ecolor=color,
+                            capthick=dataset.errorbar_linewidth
+                        )
                 else:
                     # Ohne Fehlerbalken normal plotten
                     self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
@@ -639,20 +650,33 @@ class ScatterPlotApp(QMainWindow):
                 # Fehler transformieren
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
 
-                # Mit errorbar plotten
-                self.ax_main.errorbar(
-                    x, y, yerr=y_err_trans,
-                    fmt=plot_style,
-                    color=color,
-                    label=dataset.display_label,
-                    linewidth=dataset.line_width,
-                    markersize=dataset.marker_size,
-                    capsize=dataset.errorbar_capsize,
-                    elinewidth=dataset.errorbar_linewidth,
-                    alpha=1.0,
-                    ecolor=color,
-                    capthick=dataset.errorbar_linewidth
-                )
+                errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
+
+                if errorbar_style == 'fill':
+                    # Transparente Fehlerfläche (klassische Methode)
+                    self.ax_main.fill_between(
+                        x, y - y_err_trans, y + y_err_trans,
+                        alpha=dataset.errorbar_alpha,
+                        color=color
+                    )
+                    # Hauptkurve plotten
+                    self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
+                                     linewidth=dataset.line_width, markersize=dataset.marker_size)
+                else:  # 'bars'
+                    # Fehlerbalken mit Caps
+                    self.ax_main.errorbar(
+                        x, y, yerr=y_err_trans,
+                        fmt=plot_style,
+                        color=color,
+                        label=dataset.display_label,
+                        linewidth=dataset.line_width,
+                        markersize=dataset.marker_size,
+                        capsize=dataset.errorbar_capsize,
+                        elinewidth=dataset.errorbar_linewidth,
+                        alpha=dataset.errorbar_alpha,
+                        ecolor=color,
+                        capthick=dataset.errorbar_linewidth
+                    )
             else:
                 # Ohne Fehlerbalken normal plotten
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
@@ -1480,6 +1504,7 @@ class ScatterPlotApp(QMainWindow):
             dataset.line_style = settings['line_style']
             dataset.line_width = settings['line_width']
             dataset.show_errorbars = settings['show_errorbars']
+            dataset.errorbar_style = settings['errorbar_style']
             dataset.errorbar_capsize = settings['errorbar_capsize']
             dataset.errorbar_alpha = settings['errorbar_alpha']
             dataset.errorbar_linewidth = settings['errorbar_linewidth']

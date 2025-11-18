@@ -191,29 +191,46 @@ class CurveSettingsDialog(QDialog):
             self.show_errorbars_check.setEnabled(False)
         error_layout.addWidget(error_info, 1, 0, 1, 2)
 
-        # Capsize (Breite der Endkappen)
-        error_layout.addWidget(QLabel("Cap-Größe:"), 2, 0)
+        # Fehlerbalken-Stil (v6.0)
+        error_layout.addWidget(QLabel("Darstellung:"), 2, 0)
+        self.errorbar_style_combo = QComboBox()
+        self.errorbar_style_combo.addItem("Transparente Fläche", "fill")
+        self.errorbar_style_combo.addItem("Balken mit Caps", "bars")
+        # Aktuellen Stil setzen
+        current_style = getattr(dataset, 'errorbar_style', 'fill')
+        if current_style == 'bars':
+            self.errorbar_style_combo.setCurrentIndex(1)
+        else:
+            self.errorbar_style_combo.setCurrentIndex(0)
+        self.errorbar_style_combo.currentIndexChanged.connect(self.update_errorbar_ui)
+        error_layout.addWidget(self.errorbar_style_combo, 2, 1)
+
+        # Capsize (Breite der Endkappen) - nur für 'bars'
+        self.errorbar_capsize_label = QLabel("Cap-Größe:")
+        error_layout.addWidget(self.errorbar_capsize_label, 3, 0)
         self.errorbar_capsize_spin = QDoubleSpinBox()
         self.errorbar_capsize_spin.setRange(0, 10)
         self.errorbar_capsize_spin.setSingleStep(0.5)
         self.errorbar_capsize_spin.setValue(getattr(dataset, 'errorbar_capsize', 3))
-        error_layout.addWidget(self.errorbar_capsize_spin, 2, 1)
+        error_layout.addWidget(self.errorbar_capsize_spin, 3, 1)
 
         # Transparenz
-        error_layout.addWidget(QLabel("Transparenz:"), 3, 0)
+        self.errorbar_alpha_label = QLabel("Transparenz:")
+        error_layout.addWidget(self.errorbar_alpha_label, 4, 0)
         self.errorbar_alpha_spin = QDoubleSpinBox()
         self.errorbar_alpha_spin.setRange(0, 1)
         self.errorbar_alpha_spin.setSingleStep(0.1)
-        self.errorbar_alpha_spin.setValue(getattr(dataset, 'errorbar_alpha', 0.7))
-        error_layout.addWidget(self.errorbar_alpha_spin, 3, 1)
+        self.errorbar_alpha_spin.setValue(getattr(dataset, 'errorbar_alpha', 0.3))
+        error_layout.addWidget(self.errorbar_alpha_spin, 4, 1)
 
-        # Linienbreite der Fehlerbalken
-        error_layout.addWidget(QLabel("Linienbreite:"), 4, 0)
+        # Linienbreite der Fehlerbalken - nur für 'bars'
+        self.errorbar_linewidth_label = QLabel("Linienbreite:")
+        error_layout.addWidget(self.errorbar_linewidth_label, 5, 0)
         self.errorbar_linewidth_spin = QDoubleSpinBox()
         self.errorbar_linewidth_spin.setRange(0.1, 5)
         self.errorbar_linewidth_spin.setSingleStep(0.1)
         self.errorbar_linewidth_spin.setValue(getattr(dataset, 'errorbar_linewidth', 1.0))
-        error_layout.addWidget(self.errorbar_linewidth_spin, 4, 1)
+        error_layout.addWidget(self.errorbar_linewidth_spin, 5, 1)
 
         error_group.setLayout(error_layout)
         layout.addWidget(error_group)
@@ -260,9 +277,33 @@ class CurveSettingsDialog(QDialog):
     def toggle_errorbar_settings(self):
         """Aktiviert/Deaktiviert Errorbar-Settings basierend auf Checkbox"""
         enabled = self.show_errorbars_check.isChecked()
+        self.errorbar_style_combo.setEnabled(enabled)
         self.errorbar_capsize_spin.setEnabled(enabled)
         self.errorbar_alpha_spin.setEnabled(enabled)
         self.errorbar_linewidth_spin.setEnabled(enabled)
+        # UI für den gewählten Stil aktualisieren
+        if enabled:
+            self.update_errorbar_ui()
+
+    def update_errorbar_ui(self):
+        """Aktualisiert UI basierend auf gewähltem Fehlerbalken-Stil"""
+        style = self.errorbar_style_combo.currentData()
+        is_bars = (style == 'bars')
+
+        # Cap-Größe nur bei 'bars' relevant
+        self.errorbar_capsize_label.setVisible(is_bars)
+        self.errorbar_capsize_spin.setVisible(is_bars)
+
+        # Linienbreite nur bei 'bars' relevant
+        self.errorbar_linewidth_label.setVisible(is_bars)
+        self.errorbar_linewidth_spin.setVisible(is_bars)
+
+        # Transparenz immer sichtbar (bei fill für Fläche, bei bars für Balken)
+        # Beschriftung anpassen
+        if is_bars:
+            self.errorbar_alpha_label.setText("Transparenz (Balken):")
+        else:
+            self.errorbar_alpha_label.setText("Transparenz (Fläche):")
 
     def get_settings(self):
         """Gibt alle Einstellungen als Dictionary zurück"""
@@ -273,6 +314,7 @@ class CurveSettingsDialog(QDialog):
             'line_style': self.line_combo.currentData(),
             'line_width': self.line_width_spin.value(),
             'show_errorbars': self.show_errorbars_check.isChecked(),
+            'errorbar_style': self.errorbar_style_combo.currentData(),
             'errorbar_capsize': self.errorbar_capsize_spin.value(),
             'errorbar_alpha': self.errorbar_alpha_spin.value(),
             'errorbar_linewidth': self.errorbar_linewidth_spin.value(),

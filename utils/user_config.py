@@ -85,6 +85,8 @@ DEFAULT_STYLE_PRESETS = {
         'marker_style': 'o',
         'line_width': 1.5,
         'marker_size': 4,
+        'errorbar_style': 'fill',  # Transparente Fehlerfläche (v6.0)
+        'errorbar_alpha': 0.3,
         'description': 'Für Messdaten mit Fehlerbalken'
     },
     'Fit': {
@@ -92,6 +94,7 @@ DEFAULT_STYLE_PRESETS = {
         'marker_style': '',
         'line_width': 2,
         'marker_size': 0,
+        'errorbar_style': 'bars',  # Falls Fit Fehler hat
         'description': 'Für Fit-Kurven (durchgezogene Linie)'
     },
     'Simulation': {
@@ -99,6 +102,7 @@ DEFAULT_STYLE_PRESETS = {
         'marker_style': '',
         'line_width': 1.5,
         'marker_size': 0,
+        'errorbar_style': 'bars',
         'description': 'Für Simulationen (gestrichelte Linie)'
     },
     'Theorie': {
@@ -106,6 +110,7 @@ DEFAULT_STYLE_PRESETS = {
         'marker_style': '',
         'line_width': 1.5,
         'marker_size': 0,
+        'errorbar_style': 'bars',
         'description': 'Für theoretische Kurven (Strich-Punkt)'
     }
 }
