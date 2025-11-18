@@ -34,8 +34,9 @@ class DataSet:
 
         # Fehlerbalken (v6.0)
         self.show_errorbars = True
+        self.errorbar_style = 'fill'  # 'bars' oder 'fill' (transparente Fläche)
         self.errorbar_capsize = 3
-        self.errorbar_alpha = 0.7
+        self.errorbar_alpha = 0.3  # Für fill_between
         self.errorbar_linewidth = 1.0
 
         # Individuelle Plotgrenzen (v5.7)
@@ -70,6 +71,11 @@ class DataSet:
             self.marker_style = style.get('marker_style')
             self.line_width = style.get('line_width', 2)
             self.marker_size = style.get('marker_size', 4)
+            # Fehlerbalken-Einstellungen (v6.0)
+            if 'errorbar_style' in style:
+                self.errorbar_style = style.get('errorbar_style', 'fill')
+            if 'errorbar_alpha' in style:
+                self.errorbar_alpha = style.get('errorbar_alpha', 0.3)
 
     def apply_style_preset(self, preset_name):
         """Wendet Stil-Vorlage an"""
@@ -80,6 +86,11 @@ class DataSet:
             self.marker_style = style.get('marker_style')
             self.line_width = style.get('line_width', 2)
             self.marker_size = style.get('marker_size', 4)
+            # Fehlerbalken-Einstellungen (v6.0)
+            if 'errorbar_style' in style:
+                self.errorbar_style = style.get('errorbar_style', 'fill')
+            if 'errorbar_alpha' in style:
+                self.errorbar_alpha = style.get('errorbar_alpha', 0.3)
 
     def get_plot_style(self):
         """Gibt Plot-Stil zurück"""
@@ -107,6 +118,7 @@ class DataSet:
             'legend_bold': self.legend_bold,
             'legend_italic': self.legend_italic,
             'show_errorbars': self.show_errorbars,
+            'errorbar_style': self.errorbar_style,
             'errorbar_capsize': self.errorbar_capsize,
             'errorbar_alpha': self.errorbar_alpha,
             'errorbar_linewidth': self.errorbar_linewidth,
@@ -130,8 +142,9 @@ class DataSet:
         ds.legend_bold = data.get('legend_bold', False)
         ds.legend_italic = data.get('legend_italic', False)
         ds.show_errorbars = data.get('show_errorbars', True)
+        ds.errorbar_style = data.get('errorbar_style', 'fill')
         ds.errorbar_capsize = data.get('errorbar_capsize', 3)
-        ds.errorbar_alpha = data.get('errorbar_alpha', 0.7)
+        ds.errorbar_alpha = data.get('errorbar_alpha', 0.3)
         ds.errorbar_linewidth = data.get('errorbar_linewidth', 1.0)
         ds.x_min = data.get('x_min')
         ds.x_max = data.get('x_max')
