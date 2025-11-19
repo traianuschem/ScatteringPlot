@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 6.0
+ScatterForge Plot - Version 6.1
 ================================
 
 Professionelles Tool für Streudaten-Analyse mit:
@@ -19,11 +19,12 @@ Professionelles Tool für Streudaten-Analyse mit:
 - Math Text für wissenschaftliche Notation
 - Auto-Gruppierung mit Stack-Faktoren
 - Umfassendes Logging-System
-- Legendeneditor mit individueller Formatierung (v5.7)
-- Unbegrenzte Skalierungsfaktoren (v5.7)
-- Automatische Farbvereinheitlichung bei Gruppierung (v5.7)
-- Umfassender Kurven-Editor mit Fehlerbalken-Support (v6.0)
-- Schnellfarben-Menü aus aktueller Farbpalette (v6.0)
+- Legendeneditor mit individueller Formatierung
+- Unbegrenzte Skalierungsfaktoren
+- Automatische Farbvereinheitlichung bei Gruppierung
+- Umfassender Kurven-Editor mit Fehlerbalken-Support
+- Schnellfarben-Menü aus aktueller Farbpalette
+- Flexible Fehlerbalken-Darstellung (transparente Fläche oder Balken)
 """
 
 import sys
@@ -98,10 +99,10 @@ class ScatterPlotApp(QMainWindow):
         # Logger initialisieren (v5.6)
         self.logger = setup_logger('ScatterForge')
         self.logger.info("=" * 60)
-        self.logger.info("ScatterForge Plot v6.0 gestartet")
+        self.logger.info("ScatterForge Plot v6.1 gestartet")
         self.logger.info("=" * 60)
 
-        self.setWindowTitle("ScatterForge Plot v6.0")
+        self.setWindowTitle("ScatterForge Plot v6.1")
         self.resize(1600, 1000)
 
         # Config
