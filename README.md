@@ -538,7 +538,7 @@ Dieses Projekt ist unter der GPL-3.0 Lizenz lizenziert. Siehe [LICENSE](LICENSE)
 
 ## 👥 Autoren
 
-- **TUBAF Team** - *Initial work*
+- **Richard Neubert** - *Initial work*
 - **Contributors** - [Liste der Contributors](https://github.com/traianuschem/ScatteringPlot/contributors)
 
 ---
@@ -557,7 +557,7 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
 
 ```bibtex
 @software{scatterforge_plot,
-  author = {TUBAF Team},
+  author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2025},
   version = {6.1},
