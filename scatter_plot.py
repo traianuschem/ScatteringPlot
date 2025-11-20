@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 6.1
+ScatterForge Plot - Version 6.2
 ================================
 
 Professionelles Tool für Streudaten-Analyse mit:
@@ -99,10 +99,10 @@ class ScatterPlotApp(QMainWindow):
         # Logger initialisieren (v5.6)
         self.logger = setup_logger('ScatterForge')
         self.logger.info("=" * 60)
-        self.logger.info("ScatterForge Plot v6.1 gestartet")
+        self.logger.info("ScatterForge Plot v6.2 gestartet")
         self.logger.info("=" * 60)
 
-        self.setWindowTitle("ScatterForge Plot v6.1")
+        self.setWindowTitle("ScatterForge Plot v6.2")
         self.resize(1600, 1000)
 
         # Config
@@ -118,6 +118,7 @@ class ScatterPlotApp(QMainWindow):
         self.plot_type = 'Log-Log'
         self.stack_mode = True
         self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True}
+        self.wavelength = 0.1524  # Standardwellenlänge: Cu K-alpha in nm
 
         # Erweiterte Einstellungen (Version 5.1)
         self.legend_settings = {
@@ -405,8 +406,22 @@ class ScatterPlotApp(QMainWindow):
         self.color_scheme_combo.currentTextChanged.connect(self.change_color_scheme)
         options_layout.addWidget(self.color_scheme_combo, 2, 1)
 
+        # Wellenlänge (für 2-Theta Plot)
+        options_layout.addWidget(QLabel("Wellenlänge (nm):"), 3, 0)
+        self.wavelength_edit = QLineEdit()
+        self.wavelength_edit.setText(str(self.wavelength))
+        self.wavelength_edit.setToolTip("Wellenlänge für 2-Theta Berechnung (Standard: Cu K-alpha = 0.1524 nm)")
+        self.wavelength_edit.editingFinished.connect(self.update_wavelength)
+        options_layout.addWidget(self.wavelength_edit, 3, 1)
+
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
+
+        # Achsenlimits Button
+        axis_limits_btn = QPushButton("📏 Achsenlimits festlegen")
+        axis_limits_btn.clicked.connect(self.set_axis_limits)
+        axis_limits_btn.setToolTip("Legen Sie feste Achsenlimits für den Plot fest")
+        layout.addWidget(axis_limits_btn)
 
         # Update Button
         update_btn = QPushButton("🔄 Plot aktualisieren")
@@ -1029,6 +1044,31 @@ class ScatterPlotApp(QMainWindow):
             return x, y * (x ** 2)
         elif plot_type == 'Guinier':
             return x ** 2, np.log(y)
+        elif plot_type == 'Bragg Spacing':
+            # d = 2*pi/q (q in nm^-1, d in nm)
+            d = 2 * np.pi / x
+            return d, y
+        elif plot_type == '2-Theta':
+            # 2theta = 2 * arcsin(lambda * q / (4*pi))
+            # lambda in nm, q in nm^-1, result in degrees
+            # Nur Werte berechnen, bei denen das Argument von arcsin <= 1 ist
+            arg = self.wavelength * x / (4 * np.pi)
+            # Warnung wenn Werte außerhalb des gültigen Bereichs liegen
+            if np.any(arg > 1):
+                valid_mask = arg <= 1
+                x_valid = x[valid_mask]
+                y_valid = y[valid_mask]
+                if len(x_valid) > 0:
+                    theta = np.arcsin(self.wavelength * x_valid / (4 * np.pi))
+                    two_theta = 2 * theta * 180 / np.pi
+                    return two_theta, y_valid
+                else:
+                    # Alle Werte sind ungültig, gebe leere Arrays zurück
+                    return np.array([]), np.array([])
+            else:
+                theta = np.arcsin(arg)
+                two_theta = 2 * theta * 180 / np.pi
+                return two_theta, y
         else:
             return x, y
 
@@ -1309,6 +1349,11 @@ class ScatterPlotApp(QMainWindow):
         if data and data[0] == 'dataset':
             edit_curve_action = menu.addAction("🎨 Kurve bearbeiten...")
 
+        # Gruppe bearbeiten (v6.2)
+        edit_group_action = None
+        if data and data[0] == 'group':
+            edit_group_action = menu.addAction("🎨 Gruppe bearbeiten...")
+
         rename_action = menu.addAction("Umbenennen")
 
         # Farbpalette für Gruppen (v5.4, v5.7: Erweitert um einheitliche Farbe)
@@ -1327,6 +1372,22 @@ class ScatterPlotApp(QMainWindow):
 
             # Einheitliche Farbe für Gruppe setzen (v5.7)
             set_group_color_action = menu.addAction("Einheitliche Farbe setzen...")
+
+            # Schnellfarben für Gruppen (v6.2)
+            group_quick_color_menu = menu.addMenu("Schnellfarben")
+            group_quick_color_actions = {}
+            # Bestimme welche Farbpalette die Gruppe verwendet
+            group_obj = data[1]
+            active_palette_name = group_obj.color_scheme if group_obj.color_scheme else self.color_scheme_combo.currentText()
+
+            if active_palette_name in self.config.color_schemes:
+                palette_colors = self.config.color_schemes[active_palette_name]
+                for i, color in enumerate(palette_colors[:10], 1):  # Max 10 Farben
+                    action_text = f"⬤ Farbe {i}"
+                    group_quick_color_actions[color] = group_quick_color_menu.addAction(action_text)
+        else:
+            group_quick_color_menu = None
+            group_quick_color_actions = {}
 
         # Zu Gruppe zuordnen (nur für Datensätze)
         group_menu = None
@@ -1389,6 +1450,9 @@ class ScatterPlotApp(QMainWindow):
         elif action == edit_curve_action and edit_curve_action:
             # Kurve bearbeiten (v6.0)
             self.edit_curve_settings(item)
+        elif action == edit_group_action and edit_group_action:
+            # Gruppe bearbeiten (v6.2)
+            self.edit_group_settings(item)
         elif action == rename_action:
             self.rename_item(item)
         elif action == set_group_color_action and set_group_color_action:
@@ -1417,6 +1481,12 @@ class ScatterPlotApp(QMainWindow):
             for color, color_action in quick_color_actions.items():
                 if action == color_action:
                     self.set_dataset_quick_color(item, color)
+                    break
+        elif group_quick_color_menu and action in group_quick_color_actions.values():
+            # Schnellfarbe für Gruppe anwenden (v6.2)
+            for color, color_action in group_quick_color_actions.items():
+                if action == color_action:
+                    self.set_group_quick_color(item, color)
                     break
         elif action == reset_color_action and reset_color_action:
             self.reset_dataset_color(item)
@@ -1513,6 +1583,54 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
             self.logger.info(f"Kurveneinstellungen für '{dataset.name}' aktualisiert")
 
+    def edit_group_settings(self, item):
+        """Öffnet Dialog zum Bearbeiten aller Kurven in einer Gruppe (v6.2)"""
+        from dialogs.curve_settings_dialog import CurveSettingsDialog
+
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'group':
+            return
+
+        group = data[1]
+
+        if not group.datasets:
+            QMessageBox.information(self, "Info", "Die Gruppe enthält keine Datensätze")
+            return
+
+        # Verwende das erste Dataset als Template für die Voreinstellungen
+        template_dataset = group.datasets[0]
+
+        # Bestimme aktive Farbpalette (Gruppe oder global)
+        active_palette_name = group.color_scheme if group.color_scheme else self.color_scheme_combo.currentText()
+
+        # Dialog öffnen mit Template-Dataset
+        dialog = CurveSettingsDialog(
+            self,
+            template_dataset,
+            current_color_scheme=active_palette_name,
+            color_schemes=self.config.color_schemes
+        )
+        dialog.setWindowTitle(f"Gruppeneinstellungen für '{group.name}' ({len(group.datasets)} Kurven)")
+
+        if dialog.exec():
+            settings = dialog.get_settings()
+
+            # Einstellungen auf ALLE Datasets in der Gruppe anwenden
+            for dataset in group.datasets:
+                dataset.color = settings['color']
+                dataset.marker_style = settings['marker_style']
+                dataset.marker_size = settings['marker_size']
+                dataset.line_style = settings['line_style']
+                dataset.line_width = settings['line_width']
+                dataset.show_errorbars = settings['show_errorbars']
+                dataset.errorbar_style = settings['errorbar_style']
+                dataset.errorbar_capsize = settings['errorbar_capsize']
+                dataset.errorbar_alpha = settings['errorbar_alpha']
+                dataset.errorbar_linewidth = settings['errorbar_linewidth']
+
+            self.update_plot()
+            self.logger.info(f"Gruppeneinstellungen für '{group.name}' aktualisiert ({len(group.datasets)} Kurven)")
+
     def set_dataset_quick_color(self, item, color):
         """Setzt Schnellfarbe für einen Datensatz (v6.0)"""
         data = item.data(0, Qt.UserRole)
@@ -1521,6 +1639,17 @@ class ScatterPlotApp(QMainWindow):
             dataset.color = color
             self.update_plot()
             self.logger.debug(f"Schnellfarbe {color} für '{dataset.name}' gesetzt")
+
+    def set_group_quick_color(self, item, color):
+        """Setzt Schnellfarbe für alle Datasets in einer Gruppe (v6.2)"""
+        data = item.data(0, Qt.UserRole)
+        if data and data[0] == 'group':
+            group = data[1]
+            # Farbe auf alle Datasets in der Gruppe anwenden
+            for dataset in group.datasets:
+                dataset.color = color
+            self.update_plot()
+            self.logger.debug(f"Schnellfarbe {color} für Gruppe '{group.name}' gesetzt ({len(group.datasets)} Kurven)")
 
     def set_group_color_scheme(self, item, scheme_name):
         """Setzt Farbpalette für eine Gruppe (v5.4)"""
@@ -1726,6 +1855,123 @@ class ScatterPlotApp(QMainWindow):
         for dataset in self.unassigned_datasets:
             dataset.color = None
         self.update_plot()
+
+    def update_wavelength(self):
+        """Aktualisiert die Wellenlänge aus dem UI-Eingabefeld"""
+        try:
+            wavelength = float(self.wavelength_edit.text())
+            if wavelength <= 0:
+                raise ValueError("Wellenlänge muss positiv sein")
+            self.wavelength = wavelength
+            # Plot nur aktualisieren wenn 2-Theta aktiv ist
+            if self.plot_type == '2-Theta':
+                self.update_plot()
+        except ValueError as e:
+            QMessageBox.warning(self, "Ungültige Eingabe",
+                               f"Bitte geben Sie eine gültige positive Zahl ein.\n{str(e)}")
+            self.wavelength_edit.setText(str(self.wavelength))
+
+    def set_axis_limits(self):
+        """Öffnet Dialog zum Festlegen der Achsenlimits"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Achsenlimits festlegen")
+        dialog.resize(400, 300)
+
+        layout = QVBoxLayout(dialog)
+
+        # Info-Label
+        info_label = QLabel(
+            "Legen Sie feste Achsenlimits fest. Diese bleiben beim Plot-Update erhalten.\n"
+            "Leer lassen = automatisch"
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        # Limits-Gruppe
+        limits_group = QGroupBox("Achsenlimits")
+        limits_layout = QGridLayout()
+
+        # X-Limits
+        limits_layout.addWidget(QLabel("X-Minimum:"), 0, 0)
+        xmin_edit = QLineEdit()
+        xmin_edit.setPlaceholderText("z.B. 0.001")
+        if self.axis_limits['xmin'] is not None:
+            xmin_edit.setText(str(self.axis_limits['xmin']))
+        limits_layout.addWidget(xmin_edit, 0, 1)
+
+        limits_layout.addWidget(QLabel("X-Maximum:"), 1, 0)
+        xmax_edit = QLineEdit()
+        xmax_edit.setPlaceholderText("z.B. 10.0")
+        if self.axis_limits['xmax'] is not None:
+            xmax_edit.setText(str(self.axis_limits['xmax']))
+        limits_layout.addWidget(xmax_edit, 1, 1)
+
+        # Y-Limits
+        limits_layout.addWidget(QLabel("Y-Minimum:"), 2, 0)
+        ymin_edit = QLineEdit()
+        ymin_edit.setPlaceholderText("z.B. 0.001")
+        if self.axis_limits['ymin'] is not None:
+            ymin_edit.setText(str(self.axis_limits['ymin']))
+        limits_layout.addWidget(ymin_edit, 2, 1)
+
+        limits_layout.addWidget(QLabel("Y-Maximum:"), 3, 0)
+        ymax_edit = QLineEdit()
+        ymax_edit.setPlaceholderText("z.B. 1000.0")
+        if self.axis_limits['ymax'] is not None:
+            ymax_edit.setText(str(self.axis_limits['ymax']))
+        limits_layout.addWidget(ymax_edit, 3, 1)
+
+        limits_group.setLayout(limits_layout)
+        layout.addWidget(limits_group)
+
+        # Auto-Modus Checkbox
+        auto_checkbox = QCheckBox("Automatische Skalierung (ignoriert obige Werte)")
+        auto_checkbox.setChecked(self.axis_limits['auto'])
+        layout.addWidget(auto_checkbox)
+
+        # Reset-Button
+        reset_btn = QPushButton("Alle zurücksetzen")
+        def reset_limits():
+            xmin_edit.clear()
+            xmax_edit.clear()
+            ymin_edit.clear()
+            ymax_edit.clear()
+            auto_checkbox.setChecked(True)
+        reset_btn.clicked.connect(reset_limits)
+        layout.addWidget(reset_btn)
+
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.Accepted:
+            # Limits übernehmen
+            try:
+                self.axis_limits['xmin'] = float(xmin_edit.text()) if xmin_edit.text() else None
+            except ValueError:
+                self.axis_limits['xmin'] = None
+
+            try:
+                self.axis_limits['xmax'] = float(xmax_edit.text()) if xmax_edit.text() else None
+            except ValueError:
+                self.axis_limits['xmax'] = None
+
+            try:
+                self.axis_limits['ymin'] = float(ymin_edit.text()) if ymin_edit.text() else None
+            except ValueError:
+                self.axis_limits['ymin'] = None
+
+            try:
+                self.axis_limits['ymax'] = float(ymax_edit.text()) if ymax_edit.text() else None
+            except ValueError:
+                self.axis_limits['ymax'] = None
+
+            self.axis_limits['auto'] = auto_checkbox.isChecked()
+
+            # Plot aktualisieren
+            self.update_plot()
 
     def apply_style_to_selected(self, preset_name):
         """Wendet Stil auf ausgewählte Datensätze an"""
@@ -2065,6 +2311,7 @@ class ScatterPlotApp(QMainWindow):
                     'stack_mode': self.stack_mode,
                     'color_scheme': self.color_scheme_combo.currentText(),
                     'axis_limits': self.axis_limits,
+                    'wavelength': self.wavelength,  # v6.2
                     'legend_settings': self.legend_settings,
                     'grid_settings': self.grid_settings,
                     'font_settings': self.font_settings,
@@ -2139,6 +2386,11 @@ class ScatterPlotApp(QMainWindow):
 
                 self.axis_limits = session.get('axis_limits', {'xmin': None, 'xmax': None,
                                                                'ymin': None, 'ymax': None, 'auto': True})
+
+                # Version 6.2: Wellenlänge für 2-Theta Plot
+                if 'wavelength' in session:
+                    self.wavelength = session['wavelength']
+                    self.wavelength_edit.setText(str(self.wavelength))
 
                 # Erweiterte Einstellungen (v5.1)
                 if 'legend_settings' in session:

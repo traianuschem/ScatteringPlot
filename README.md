@@ -1,18 +1,47 @@
-# ScatterForge Plot v6.1
+# ScatterForge Plot v6.2
 
 **Professionelles Tool für Streudaten-Analyse mit Qt6-basierter GUI**
 
 ScatterForge Plot ist ein leistungsstarkes, benutzerfreundliches Tool zur Visualisierung und Analyse von Streudaten. Entwickelt für Naturwissenschaftler und Ingenieure, bietet es umfangreiche Funktionen für die Darstellung von SAXS/SANS-Daten und anderen Streumessungen mit präziser Kontrolle über alle Aspekte der Plot-Formatierung.
 
-![Version](https://img.shields.io/badge/version-6.1-blue)
+![Version](https://img.shields.io/badge/version-6.2-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 ---
 
-## 🎉 Neue Features in v6.1
+## 🎉 Neue Features in v6.2
 
-Version 6.1 bringt **umfassende Plot-Formatierung** und **professionelle Kurven-Gestaltung**:
+Version 6.2 erweitert die Flexibilität mit **neuen Plot-Typen**, **Achsenlimits-Kontrolle** und **Gruppen-Bearbeitung**:
+
+### 📐 Achsenlimits-Dialog
+- **Feste Achsenlimits** für konsistente Plots
+- **Manuelle Kontrolle** über X- und Y-Achsen (Min/Max)
+- **Persistenz**: Limits bleiben beim Plot-Update erhalten
+- **Auto-Modus**: Schnelles Umschalten zu automatischer Skalierung
+- **Session-Speicherung**: Achsenlimits werden in Sessions gespeichert
+
+### 📊 Neue Plot-Typen
+- **Bragg Spacing**: Realraum-Darstellung (d = 2π/q in nm)
+  - Ideal für Kristallstruktur-Analysen
+  - Logarithmische Skalierung auf beiden Achsen
+- **2-Theta**: Winkelbasierte Darstellung
+  - Konfigurierbare Wellenlänge (Standard: Cu K-alpha = 0.1524 nm)
+  - Berechnung: 2θ = 2·arcsin(λ·q / 4π) in Grad
+  - Automatische Filterung ungültiger Werte
+
+### 🎨 Gruppen-Bearbeitung
+- **"Gruppe bearbeiten" Dialog**: Alle Kurven in einer Gruppe gleichzeitig formatieren
+  - Farbe, Marker, Linie, Fehlerbalken
+  - Einstellungen werden auf alle Datasets in der Gruppe angewendet
+  - Spart Zeit bei der Formatierung vieler ähnlicher Kurven
+- **Schnellfarben für Gruppen**: Direkte Farbauswahl aus Palette für alle Kurven der Gruppe
+  - Konsistente Farbgebung mit einem Klick
+  - Berücksichtigt gruppenspezifische Farbpaletten
+
+---
+
+## 🌟 Highlights v6.1
 
 ### 🎨 Kurven-Editor
 - **Umfassender Dialog** für alle visuellen Eigenschaften jeder Kurve
@@ -46,7 +75,7 @@ Version 6.1 bringt **umfassende Plot-Formatierung** und **professionelle Kurven-
 ## 📋 Hauptfeatures
 
 ### Visualisierung
-- **5 Plot-Typen**: Log-Log, Porod, Kratky, Guinier, PDDF
+- **7 Plot-Typen**: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF
 - **Stack-Modus**: Kurven mit individuellen Stack-Faktoren trennen (nicht-kumulativ!)
 - **Fehlerbalken**: 2 Darstellungsarten (transparente Fläche oder Balken)
 - **Annotations & Referenzlinien**: Drag & Drop im Plot
@@ -239,6 +268,8 @@ Achsen → Achsen-Einstellungen...
 | **Porod** | q [nm⁻¹] | I·q⁴ [a.u.] | Porod-Analyse (Grenzflächenstruktur) |
 | **Kratky** | q [nm⁻¹] | I·q² [a.u.] | Kratky-Plot (Kompaktheit) |
 | **Guinier** | q² [nm⁻²] | ln(I) | Guinier-Approximation (Trägheitsradius) |
+| **Bragg Spacing** | d [nm] | I [a.u.] | Realraum-Darstellung (d = 2π/q) |
+| **2-Theta** | 2θ [°] | I [a.u.] | Winkel-Darstellung (konfigurierbare Wellenlänge) |
 | **PDDF** | q [nm⁻¹] | I [a.u.] + p(r) | Paardistanzverteilungsfunktion |
 
 ---
@@ -560,24 +591,25 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2025},
-  version = {6.1},
+  version = {6.2},
   url = {https://github.com/traianuschem/ScatteringPlot}
 }
 ```
 
 ---
 
-## 🏆 Highlights v6.1
+## 🏆 Highlights v6.2
 
-- 🎨 **Umfassender Kurven-Editor** - Alle visuellen Eigenschaften in einem Dialog
-- ⚡ **Schnellfarben-Menü** - Direkter Zugriff auf Palette-Farben
-- 📊 **Flexible Fehlerbalken** - Transparente Fläche ODER Balken mit Caps
-- 📐 **Individuelle Plotgrenzen** - X/Y-Limits pro Datensatz
-- 🎯 **Erweiterte Plot-Formatierung** - Achsen, Grid, Legende mit voller Kontrolle
+- 📐 **Achsenlimits-Kontrolle** - Feste Limits mit Persistenz beim Plot-Update
+- 📊 **Bragg Spacing & 2-Theta** - Neue Plot-Typen für Kristallstruktur-Analysen
+- 🎨 **Gruppen-Bearbeitung** - Alle Kurven einer Gruppe gleichzeitig formatieren
+- ⚡ **Schnellfarben für Gruppen** - Konsistente Farbgebung mit einem Klick
+- 🎯 **Umfassender Kurven-Editor** - Alle visuellen Eigenschaften in einem Dialog
+- 📏 **Flexible Fehlerbalken** - Transparente Fläche ODER Balken mit Caps
 - 💾 **Standard-Einstellungen** - Einmal einstellen, immer verwenden
 
 ---
 
 **Made with ❤️ for the scientific community**
 
-*Version 6.1 - Januar 2025*
+*Version 6.2 - Januar 2025*
