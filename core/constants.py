@@ -31,6 +31,18 @@ PLOT_TYPES = {
         'xscale': 'linear',
         'yscale': 'linear'
     },
+    'Bragg Spacing': {
+        'xlabel': 'd / nm',
+        'ylabel': 'I / a.u.',
+        'xscale': 'log',
+        'yscale': 'log'
+    },
+    '2-Theta': {
+        'xlabel': '2θ / °',
+        'ylabel': 'I / a.u.',
+        'xscale': 'linear',
+        'yscale': 'log'
+    },
     'PDDF': {
         'xlabel': 'q / nm⁻¹',
         'ylabel': 'I / a.u.',

@@ -118,6 +118,7 @@ class ScatterPlotApp(QMainWindow):
         self.plot_type = 'Log-Log'
         self.stack_mode = True
         self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True}
+        self.wavelength = 0.1524  # Standardwellenlänge: Cu K-alpha in nm
 
         # Erweiterte Einstellungen (Version 5.1)
         self.legend_settings = {
@@ -405,8 +406,22 @@ class ScatterPlotApp(QMainWindow):
         self.color_scheme_combo.currentTextChanged.connect(self.change_color_scheme)
         options_layout.addWidget(self.color_scheme_combo, 2, 1)
 
+        # Wellenlänge (für 2-Theta Plot)
+        options_layout.addWidget(QLabel("Wellenlänge (nm):"), 3, 0)
+        self.wavelength_edit = QLineEdit()
+        self.wavelength_edit.setText(str(self.wavelength))
+        self.wavelength_edit.setToolTip("Wellenlänge für 2-Theta Berechnung (Standard: Cu K-alpha = 0.1524 nm)")
+        self.wavelength_edit.editingFinished.connect(self.update_wavelength)
+        options_layout.addWidget(self.wavelength_edit, 3, 1)
+
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
+
+        # Achsenlimits Button
+        axis_limits_btn = QPushButton("📏 Achsenlimits festlegen")
+        axis_limits_btn.clicked.connect(self.set_axis_limits)
+        axis_limits_btn.setToolTip("Legen Sie feste Achsenlimits für den Plot fest")
+        layout.addWidget(axis_limits_btn)
 
         # Update Button
         update_btn = QPushButton("🔄 Plot aktualisieren")
@@ -1029,6 +1044,31 @@ class ScatterPlotApp(QMainWindow):
             return x, y * (x ** 2)
         elif plot_type == 'Guinier':
             return x ** 2, np.log(y)
+        elif plot_type == 'Bragg Spacing':
+            # d = 2*pi/q (q in nm^-1, d in nm)
+            d = 2 * np.pi / x
+            return d, y
+        elif plot_type == '2-Theta':
+            # 2theta = 2 * arcsin(lambda * q / (4*pi))
+            # lambda in nm, q in nm^-1, result in degrees
+            # Nur Werte berechnen, bei denen das Argument von arcsin <= 1 ist
+            arg = self.wavelength * x / (4 * np.pi)
+            # Warnung wenn Werte außerhalb des gültigen Bereichs liegen
+            if np.any(arg > 1):
+                valid_mask = arg <= 1
+                x_valid = x[valid_mask]
+                y_valid = y[valid_mask]
+                if len(x_valid) > 0:
+                    theta = np.arcsin(self.wavelength * x_valid / (4 * np.pi))
+                    two_theta = 2 * theta * 180 / np.pi
+                    return two_theta, y_valid
+                else:
+                    # Alle Werte sind ungültig, gebe leere Arrays zurück
+                    return np.array([]), np.array([])
+            else:
+                theta = np.arcsin(arg)
+                two_theta = 2 * theta * 180 / np.pi
+                return two_theta, y
         else:
             return x, y
 
@@ -1727,6 +1767,123 @@ class ScatterPlotApp(QMainWindow):
             dataset.color = None
         self.update_plot()
 
+    def update_wavelength(self):
+        """Aktualisiert die Wellenlänge aus dem UI-Eingabefeld"""
+        try:
+            wavelength = float(self.wavelength_edit.text())
+            if wavelength <= 0:
+                raise ValueError("Wellenlänge muss positiv sein")
+            self.wavelength = wavelength
+            # Plot nur aktualisieren wenn 2-Theta aktiv ist
+            if self.plot_type == '2-Theta':
+                self.update_plot()
+        except ValueError as e:
+            QMessageBox.warning(self, "Ungültige Eingabe",
+                               f"Bitte geben Sie eine gültige positive Zahl ein.\n{str(e)}")
+            self.wavelength_edit.setText(str(self.wavelength))
+
+    def set_axis_limits(self):
+        """Öffnet Dialog zum Festlegen der Achsenlimits"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Achsenlimits festlegen")
+        dialog.resize(400, 300)
+
+        layout = QVBoxLayout(dialog)
+
+        # Info-Label
+        info_label = QLabel(
+            "Legen Sie feste Achsenlimits fest. Diese bleiben beim Plot-Update erhalten.\n"
+            "Leer lassen = automatisch"
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        # Limits-Gruppe
+        limits_group = QGroupBox("Achsenlimits")
+        limits_layout = QGridLayout()
+
+        # X-Limits
+        limits_layout.addWidget(QLabel("X-Minimum:"), 0, 0)
+        xmin_edit = QLineEdit()
+        xmin_edit.setPlaceholderText("z.B. 0.001")
+        if self.axis_limits['xmin'] is not None:
+            xmin_edit.setText(str(self.axis_limits['xmin']))
+        limits_layout.addWidget(xmin_edit, 0, 1)
+
+        limits_layout.addWidget(QLabel("X-Maximum:"), 1, 0)
+        xmax_edit = QLineEdit()
+        xmax_edit.setPlaceholderText("z.B. 10.0")
+        if self.axis_limits['xmax'] is not None:
+            xmax_edit.setText(str(self.axis_limits['xmax']))
+        limits_layout.addWidget(xmax_edit, 1, 1)
+
+        # Y-Limits
+        limits_layout.addWidget(QLabel("Y-Minimum:"), 2, 0)
+        ymin_edit = QLineEdit()
+        ymin_edit.setPlaceholderText("z.B. 0.001")
+        if self.axis_limits['ymin'] is not None:
+            ymin_edit.setText(str(self.axis_limits['ymin']))
+        limits_layout.addWidget(ymin_edit, 2, 1)
+
+        limits_layout.addWidget(QLabel("Y-Maximum:"), 3, 0)
+        ymax_edit = QLineEdit()
+        ymax_edit.setPlaceholderText("z.B. 1000.0")
+        if self.axis_limits['ymax'] is not None:
+            ymax_edit.setText(str(self.axis_limits['ymax']))
+        limits_layout.addWidget(ymax_edit, 3, 1)
+
+        limits_group.setLayout(limits_layout)
+        layout.addWidget(limits_group)
+
+        # Auto-Modus Checkbox
+        auto_checkbox = QCheckBox("Automatische Skalierung (ignoriert obige Werte)")
+        auto_checkbox.setChecked(self.axis_limits['auto'])
+        layout.addWidget(auto_checkbox)
+
+        # Reset-Button
+        reset_btn = QPushButton("Alle zurücksetzen")
+        def reset_limits():
+            xmin_edit.clear()
+            xmax_edit.clear()
+            ymin_edit.clear()
+            ymax_edit.clear()
+            auto_checkbox.setChecked(True)
+        reset_btn.clicked.connect(reset_limits)
+        layout.addWidget(reset_btn)
+
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.Accepted:
+            # Limits übernehmen
+            try:
+                self.axis_limits['xmin'] = float(xmin_edit.text()) if xmin_edit.text() else None
+            except ValueError:
+                self.axis_limits['xmin'] = None
+
+            try:
+                self.axis_limits['xmax'] = float(xmax_edit.text()) if xmax_edit.text() else None
+            except ValueError:
+                self.axis_limits['xmax'] = None
+
+            try:
+                self.axis_limits['ymin'] = float(ymin_edit.text()) if ymin_edit.text() else None
+            except ValueError:
+                self.axis_limits['ymin'] = None
+
+            try:
+                self.axis_limits['ymax'] = float(ymax_edit.text()) if ymax_edit.text() else None
+            except ValueError:
+                self.axis_limits['ymax'] = None
+
+            self.axis_limits['auto'] = auto_checkbox.isChecked()
+
+            # Plot aktualisieren
+            self.update_plot()
+
     def apply_style_to_selected(self, preset_name):
         """Wendet Stil auf ausgewählte Datensätze an"""
         items = self.tree.selectedItems()
@@ -2065,6 +2222,7 @@ class ScatterPlotApp(QMainWindow):
                     'stack_mode': self.stack_mode,
                     'color_scheme': self.color_scheme_combo.currentText(),
                     'axis_limits': self.axis_limits,
+                    'wavelength': self.wavelength,  # v6.2
                     'legend_settings': self.legend_settings,
                     'grid_settings': self.grid_settings,
                     'font_settings': self.font_settings,
@@ -2139,6 +2297,11 @@ class ScatterPlotApp(QMainWindow):
 
                 self.axis_limits = session.get('axis_limits', {'xmin': None, 'xmax': None,
                                                                'ymin': None, 'ymax': None, 'auto': True})
+
+                # Version 6.2: Wellenlänge für 2-Theta Plot
+                if 'wavelength' in session:
+                    self.wavelength = session['wavelength']
+                    self.wavelength_edit.setText(str(self.wavelength))
 
                 # Erweiterte Einstellungen (v5.1)
                 if 'legend_settings' in session:
