@@ -87,6 +87,15 @@ class LegendSettingsDialog(QDialog):
         self.fancybox_checkbox.setChecked(legend_settings.get('fancybox', True))
         legend_layout.addWidget(self.fancybox_checkbox, 6, 0, 1, 2)
 
+        # v7.0: Reihenfolge invertieren
+        self.reverse_order_checkbox = QCheckBox("Reihenfolge invertieren (gestackte Kurven)")
+        self.reverse_order_checkbox.setChecked(legend_settings.get('reverse_order', False))
+        self.reverse_order_checkbox.setToolTip(
+            "Kehrt die Reihenfolge der Legenden-Einträge um.\n"
+            "Nützlich bei gestackten Kurven: oberste Kurve → oberster Legenden-Eintrag"
+        )
+        legend_layout.addWidget(self.reverse_order_checkbox, 7, 0, 1, 2)
+
         legend_group.setLayout(legend_layout)
         layout.addWidget(legend_group)
 
@@ -105,5 +114,6 @@ class LegendSettingsDialog(QDialog):
             'alpha': self.alpha_spin.value(),
             'frameon': self.frame_checkbox.isChecked(),
             'shadow': self.shadow_checkbox.isChecked(),
-            'fancybox': self.fancybox_checkbox.isChecked()
+            'fancybox': self.fancybox_checkbox.isChecked(),
+            'reverse_order': self.reverse_order_checkbox.isChecked()  # v7.0
         }

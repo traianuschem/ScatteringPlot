@@ -7,10 +7,11 @@ This dialog allows users to add text annotations to plots.
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
     QLabel, QLineEdit, QDoubleSpinBox, QSpinBox,
-    QDialogButtonBox, QPushButton
+    QDialogButtonBox, QPushButton, QMessageBox
 )
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QColorDialog
+from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 
 
 class AnnotationsDialog(QDialog):
@@ -28,8 +29,27 @@ class AnnotationsDialog(QDialog):
 
         text_layout.addWidget(QLabel("Text:"), 0, 0)
         self.text_edit = QLineEdit()
-        self.text_edit.setPlaceholderText("z.B.: Bereich A")
+        self.text_edit.setPlaceholderText("z.B.: Bereich A oder **wichtig** oder $\\alpha$")
+        self.text_edit.textChanged.connect(self.update_preview)
         text_layout.addWidget(self.text_edit, 0, 1)
+
+        # Syntax-Hilfe Button (v7.0)
+        syntax_help_btn = QPushButton("📖 LaTeX/MathText Syntax")
+        syntax_help_btn.clicked.connect(self.show_syntax_help)
+        text_layout.addWidget(syntax_help_btn, 1, 0, 1, 2)
+
+        # Vorschau (v7.0)
+        text_layout.addWidget(QLabel("Vorschau:"), 2, 0)
+        self.preview_label = QLabel("")
+        self.preview_label.setWordWrap(True)
+        self.preview_label.setStyleSheet(
+            "background-color: #2b2b2b; "
+            "padding: 8px; "
+            "border: 1px solid #555; "
+            "border-radius: 4px; "
+            "min-height: 30px;"
+        )
+        text_layout.addWidget(self.preview_label, 2, 1)
 
         text_group.setLayout(text_layout)
         layout.addWidget(text_group)
@@ -108,3 +128,67 @@ class AnnotationsDialog(QDialog):
             'color': self.color,
             'rotation': self.rotation_spin.value()
         }
+
+    def update_preview(self):
+        """Aktualisiert die Vorschau des formatierten Textes (v7.0)"""
+        text = self.text_edit.text()
+
+        if not text:
+            self.preview_label.setText("<i>Geben Sie einen Text ein...</i>")
+            return
+
+        # MathText preprocessing
+        processed = preprocess_mathtext(text)
+
+        # Erstelle HTML-Preview (approximiert das Ergebnis)
+        preview_html = self._create_preview_html(processed)
+        self.preview_label.setText(preview_html)
+
+    def _create_preview_html(self, text):
+        """
+        Erstellt eine HTML-Vorschau für den MathText.
+        Dies ist eine Approximation - das tatsächliche Rendering erfolgt durch Matplotlib.
+        """
+        # Einfache Ersetzungen für häufige MathText-Befehle
+        replacements = {
+            r'$\alpha$': 'α',
+            r'$\beta$': 'β',
+            r'$\gamma$': 'γ',
+            r'$\delta$': 'δ',
+            r'$\theta$': 'θ',
+            r'$\lambda$': 'λ',
+            r'$\mu$': 'µ',
+            r'$\pi$': 'π',
+            r'$\sigma$': 'σ',
+            r'$\pm$': '±',
+            r'$\times$': '×',
+            r'$\cdot$': '·',
+        }
+
+        preview = text
+        for mathtext, symbol in replacements.items():
+            preview = preview.replace(mathtext, symbol)
+
+        # Ersetze \mathbf{...} mit <b>...</b>
+        import re
+        preview = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'<b>\1</b>', preview)
+        preview = re.sub(r'\$\\mathit\{([^}]+)\}\$', r'<i>\1</i>', preview)
+
+        # Einfache Hochstellung/Tiefstellung (sehr vereinfacht)
+        preview = re.sub(r'\$([^$]*)\^(\d+)([^$]*)\$', r'\1<sup>\2</sup>\3', preview)
+        preview = re.sub(r'\$([^$]*)_(\d+)([^$]*)\$', r'\1<sub>\2</sub>\3', preview)
+
+        # Entferne übrig gebliebene $
+        preview = preview.replace('$', '')
+
+        return preview
+
+    def show_syntax_help(self):
+        """Zeigt Syntax-Hilfe für LaTeX/MathText an (v7.0)"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("LaTeX/MathText Syntax-Hilfe")
+        msg.setIcon(QMessageBox.Information)
+        msg.setText(get_syntax_help_text())
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setMinimumWidth(500)
+        msg.exec()

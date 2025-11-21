@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 6.2
-================================
+ScatterForge Plot - Version 7.0-dev
+====================================
 
 Professionelles Tool für Streudaten-Analyse mit:
 - Qt6-basierte moderne GUI mit modularer Architektur
@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QMenu, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QColor, QPalette
+from PySide6.QtGui import QAction, QColor, QPalette, QShortcut, QKeySequence
 
 # Matplotlib mit Qt Backend
 import matplotlib
@@ -69,6 +69,7 @@ from dialogs.axes_dialog import AxesSettingsDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
+from utils.mathtext_formatter import preprocess_mathtext, format_legend_text
 
 
 class DataTreeWidget(QTreeWidget):
@@ -128,7 +129,8 @@ class ScatterPlotApp(QMainWindow):
             'alpha': 0.9,
             'frameon': True,
             'shadow': False,
-            'fancybox': True
+            'fancybox': True,
+            'reverse_order': False  # v7.0: Reihenfolge invertieren
         }
         self.grid_settings = {
             'major_enable': True,
@@ -227,17 +229,25 @@ class ScatterPlotApp(QMainWindow):
 
         file_menu.addSeparator()
 
+        # v7.0: Shortcuts für Session-Management
         save_session_action = QAction("Session speichern", self)
+        save_session_action.setShortcut(QKeySequence("Ctrl+S"))
         save_session_action.triggered.connect(self.save_session)
         file_menu.addAction(save_session_action)
 
         load_session_action = QAction("Session laden", self)
+        load_session_action.setShortcut(QKeySequence("Ctrl+O"))
         load_session_action.triggered.connect(self.load_session)
         file_menu.addAction(load_session_action)
+
+        # v7.0: Alternativer Shortcut für Session laden
+        load_session_action2 = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        load_session_action2.activated.connect(self.load_session)
 
         file_menu.addSeparator()
 
         export_action = QAction("Exportieren...", self)
+        export_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
         export_action.triggered.connect(self.show_export_dialog)
         file_menu.addAction(export_action)
 
@@ -260,7 +270,9 @@ class ScatterPlotApp(QMainWindow):
         legend_action.triggered.connect(self.show_legend_settings)
         plot_menu.addAction(legend_action)
 
+        # v7.0: Shortcut für Legenden-Editor
         legend_editor_action = QAction("Legenden-Editor...", self)
+        legend_editor_action.setShortcut(QKeySequence("Ctrl+L"))
         legend_editor_action.triggered.connect(self.show_legend_editor)
         plot_menu.addAction(legend_editor_action)
 
@@ -307,6 +319,53 @@ class ScatterPlotApp(QMainWindow):
         about_action = QAction("Über", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
+
+        # v7.0: Zusätzliche Shortcuts (nicht im Menü sichtbar)
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        """
+        Richtet globale Shortcuts ein (v7.0)
+        """
+        # Plot-Typ-Shortcuts (Ctrl+Shift+1-7)
+        plot_types = ['Log-Log', 'Porod', 'Kratky', 'Guinier', 'Bragg Spacing', '2-Theta', 'PDDF']
+        for i, plot_type in enumerate(plot_types, start=1):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+Shift+{i}"), self)
+            shortcut.activated.connect(lambda pt=plot_type: self.change_plot_type_shortcut(pt))
+
+        # Kurven-Editor für ausgewähltes Element (Ctrl+E)
+        edit_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
+        edit_shortcut.activated.connect(self.edit_selected_curve)
+
+        # Neue Gruppe erstellen (Ctrl+G)
+        group_shortcut = QShortcut(QKeySequence("Ctrl+G"), self)
+        group_shortcut.activated.connect(self.create_group)
+
+        # Ausgewähltes Element löschen (Delete)
+        delete_shortcut = QShortcut(QKeySequence("Delete"), self)
+        delete_shortcut.activated.connect(self.delete_selected)
+
+    def change_plot_type_shortcut(self, plot_type):
+        """Ändert den Plot-Typ via Shortcut (v7.0)"""
+        index = self.plot_type_combo.findText(plot_type)
+        if index >= 0:
+            self.plot_type_combo.setCurrentIndex(index)
+            self.logger.info(f"Plot-Typ gewechselt zu '{plot_type}' via Shortcut")
+
+    def edit_selected_curve(self):
+        """Öffnet Kurven-Editor für ausgewähltes Element (v7.0)"""
+        item = self.tree.currentItem()
+        if item:
+            data = item.data(0, Qt.UserRole)
+            if data and data[0] == 'dataset':
+                self.edit_curve_settings(item)
+            elif data and data[0] == 'group':
+                # Für Gruppen: Gruppen-Editor
+                self.edit_group_curves(data[1])
+            else:
+                self.logger.debug("Kein Dataset oder Gruppe ausgewählt für Kurven-Editor")
+        else:
+            self.logger.debug("Nichts ausgewählt für Kurven-Editor")
 
     def create_main_widget(self):
         """Erstellt das Haupt-Widget"""
@@ -472,11 +531,55 @@ class ScatterPlotApp(QMainWindow):
         # Plot bleibt im Light Mode (für bessere Lesbarkeit)
         plt.style.use('default')
 
+    def get_tree_order(self):
+        """
+        Liest die Reihenfolge der Elemente aus dem Tree aus (v7.0)
+
+        Returns:
+            tuple: (ordered_groups, ordered_unassigned)
+                - ordered_groups: Liste von (group, datasets_in_order)
+                - ordered_unassigned: Liste von datasets
+        """
+        ordered_groups = []
+        ordered_unassigned = []
+
+        # Durchlaufe Tree von oben nach unten
+        root = self.tree.invisibleRootItem()
+
+        for i in range(root.childCount()):
+            item = root.child(i)
+            data = item.data(0, Qt.UserRole)
+
+            if not data:
+                continue
+
+            if data[0] == 'group':
+                group = data[1]
+                # Sammle Datasets dieser Gruppe in Tree-Reihenfolge
+                datasets_in_order = []
+                for j in range(item.childCount()):
+                    child_item = item.child(j)
+                    child_data = child_item.data(0, Qt.UserRole)
+                    if child_data and child_data[0] == 'dataset':
+                        datasets_in_order.append(child_data[1])
+                ordered_groups.append((group, datasets_in_order))
+
+            elif data[0] == 'dataset':
+                # Unassigned dataset
+                dataset = data[1]
+                ordered_unassigned.append(dataset)
+
+        return ordered_groups, ordered_unassigned
+
     def update_plot(self):
         """Aktualisiert den Plot"""
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
         self.logger.debug(f"Plot-Update: Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
+
+        # v7.0: Tree-Reihenfolge für Plot und Legende verwenden
+        ordered_groups, ordered_unassigned = self.get_tree_order()
+        self.logger.debug(f"  Tree-Order: {len(ordered_groups)} Gruppen, {len(ordered_unassigned)} unassigned")
 
         # Figure leeren
         self.fig.clear()
@@ -498,8 +601,9 @@ class ScatterPlotApp(QMainWindow):
         # Plotten
         plot_info = PLOT_TYPES[self.plot_type]
 
-        # Gruppen plotten
-        for group in self.groups:
+        # v7.0: Verwende Tree-Order statt self.groups
+        # Gruppen plotten in Tree-Reihenfolge
+        for group, datasets_in_order in ordered_groups:
             if not group.visible:
                 continue
 
@@ -513,10 +617,11 @@ class ScatterPlotApp(QMainWindow):
                 group_label = group.name
 
             # Dummy-Plot für Gruppen-Header in Legende
-            has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
+            # v7.0: Verwende datasets_in_order (Tree-Order)
+            has_visible_datasets = any(ds.show_in_legend for ds in datasets_in_order)
             if has_visible_datasets:
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                self.logger.debug(f"  Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack=×{stack_factor:.1f}")
+                self.logger.debug(f"  Gruppe '{group.name}': {len(datasets_in_order)} Datasets (Tree-Order), Stack=×{stack_factor:.1f}")
 
             # Gruppenspezifische Farbpalette (v5.4)
             if group.color_scheme:
@@ -526,8 +631,8 @@ class ScatterPlotApp(QMainWindow):
             else:
                 group_color_cycle = color_cycle
 
-            # Plot je Datensatz
-            for dataset in group.datasets:
+            # v7.0: Plot je Datensatz in Tree-Reihenfolge
+            for dataset in datasets_in_order:
                 # Checkbox steuert Sichtbarkeit komplett
                 if not dataset.show_in_legend:
                     continue
@@ -609,12 +714,12 @@ class ScatterPlotApp(QMainWindow):
                     self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                      linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
-        unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
+        # v7.0: Auch nicht zugeordnete Datensätze plotten in Tree-Order (ohne Stack-Faktor)
+        unassigned_count = sum(1 for ds in ordered_unassigned if ds.show_in_legend)
         if unassigned_count > 0:
-            self.logger.debug(f"  Unassigned: {unassigned_count} Datasets (ohne Stacking)")
+            self.logger.debug(f"  Unassigned: {unassigned_count} Datasets (Tree-Order, ohne Stacking)")
 
-        for dataset in self.unassigned_datasets:
+        for dataset in ordered_unassigned:
             # Checkbox steuert Sichtbarkeit komplett
             if not dataset.show_in_legend:
                 continue
@@ -692,15 +797,17 @@ class ScatterPlotApp(QMainWindow):
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7)
+        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7, v7.0: MathText)
         if self.custom_xlabel:
-            xlabel = self.custom_xlabel
+            # v7.0: MathText-Formatierung auch für custom labels
+            xlabel = preprocess_mathtext(self.custom_xlabel)
         else:
             xlabel = self.format_axis_label(plot_info['xlabel'])
             xlabel = self.convert_to_mathtext(xlabel)
 
         if self.custom_ylabel:
-            ylabel = self.custom_ylabel
+            # v7.0: MathText-Formatierung auch für custom labels
+            ylabel = preprocess_mathtext(self.custom_ylabel)
         else:
             ylabel = self.format_axis_label(plot_info['ylabel'])
             ylabel = self.convert_to_mathtext(ylabel)
@@ -793,8 +900,8 @@ class ScatterPlotApp(QMainWindow):
             if self.axis_limits['ymax'] is not None:
                 self.ax_main.set_ylim(top=self.axis_limits['ymax'])
 
-        # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung)
-        if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
+        # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung, v7.0: Tree-Order)
+        if any(group.visible and datasets_in_order for group, datasets_in_order in ordered_groups) or ordered_unassigned:
             from matplotlib.lines import Line2D
 
             # Map für Formatierungen erstellen (Label -> (bold, italic))
@@ -804,22 +911,25 @@ class ScatterPlotApp(QMainWindow):
             new_handles = []
             new_labels = []
 
-            for group in self.groups:
-                if group.visible and group.datasets:
+            # v7.0: Verwende Tree-Order
+            for group, datasets_in_order in ordered_groups:
+                if group.visible and datasets_in_order:
                     # Gruppe als Label hinzufügen, falls gewünscht
                     if getattr(group, 'show_in_legend', True):
                         # Dummy-Handle für Gruppen-Label (unsichtbare Linie)
                         dummy_handle = Line2D([0], [0], color='none', marker='', linestyle='')
                         new_handles.append(dummy_handle)
                         group_label = getattr(group, 'display_label', group.name)
-                        new_labels.append(group_label)
-                        format_map[group_label] = (
-                            getattr(group, 'legend_bold', False),
-                            getattr(group, 'legend_italic', False)
-                        )
+                        # v7.0: MathText-Formatierung anwenden
+                        is_bold = getattr(group, 'legend_bold', False)
+                        is_italic = getattr(group, 'legend_italic', False)
+                        formatted_label = format_legend_text(group_label, is_bold, is_italic)
+                        new_labels.append(formatted_label)
+                        # Speichere Original-Label für Mapping
+                        format_map[formatted_label] = (group_label, is_bold, is_italic)
 
-                    # Datasets der Gruppe
-                    for dataset in group.datasets:
+                    # v7.0: Datasets der Gruppe in Tree-Reihenfolge
+                    for dataset in datasets_in_order:
                         if dataset.show_in_legend:
                             # Handle explizit mit korrekter Farbe und Stil erstellen
                             plot_style = dataset.get_plot_style()
@@ -842,14 +952,16 @@ class ScatterPlotApp(QMainWindow):
                                           linewidth=dataset.line_width,
                                           markersize=dataset.marker_size)
                             new_handles.append(handle)
-                            new_labels.append(dataset.display_label)
-                            format_map[dataset.display_label] = (
-                                getattr(dataset, 'legend_bold', False),
-                                getattr(dataset, 'legend_italic', False)
-                            )
+                            # v7.0: MathText-Formatierung anwenden
+                            is_bold = getattr(dataset, 'legend_bold', False)
+                            is_italic = getattr(dataset, 'legend_italic', False)
+                            formatted_label = format_legend_text(dataset.display_label, is_bold, is_italic)
+                            new_labels.append(formatted_label)
+                            # Speichere Original-Label für Mapping
+                            format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
 
-            # Unassigned Datasets
-            for dataset in self.unassigned_datasets:
+            # v7.0: Unassigned Datasets in Tree-Order
+            for dataset in ordered_unassigned:
                 if dataset.show_in_legend:
                     # Handle explizit mit korrekter Farbe und Stil erstellen
                     plot_style = dataset.get_plot_style()
@@ -872,11 +984,19 @@ class ScatterPlotApp(QMainWindow):
                                   linewidth=dataset.line_width,
                                   markersize=dataset.marker_size)
                     new_handles.append(handle)
-                    new_labels.append(dataset.display_label)
-                    format_map[dataset.display_label] = (
-                        getattr(dataset, 'legend_bold', False),
-                        getattr(dataset, 'legend_italic', False)
-                    )
+                    # v7.0: MathText-Formatierung anwenden
+                    is_bold = getattr(dataset, 'legend_bold', False)
+                    is_italic = getattr(dataset, 'legend_italic', False)
+                    formatted_label = format_legend_text(dataset.display_label, is_bold, is_italic)
+                    new_labels.append(formatted_label)
+                    # Speichere Original-Label für Mapping
+                    format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
+
+            # v7.0: Reihenfolge invertieren falls gewünscht (für gestackte Kurven)
+            if self.legend_settings.get('reverse_order', False):
+                new_handles = new_handles[::-1]
+                new_labels = new_labels[::-1]
+                self.logger.debug("  Legende: Reihenfolge invertiert")
 
             # Legende erstellen
             legend = self.ax_main.legend(
@@ -893,26 +1013,12 @@ class ScatterPlotApp(QMainWindow):
 
             # v5.3: Font-Eigenschaften für Legenden-Texte anwenden
             # v5.7: Individuelle Formatierung pro Eintrag
+            # v7.0: Formatierung erfolgt jetzt über MathText, nur noch Font-Familie setzen
             if legend:
                 legend_texts = legend.get_texts()
-
-                for i, text in enumerate(legend_texts):
-                    if i < len(new_labels):
-                        label = new_labels[i]
-
-                        # Individuelle Formatierung aus format_map
-                        if label in format_map:
-                            is_bold, is_italic = format_map[label]
-                            weight = 'bold' if is_bold else 'normal'
-                            style = 'italic' if is_italic else 'normal'
-                        else:
-                            # Fallback auf globale Einstellungen
-                            weight = 'bold' if self.font_settings.get('legend_bold', False) else 'normal'
-                            style = 'italic' if self.font_settings.get('legend_italic', False) else 'normal'
-
-                        text.set_fontweight(weight)
-                        text.set_fontstyle(style)
-                        text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
+                for text in legend_texts:
+                    # Font-Familie für alle Einträge setzen
+                    text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
 
         # Referenzlinien (Version 5.2)
         for ref_line in self.reference_lines:
@@ -945,13 +1051,16 @@ class ScatterPlotApp(QMainWindow):
                                      ha='right', va='bottom',
                                      fontsize=10, color=ref_line['color'])
 
-        # Annotations (Version 5.2, erweitert 5.3: draggable)
+        # Annotations (Version 5.2, erweitert 5.3: draggable, v7.0: MathText)
         self.annotation_texts = []  # Text-Objekte speichern für draggable
         for idx, annotation in enumerate(self.annotations):
+            # v7.0: MathText-Formatierung anwenden
+            formatted_text = preprocess_mathtext(annotation['text'])
+
             text_obj = self.ax_main.text(
                 annotation['x'],
                 annotation['y'],
-                annotation['text'],
+                formatted_text,
                 fontsize=annotation['fontsize'],
                 color=annotation['color'],
                 rotation=annotation['rotation'],

@@ -6,8 +6,9 @@ This dialog allows users to configure axis labels and titles.
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
-    QLabel, QLineEdit, QDialogButtonBox, QCheckBox
+    QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton, QMessageBox, QHBoxLayout
 )
+from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 
 
 class AxesSettingsDialog(QDialog):
@@ -38,6 +39,7 @@ class AxesSettingsDialog(QDialog):
         titles_layout.addWidget(QLabel("X-Achse Titel:"), 0, 0)
         self.xlabel_edit = QLineEdit()
         self.xlabel_edit.setPlaceholderText(f"Auto: basiert auf '{plot_type}'")
+        self.xlabel_edit.textChanged.connect(self.update_preview)
         if current_xlabel:
             self.xlabel_edit.setText(current_xlabel)
         titles_layout.addWidget(self.xlabel_edit, 0, 1)
@@ -46,9 +48,28 @@ class AxesSettingsDialog(QDialog):
         titles_layout.addWidget(QLabel("Y-Achse Titel:"), 1, 0)
         self.ylabel_edit = QLineEdit()
         self.ylabel_edit.setPlaceholderText(f"Auto: basiert auf '{plot_type}'")
+        self.ylabel_edit.textChanged.connect(self.update_preview)
         if current_ylabel:
             self.ylabel_edit.setText(current_ylabel)
         titles_layout.addWidget(self.ylabel_edit, 1, 1)
+
+        # Syntax-Hilfe Button (v7.0)
+        syntax_help_btn = QPushButton("📖 LaTeX/MathText Syntax-Hilfe")
+        syntax_help_btn.clicked.connect(self.show_syntax_help)
+        titles_layout.addWidget(syntax_help_btn, 2, 0, 1, 2)
+
+        # Vorschau (v7.0)
+        titles_layout.addWidget(QLabel("Vorschau:"), 3, 0)
+        self.preview_label = QLabel("")
+        self.preview_label.setWordWrap(True)
+        self.preview_label.setStyleSheet(
+            "background-color: #2b2b2b; "
+            "padding: 8px; "
+            "border: 1px solid #555; "
+            "border-radius: 4px; "
+            "min-height: 40px;"
+        )
+        titles_layout.addWidget(self.preview_label, 3, 1)
 
         titles_group.setLayout(titles_layout)
         layout.addWidget(titles_group)
@@ -132,13 +153,15 @@ class AxesSettingsDialog(QDialog):
         layout.addWidget(math_group)
 
         # Reset-Button
-        from PySide6.QtWidgets import QPushButton, QHBoxLayout
         reset_layout = QHBoxLayout()
         reset_btn = QPushButton("Auf Standard zurücksetzen")
         reset_btn.clicked.connect(self.reset_labels)
         reset_layout.addStretch()
         reset_layout.addWidget(reset_btn)
         layout.addLayout(reset_layout)
+
+        # Initial preview update
+        self.update_preview()
 
         layout.addStretch()
 
@@ -196,3 +219,68 @@ class AxesSettingsDialog(QDialog):
             'ymax': ymax,
             'auto': self.auto_checkbox.isChecked()
         }
+
+    def update_preview(self):
+        """Aktualisiert die Vorschau der formatierten Achsenbeschriftungen (v7.0)"""
+        xlabel = self.xlabel_edit.text()
+        ylabel = self.ylabel_edit.text()
+
+        if not xlabel and not ylabel:
+            self.preview_label.setText("<i>Geben Sie Achsentitel ein für Vorschau...</i>")
+            return
+
+        # MathText preprocessing
+        preview_parts = []
+        if xlabel:
+            processed_x = preprocess_mathtext(xlabel)
+            preview_x_html = self._create_preview_html(processed_x)
+            preview_parts.append(f"<b>X:</b> {preview_x_html}")
+
+        if ylabel:
+            processed_y = preprocess_mathtext(ylabel)
+            preview_y_html = self._create_preview_html(processed_y)
+            preview_parts.append(f"<b>Y:</b> {preview_y_html}")
+
+        self.preview_label.setText(" | ".join(preview_parts))
+
+    def _create_preview_html(self, text):
+        """
+        Erstellt eine HTML-Vorschau für den MathText.
+        Dies ist eine Approximation - das tatsächliche Rendering erfolgt durch Matplotlib.
+        """
+        # Einfache Ersetzungen für häufige MathText-Befehle
+        replacements = {
+            r'$\alpha$': 'α', r'$\beta$': 'β', r'$\gamma$': 'γ',
+            r'$\delta$': 'δ', r'$\theta$': 'θ', r'$\lambda$': 'λ',
+            r'$\mu$': 'µ', r'$\pi$': 'π', r'$\sigma$': 'σ',
+            r'$\pm$': '±', r'$\times$': '×', r'$\cdot$': '·',
+            r'$\AA$': 'Å', r'\AA': 'Å',
+        }
+
+        preview = text
+        for mathtext, symbol in replacements.items():
+            preview = preview.replace(mathtext, symbol)
+
+        # Ersetze \mathbf{...} mit <b>...</b>
+        import re
+        preview = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'<b>\1</b>', preview)
+        preview = re.sub(r'\$\\mathit\{([^}]+)\}\$', r'<i>\1</i>', preview)
+
+        # Einfache Hochstellung/Tiefstellung (sehr vereinfacht)
+        preview = re.sub(r'\$([^$]*)\^{?([^}$]+)}?([^$]*)\$', r'\1<sup>\2</sup>\3', preview)
+        preview = re.sub(r'\$([^$]*)_{?([^}$]+)}?([^$]*)\$', r'\1<sub>\2</sub>\3', preview)
+
+        # Entferne übrig gebliebene $
+        preview = preview.replace('$', '')
+
+        return preview
+
+    def show_syntax_help(self):
+        """Zeigt Syntax-Hilfe für LaTeX/MathText an (v7.0)"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("LaTeX/MathText Syntax-Hilfe")
+        msg.setIcon(QMessageBox.Information)
+        msg.setText(get_syntax_help_text())
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setMinimumWidth(500)
+        msg.exec()
