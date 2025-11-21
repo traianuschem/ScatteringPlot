@@ -268,7 +268,7 @@ class ScatterPlotApp(QMainWindow):
         grid_action.triggered.connect(self.show_grid_settings)
         plot_menu.addAction(grid_action)
 
-        axes_action = QAction("Achsenbeschriftungen...", self)
+        axes_action = QAction("Achsen und Limits...", self)
         axes_action.triggered.connect(self.show_axes_settings)
         plot_menu.addAction(axes_action)
 
@@ -416,12 +416,6 @@ class ScatterPlotApp(QMainWindow):
 
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
-
-        # Achsenlimits Button
-        axis_limits_btn = QPushButton("📏 Achsenlimits festlegen")
-        axis_limits_btn.clicked.connect(self.set_axis_limits)
-        axis_limits_btn.setToolTip("Legen Sie feste Achsenlimits für den Plot fest")
-        layout.addWidget(axis_limits_btn)
 
         # Update Button
         update_btn = QPushButton("🔄 Plot aktualisieren")
@@ -971,7 +965,22 @@ class ScatterPlotApp(QMainWindow):
             text_obj._annotation_idx = idx  # Index speichern
             self.annotation_texts.append(text_obj)
 
-        self.fig.tight_layout()
+        # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
+        try:
+            self.fig.tight_layout()
+        except ValueError as e:
+            # MathText-Parsing-Fehler (z.B. nicht geschlossene Klammern in LaTeX)
+            error_msg = str(e)
+            if "ParseException" in error_msg or "Expected end of text" in error_msg:
+                self.logger.warning(f"MathText-Fehler in Legende ignoriert: {error_msg[:100]}...")
+                # Versuche Plot ohne tight_layout zu zeichnen
+            else:
+                # Andere ValueError durchreichen
+                raise
+        except Exception as e:
+            # Andere Fehler loggen aber nicht abstürzen
+            self.logger.error(f"Fehler bei tight_layout(): {e}")
+
         self.canvas.draw()
 
     def convert_to_mathtext(self, text):
@@ -1871,108 +1880,6 @@ class ScatterPlotApp(QMainWindow):
                                f"Bitte geben Sie eine gültige positive Zahl ein.\n{str(e)}")
             self.wavelength_edit.setText(str(self.wavelength))
 
-    def set_axis_limits(self):
-        """Öffnet Dialog zum Festlegen der Achsenlimits"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Achsenlimits festlegen")
-        dialog.resize(400, 300)
-
-        layout = QVBoxLayout(dialog)
-
-        # Info-Label
-        info_label = QLabel(
-            "Legen Sie feste Achsenlimits fest. Diese bleiben beim Plot-Update erhalten.\n"
-            "Leer lassen = automatisch"
-        )
-        info_label.setWordWrap(True)
-        layout.addWidget(info_label)
-
-        # Limits-Gruppe
-        limits_group = QGroupBox("Achsenlimits")
-        limits_layout = QGridLayout()
-
-        # X-Limits
-        limits_layout.addWidget(QLabel("X-Minimum:"), 0, 0)
-        xmin_edit = QLineEdit()
-        xmin_edit.setPlaceholderText("z.B. 0.001")
-        if self.axis_limits['xmin'] is not None:
-            xmin_edit.setText(str(self.axis_limits['xmin']))
-        limits_layout.addWidget(xmin_edit, 0, 1)
-
-        limits_layout.addWidget(QLabel("X-Maximum:"), 1, 0)
-        xmax_edit = QLineEdit()
-        xmax_edit.setPlaceholderText("z.B. 10.0")
-        if self.axis_limits['xmax'] is not None:
-            xmax_edit.setText(str(self.axis_limits['xmax']))
-        limits_layout.addWidget(xmax_edit, 1, 1)
-
-        # Y-Limits
-        limits_layout.addWidget(QLabel("Y-Minimum:"), 2, 0)
-        ymin_edit = QLineEdit()
-        ymin_edit.setPlaceholderText("z.B. 0.001")
-        if self.axis_limits['ymin'] is not None:
-            ymin_edit.setText(str(self.axis_limits['ymin']))
-        limits_layout.addWidget(ymin_edit, 2, 1)
-
-        limits_layout.addWidget(QLabel("Y-Maximum:"), 3, 0)
-        ymax_edit = QLineEdit()
-        ymax_edit.setPlaceholderText("z.B. 1000.0")
-        if self.axis_limits['ymax'] is not None:
-            ymax_edit.setText(str(self.axis_limits['ymax']))
-        limits_layout.addWidget(ymax_edit, 3, 1)
-
-        limits_group.setLayout(limits_layout)
-        layout.addWidget(limits_group)
-
-        # Auto-Modus Checkbox
-        auto_checkbox = QCheckBox("Automatische Skalierung (ignoriert obige Werte)")
-        auto_checkbox.setChecked(self.axis_limits['auto'])
-        layout.addWidget(auto_checkbox)
-
-        # Reset-Button
-        reset_btn = QPushButton("Alle zurücksetzen")
-        def reset_limits():
-            xmin_edit.clear()
-            xmax_edit.clear()
-            ymin_edit.clear()
-            ymax_edit.clear()
-            auto_checkbox.setChecked(True)
-        reset_btn.clicked.connect(reset_limits)
-        layout.addWidget(reset_btn)
-
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-
-        if dialog.exec() == QDialog.Accepted:
-            # Limits übernehmen
-            try:
-                self.axis_limits['xmin'] = float(xmin_edit.text()) if xmin_edit.text() else None
-            except ValueError:
-                self.axis_limits['xmin'] = None
-
-            try:
-                self.axis_limits['xmax'] = float(xmax_edit.text()) if xmax_edit.text() else None
-            except ValueError:
-                self.axis_limits['xmax'] = None
-
-            try:
-                self.axis_limits['ymin'] = float(ymin_edit.text()) if ymin_edit.text() else None
-            except ValueError:
-                self.axis_limits['ymin'] = None
-
-            try:
-                self.axis_limits['ymax'] = float(ymax_edit.text()) if ymax_edit.text() else None
-            except ValueError:
-                self.axis_limits['ymax'] = None
-
-            self.axis_limits['auto'] = auto_checkbox.isChecked()
-
-            # Plot aktualisieren
-            self.update_plot()
-
     def apply_style_to_selected(self, preset_name):
         """Wendet Stil auf ausgewählte Datensätze an"""
         items = self.tree.selectedItems()
@@ -2090,10 +1997,11 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_axes_settings(self):
-        """Zeigt Achsenbeschriftungen Dialog (v5.7)"""
-        dialog = AxesSettingsDialog(self, self.custom_xlabel, self.custom_ylabel, self.plot_type)
+        """Zeigt Achsen und Limits Dialog (v6.2)"""
+        dialog = AxesSettingsDialog(self, self.custom_xlabel, self.custom_ylabel, self.plot_type, self.axis_limits)
         if dialog.exec():
             self.custom_xlabel, self.custom_ylabel = dialog.get_labels()
+            self.axis_limits = dialog.get_axis_limits()
             self.update_plot()
 
     def show_font_settings(self):
