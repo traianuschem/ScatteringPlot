@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 6.2
-================================
+ScatterForge Plot - Version 7.0-dev
+====================================
 
 Professionelles Tool für Streudaten-Analyse mit:
 - Qt6-basierte moderne GUI mit modularer Architektur
@@ -69,6 +69,7 @@ from dialogs.axes_dialog import AxesSettingsDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
+from utils.mathtext_formatter import preprocess_mathtext, format_legend_text
 
 
 class DataTreeWidget(QTreeWidget):
@@ -812,11 +813,13 @@ class ScatterPlotApp(QMainWindow):
                         dummy_handle = Line2D([0], [0], color='none', marker='', linestyle='')
                         new_handles.append(dummy_handle)
                         group_label = getattr(group, 'display_label', group.name)
-                        new_labels.append(group_label)
-                        format_map[group_label] = (
-                            getattr(group, 'legend_bold', False),
-                            getattr(group, 'legend_italic', False)
-                        )
+                        # v7.0: MathText-Formatierung anwenden
+                        is_bold = getattr(group, 'legend_bold', False)
+                        is_italic = getattr(group, 'legend_italic', False)
+                        formatted_label = format_legend_text(group_label, is_bold, is_italic)
+                        new_labels.append(formatted_label)
+                        # Speichere Original-Label für Mapping
+                        format_map[formatted_label] = (group_label, is_bold, is_italic)
 
                     # Datasets der Gruppe
                     for dataset in group.datasets:
@@ -842,11 +845,13 @@ class ScatterPlotApp(QMainWindow):
                                           linewidth=dataset.line_width,
                                           markersize=dataset.marker_size)
                             new_handles.append(handle)
-                            new_labels.append(dataset.display_label)
-                            format_map[dataset.display_label] = (
-                                getattr(dataset, 'legend_bold', False),
-                                getattr(dataset, 'legend_italic', False)
-                            )
+                            # v7.0: MathText-Formatierung anwenden
+                            is_bold = getattr(dataset, 'legend_bold', False)
+                            is_italic = getattr(dataset, 'legend_italic', False)
+                            formatted_label = format_legend_text(dataset.display_label, is_bold, is_italic)
+                            new_labels.append(formatted_label)
+                            # Speichere Original-Label für Mapping
+                            format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
 
             # Unassigned Datasets
             for dataset in self.unassigned_datasets:
@@ -872,11 +877,13 @@ class ScatterPlotApp(QMainWindow):
                                   linewidth=dataset.line_width,
                                   markersize=dataset.marker_size)
                     new_handles.append(handle)
-                    new_labels.append(dataset.display_label)
-                    format_map[dataset.display_label] = (
-                        getattr(dataset, 'legend_bold', False),
-                        getattr(dataset, 'legend_italic', False)
-                    )
+                    # v7.0: MathText-Formatierung anwenden
+                    is_bold = getattr(dataset, 'legend_bold', False)
+                    is_italic = getattr(dataset, 'legend_italic', False)
+                    formatted_label = format_legend_text(dataset.display_label, is_bold, is_italic)
+                    new_labels.append(formatted_label)
+                    # Speichere Original-Label für Mapping
+                    format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
 
             # Legende erstellen
             legend = self.ax_main.legend(
@@ -893,26 +900,12 @@ class ScatterPlotApp(QMainWindow):
 
             # v5.3: Font-Eigenschaften für Legenden-Texte anwenden
             # v5.7: Individuelle Formatierung pro Eintrag
+            # v7.0: Formatierung erfolgt jetzt über MathText, nur noch Font-Familie setzen
             if legend:
                 legend_texts = legend.get_texts()
-
-                for i, text in enumerate(legend_texts):
-                    if i < len(new_labels):
-                        label = new_labels[i]
-
-                        # Individuelle Formatierung aus format_map
-                        if label in format_map:
-                            is_bold, is_italic = format_map[label]
-                            weight = 'bold' if is_bold else 'normal'
-                            style = 'italic' if is_italic else 'normal'
-                        else:
-                            # Fallback auf globale Einstellungen
-                            weight = 'bold' if self.font_settings.get('legend_bold', False) else 'normal'
-                            style = 'italic' if self.font_settings.get('legend_italic', False) else 'normal'
-
-                        text.set_fontweight(weight)
-                        text.set_fontstyle(style)
-                        text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
+                for text in legend_texts:
+                    # Font-Familie für alle Einträge setzen
+                    text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
 
         # Referenzlinien (Version 5.2)
         for ref_line in self.reference_lines:

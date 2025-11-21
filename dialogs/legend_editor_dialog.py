@@ -11,9 +11,10 @@ This dialog allows users to edit legend entries with advanced options:
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QDialogButtonBox, QGroupBox, QCheckBox, QLineEdit,
-    QLabel, QWidget
+    QLabel, QWidget, QMessageBox, QTextEdit
 )
 from PySide6.QtCore import Qt
+from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 
 
 class LegendEditorDialog(QDialog):
@@ -92,6 +93,27 @@ class LegendEditorDialog(QDialog):
         self.name_edit.textChanged.connect(self.on_name_changed)
         name_layout.addWidget(self.name_edit)
         editor_layout.addLayout(name_layout)
+
+        # Syntax-Hilfe Button
+        syntax_help_btn = QPushButton("📖 LaTeX/MathText Syntax-Hilfe")
+        syntax_help_btn.clicked.connect(self.show_syntax_help)
+        editor_layout.addWidget(syntax_help_btn)
+
+        # Preview-Label
+        preview_label = QLabel("Vorschau:")
+        preview_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        editor_layout.addWidget(preview_label)
+
+        self.preview_text = QLabel("")
+        self.preview_text.setWordWrap(True)
+        self.preview_text.setStyleSheet(
+            "background-color: #2b2b2b; "
+            "padding: 8px; "
+            "border: 1px solid #555; "
+            "border-radius: 4px; "
+            "min-height: 30px;"
+        )
+        editor_layout.addWidget(self.preview_text)
 
         # Sichtbarkeit
         self.visible_check = QCheckBox("In Legende anzeigen")
@@ -191,6 +213,9 @@ class LegendEditorDialog(QDialog):
         self.bold_check.blockSignals(False)
         self.italic_check.blockSignals(False)
 
+        # Vorschau aktualisieren
+        self.update_preview()
+
     def enable_editor(self, enabled):
         """Editor aktivieren/deaktivieren"""
         self.name_edit.setEnabled(enabled)
@@ -218,6 +243,7 @@ class LegendEditorDialog(QDialog):
             obj.display_label = new_name
 
         self.update_list_item(current)
+        self.update_preview()
 
     def on_visibility_changed(self):
         """Sichtbarkeit wurde geändert"""
@@ -261,6 +287,8 @@ class LegendEditorDialog(QDialog):
 
         obj.legend_bold = is_bold
         obj.legend_italic = is_italic
+
+        self.update_preview()
 
     def update_list_item(self, list_item):
         """Aktualisiert die Anzeige eines List-Items"""
@@ -310,3 +338,89 @@ class LegendEditorDialog(QDialog):
     def get_legend_order(self):
         """Gibt die neue Reihenfolge der Legendeneinträge zurück"""
         return self.legend_items
+
+    def update_preview(self):
+        """Aktualisiert die Vorschau des formatierten Textes (v7.0)"""
+        current = self.entry_list.currentItem()
+        if current is None:
+            self.preview_text.setText("")
+            return
+
+        item_data = current.data(Qt.UserRole)
+        obj = item_data[1]
+
+        # Aktuellen Text und Formatierung holen
+        text = self.name_edit.text()
+        is_bold = self.bold_check.isChecked()
+        is_italic = self.italic_check.isChecked()
+
+        if not text:
+            self.preview_text.setText("<i>Geben Sie einen Namen ein...</i>")
+            return
+
+        # MathText preprocessing
+        processed = preprocess_mathtext(text)
+
+        # Erstelle HTML-Preview (approximiert das Ergebnis)
+        preview_html = self._create_preview_html(processed, is_bold, is_italic)
+        self.preview_text.setText(preview_html)
+
+    def _create_preview_html(self, text, is_bold, is_italic):
+        """
+        Erstellt eine HTML-Vorschau für den MathText.
+        Dies ist eine Approximation - das tatsächliche Rendering erfolgt durch Matplotlib.
+        """
+        # Einfache Ersetzungen für häufige MathText-Befehle
+        replacements = {
+            r'$\alpha$': 'α',
+            r'$\beta$': 'β',
+            r'$\gamma$': 'γ',
+            r'$\delta$': 'δ',
+            r'$\theta$': 'θ',
+            r'$\lambda$': 'λ',
+            r'$\mu$': 'µ',
+            r'$\pi$': 'π',
+            r'$\sigma$': 'σ',
+            r'$\pm$': '±',
+            r'$\times$': '×',
+            r'$\cdot$': '·',
+        }
+
+        preview = text
+        for mathtext, symbol in replacements.items():
+            preview = preview.replace(mathtext, symbol)
+
+        # Ersetze \mathbf{...} mit <b>...</b>
+        import re
+        preview = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'<b>\1</b>', preview)
+        preview = re.sub(r'\$\\mathit\{([^}]+)\}\$', r'<i>\1</i>', preview)
+
+        # Einfache Hochstellung/Tiefstellung (sehr vereinfacht)
+        preview = re.sub(r'\$([^$]*)\^(\d+)([^$]*)\$', r'\1<sup>\2</sup>\3', preview)
+        preview = re.sub(r'\$([^$]*)_(\d+)([^$]*)\$', r'\1<sub>\2</sub>\3', preview)
+
+        # Entferne übrig gebliebene $
+        preview = preview.replace('$', '')
+
+        # Globale Formatierung anwenden
+        if is_bold and is_italic:
+            preview = f"<b><i>{preview}</i></b>"
+        elif is_bold:
+            preview = f"<b>{preview}</b>"
+        elif is_italic:
+            preview = f"<i>{preview}</i>"
+
+        return preview
+
+    def show_syntax_help(self):
+        """Zeigt Syntax-Hilfe für LaTeX/MathText an (v7.0)"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("LaTeX/MathText Syntax-Hilfe")
+        msg.setIcon(QMessageBox.Information)
+        msg.setText(get_syntax_help_text())
+        msg.setStandardButtons(QMessageBox.Ok)
+
+        # Dialog vergrößern
+        msg.setMinimumWidth(500)
+
+        msg.exec()
