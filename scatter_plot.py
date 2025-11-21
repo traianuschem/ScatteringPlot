@@ -129,7 +129,8 @@ class ScatterPlotApp(QMainWindow):
             'alpha': 0.9,
             'frameon': True,
             'shadow': False,
-            'fancybox': True
+            'fancybox': True,
+            'reverse_order': False  # v7.0: Reihenfolge invertieren
         }
         self.grid_settings = {
             'major_enable': True,
@@ -530,11 +531,55 @@ class ScatterPlotApp(QMainWindow):
         # Plot bleibt im Light Mode (für bessere Lesbarkeit)
         plt.style.use('default')
 
+    def get_tree_order(self):
+        """
+        Liest die Reihenfolge der Elemente aus dem Tree aus (v7.0)
+
+        Returns:
+            tuple: (ordered_groups, ordered_unassigned)
+                - ordered_groups: Liste von (group, datasets_in_order)
+                - ordered_unassigned: Liste von datasets
+        """
+        ordered_groups = []
+        ordered_unassigned = []
+
+        # Durchlaufe Tree von oben nach unten
+        root = self.tree.invisibleRootItem()
+
+        for i in range(root.childCount()):
+            item = root.child(i)
+            data = item.data(0, Qt.UserRole)
+
+            if not data:
+                continue
+
+            if data[0] == 'group':
+                group = data[1]
+                # Sammle Datasets dieser Gruppe in Tree-Reihenfolge
+                datasets_in_order = []
+                for j in range(item.childCount()):
+                    child_item = item.child(j)
+                    child_data = child_item.data(0, Qt.UserRole)
+                    if child_data and child_data[0] == 'dataset':
+                        datasets_in_order.append(child_data[1])
+                ordered_groups.append((group, datasets_in_order))
+
+            elif data[0] == 'dataset':
+                # Unassigned dataset
+                dataset = data[1]
+                ordered_unassigned.append(dataset)
+
+        return ordered_groups, ordered_unassigned
+
     def update_plot(self):
         """Aktualisiert den Plot"""
         # Plot-Einstellungen
         self.stack_mode = self.stack_checkbox.isChecked()
         self.logger.debug(f"Plot-Update: Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
+
+        # v7.0: Tree-Reihenfolge für Plot und Legende verwenden
+        ordered_groups, ordered_unassigned = self.get_tree_order()
+        self.logger.debug(f"  Tree-Order: {len(ordered_groups)} Gruppen, {len(ordered_unassigned)} unassigned")
 
         # Figure leeren
         self.fig.clear()
@@ -556,8 +601,9 @@ class ScatterPlotApp(QMainWindow):
         # Plotten
         plot_info = PLOT_TYPES[self.plot_type]
 
-        # Gruppen plotten
-        for group in self.groups:
+        # v7.0: Verwende Tree-Order statt self.groups
+        # Gruppen plotten in Tree-Reihenfolge
+        for group, datasets_in_order in ordered_groups:
             if not group.visible:
                 continue
 
@@ -571,10 +617,11 @@ class ScatterPlotApp(QMainWindow):
                 group_label = group.name
 
             # Dummy-Plot für Gruppen-Header in Legende
-            has_visible_datasets = any(ds.show_in_legend for ds in group.datasets)
+            # v7.0: Verwende datasets_in_order (Tree-Order)
+            has_visible_datasets = any(ds.show_in_legend for ds in datasets_in_order)
             if has_visible_datasets:
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                self.logger.debug(f"  Gruppe '{group.name}': {len(group.datasets)} Datasets, Stack=×{stack_factor:.1f}")
+                self.logger.debug(f"  Gruppe '{group.name}': {len(datasets_in_order)} Datasets (Tree-Order), Stack=×{stack_factor:.1f}")
 
             # Gruppenspezifische Farbpalette (v5.4)
             if group.color_scheme:
@@ -584,8 +631,8 @@ class ScatterPlotApp(QMainWindow):
             else:
                 group_color_cycle = color_cycle
 
-            # Plot je Datensatz
-            for dataset in group.datasets:
+            # v7.0: Plot je Datensatz in Tree-Reihenfolge
+            for dataset in datasets_in_order:
                 # Checkbox steuert Sichtbarkeit komplett
                 if not dataset.show_in_legend:
                     continue
@@ -667,12 +714,12 @@ class ScatterPlotApp(QMainWindow):
                     self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                      linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Auch nicht zugeordnete Datensätze plotten (ohne Stack-Faktor)
-        unassigned_count = sum(1 for ds in self.unassigned_datasets if ds.show_in_legend)
+        # v7.0: Auch nicht zugeordnete Datensätze plotten in Tree-Order (ohne Stack-Faktor)
+        unassigned_count = sum(1 for ds in ordered_unassigned if ds.show_in_legend)
         if unassigned_count > 0:
-            self.logger.debug(f"  Unassigned: {unassigned_count} Datasets (ohne Stacking)")
+            self.logger.debug(f"  Unassigned: {unassigned_count} Datasets (Tree-Order, ohne Stacking)")
 
-        for dataset in self.unassigned_datasets:
+        for dataset in ordered_unassigned:
             # Checkbox steuert Sichtbarkeit komplett
             if not dataset.show_in_legend:
                 continue
@@ -853,8 +900,8 @@ class ScatterPlotApp(QMainWindow):
             if self.axis_limits['ymax'] is not None:
                 self.ax_main.set_ylim(top=self.axis_limits['ymax'])
 
-        # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung)
-        if any(group.visible and group.datasets for group in self.groups) or self.unassigned_datasets:
+        # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung, v7.0: Tree-Order)
+        if any(group.visible and datasets_in_order for group, datasets_in_order in ordered_groups) or ordered_unassigned:
             from matplotlib.lines import Line2D
 
             # Map für Formatierungen erstellen (Label -> (bold, italic))
@@ -864,8 +911,9 @@ class ScatterPlotApp(QMainWindow):
             new_handles = []
             new_labels = []
 
-            for group in self.groups:
-                if group.visible and group.datasets:
+            # v7.0: Verwende Tree-Order
+            for group, datasets_in_order in ordered_groups:
+                if group.visible and datasets_in_order:
                     # Gruppe als Label hinzufügen, falls gewünscht
                     if getattr(group, 'show_in_legend', True):
                         # Dummy-Handle für Gruppen-Label (unsichtbare Linie)
@@ -880,8 +928,8 @@ class ScatterPlotApp(QMainWindow):
                         # Speichere Original-Label für Mapping
                         format_map[formatted_label] = (group_label, is_bold, is_italic)
 
-                    # Datasets der Gruppe
-                    for dataset in group.datasets:
+                    # v7.0: Datasets der Gruppe in Tree-Reihenfolge
+                    for dataset in datasets_in_order:
                         if dataset.show_in_legend:
                             # Handle explizit mit korrekter Farbe und Stil erstellen
                             plot_style = dataset.get_plot_style()
@@ -912,8 +960,8 @@ class ScatterPlotApp(QMainWindow):
                             # Speichere Original-Label für Mapping
                             format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
 
-            # Unassigned Datasets
-            for dataset in self.unassigned_datasets:
+            # v7.0: Unassigned Datasets in Tree-Order
+            for dataset in ordered_unassigned:
                 if dataset.show_in_legend:
                     # Handle explizit mit korrekter Farbe und Stil erstellen
                     plot_style = dataset.get_plot_style()
@@ -943,6 +991,12 @@ class ScatterPlotApp(QMainWindow):
                     new_labels.append(formatted_label)
                     # Speichere Original-Label für Mapping
                     format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
+
+            # v7.0: Reihenfolge invertieren falls gewünscht (für gestackte Kurven)
+            if self.legend_settings.get('reverse_order', False):
+                new_handles = new_handles[::-1]
+                new_labels = new_labels[::-1]
+                self.logger.debug("  Legende: Reihenfolge invertiert")
 
             # Legende erstellen
             legend = self.ax_main.legend(
