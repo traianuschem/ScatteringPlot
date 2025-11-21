@@ -125,7 +125,6 @@ class AxesSettingsDialog(QDialog):
         limits_layout.addWidget(self.auto_checkbox, 5, 0, 1, 2)
 
         # Reset Limits Button
-        from PySide6.QtWidgets import QPushButton
         reset_limits_btn = QPushButton("Limits zurücksetzen")
         reset_limits_btn.clicked.connect(self.reset_limits)
         limits_layout.addWidget(reset_limits_btn, 6, 0, 1, 2)
@@ -261,17 +260,26 @@ class AxesSettingsDialog(QDialog):
         for mathtext, symbol in replacements.items():
             preview = preview.replace(mathtext, symbol)
 
-        # Ersetze \mathbf{...} mit <b>...</b>
+        # Ersetze \mathbf{...} und \mathit{...} mit HTML
         import re
         preview = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'<b>\1</b>', preview)
         preview = re.sub(r'\$\\mathit\{([^}]+)\}\$', r'<i>\1</i>', preview)
 
-        # Einfache Hochstellung/Tiefstellung (sehr vereinfacht)
-        preview = re.sub(r'\$([^$]*)\^{?([^}$]+)}?([^$]*)\$', r'\1<sup>\2</sup>\3', preview)
-        preview = re.sub(r'\$([^$]*)_{?([^}$]+)}?([^$]*)\$', r'\1<sub>\2</sub>\3', preview)
+        # Verschachtelte Formatierung
+        preview = re.sub(r'\\mathbf\{\\mathit\{([^}]+)\}\}', r'<b><i>\1</i></b>', preview)
 
-        # Entferne übrig gebliebene $
+        # Hochstellung und Tiefstellung (verbessert für {}-Syntax)
+        # ^{...} und ^x
+        preview = re.sub(r'\^{([^}]+)}', r'<sup>\1</sup>', preview)
+        preview = re.sub(r'\^(\w)', r'<sup>\1</sup>', preview)
+
+        # _{...} und _x
+        preview = re.sub(r'_{([^}]+)}', r'<sub>\1</sub>', preview)
+        preview = re.sub(r'_(\w)', r'<sub>\1</sub>', preview)
+
+        # Entferne übrig gebliebene $ und \
         preview = preview.replace('$', '')
+        preview = preview.replace('\\', '')
 
         return preview
 

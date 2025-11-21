@@ -18,6 +18,7 @@ def preprocess_mathtext(text):
     - **text** → Fettdruck ($\mathbf{text}$)
     - *text* → Kursiv ($\mathit{text}$)
     - Bereits vorhandenes MathText bleibt unverändert ($...$)
+    - Verkettungen: **text $formula$ text**
 
     Args:
         text (str): Input-Text mit einfacher Formatierung
@@ -32,38 +33,95 @@ def preprocess_mathtext(text):
         >>> preprocess_mathtext("*Fit* für $q^2$")
         '$\\mathit{Fit}$ für $q^2$'
 
-        >>> preprocess_mathtext("Normale Messung")
-        'Normale Messung'
+        >>> preprocess_mathtext("**Text $formula$ Text**")
+        '$\\mathbf{Text }$$formula$$\\mathbf{ Text}$'
     """
     if not text:
         return text
 
-    # Schritt 1: Bestehende $...$ Bereiche schützen (temporär ersetzen)
-    # Um zu vermeiden, dass wir in bereits formatierten MathText-Bereichen arbeiten
-    protected_regions = []
+    # Schritt 1: Verarbeite **...** und *...* MIT Berücksichtigung von $...$
+    # Wir müssen hier intelligenter sein und ** INNERHALB von $...$ nicht anfassen,
+    # aber ** AUSSERHALB schon
 
-    def protect_mathtext(match):
-        """Temporäre Ersetzung für bereits vorhandenes MathText"""
-        protected_regions.append(match.group(0))
-        return f"__MATHTEXT_{len(protected_regions)-1}__"
+    def process_bold_with_mathtext(text):
+        """Verarbeitet **...** auch wenn $...$ darin vorkommt"""
+        # Finde alle **...** Bereiche
+        result = []
+        pos = 0
 
-    # Schütze $...$ Bereiche
-    text = re.sub(r'\$[^$]+\$', protect_mathtext, text)
+        for match in re.finditer(r'\*\*(.+?)\*\*', text):
+            # Füge Text vor dem Match hinzu
+            result.append(text[pos:match.start()])
 
-    # Schritt 2: Formatierung konvertieren
-    # **text** → $\mathbf{text}$
-    text = re.sub(r'\*\*([^*]+)\*\*', r'$\\mathbf{\1}$', text)
+            content = match.group(1)
+            # Prüfe ob der Inhalt $...$ enthält
+            if '$' in content:
+                # Zerlege in Teile: normale Teile und $...$ Teile
+                parts = []
+                last_end = 0
+                for dollar_match in re.finditer(r'\$[^$]+\$', content):
+                    # Text vor $...$
+                    before = content[last_end:dollar_match.start()]
+                    if before:
+                        parts.append(f'$\\mathbf{{{before}}}$')
+                    # $...$ selbst (ohne bold, da es schon formatiert ist)
+                    parts.append(dollar_match.group(0))
+                    last_end = dollar_match.end()
 
-    # *text* → $\mathit{text}$ (nur wenn nicht bereits ** ersetzt wurde)
-    text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'$\\mathit{\1}$', text)
+                # Rest nach letztem $...$
+                after = content[last_end:]
+                if after:
+                    parts.append(f'$\\mathbf{{{after}}}$')
 
-    # Schritt 3: Geschützte Bereiche wiederherstellen
-    for i, region in enumerate(protected_regions):
-        text = text.replace(f"__MATHTEXT_{i}__", region)
+                result.append(''.join(parts))
+            else:
+                # Kein $...$ im Inhalt - einfach umwandeln
+                result.append(f'$\\mathbf{{{content}}}$')
 
-    # Schritt 4: Benachbarte $...$ $...$ zusammenführen für bessere Lesbarkeit
-    # $\mathbf{A}$ $\mathit{B}$ → $\mathbf{A}$ $\mathit{B}$ (bleibt so)
-    # Aber: "text$" "$more" → "text$ $more" ist OK
+            pos = match.end()
+
+        # Rest des Textes
+        result.append(text[pos:])
+        return ''.join(result)
+
+    def process_italic_with_mathtext(text):
+        """Verarbeitet *...* auch wenn $...$ darin vorkommt (aber nicht **...**)"""
+        result = []
+        pos = 0
+
+        for match in re.finditer(r'(?<!\*)\*(.+?)\*(?!\*)', text):
+            # Füge Text vor dem Match hinzu
+            result.append(text[pos:match.start()])
+
+            content = match.group(1)
+            # Prüfe ob der Inhalt $...$ enthält
+            if '$' in content:
+                # Zerlege in Teile
+                parts = []
+                last_end = 0
+                for dollar_match in re.finditer(r'\$[^$]+\$', content):
+                    before = content[last_end:dollar_match.start()]
+                    if before:
+                        parts.append(f'$\\mathit{{{before}}}$')
+                    parts.append(dollar_match.group(0))
+                    last_end = dollar_match.end()
+
+                after = content[last_end:]
+                if after:
+                    parts.append(f'$\\mathit{{{after}}}$')
+
+                result.append(''.join(parts))
+            else:
+                result.append(f'$\\mathit{{{content}}}$')
+
+            pos = match.end()
+
+        result.append(text[pos:])
+        return ''.join(result)
+
+    # Erst ** verarbeiten, dann *
+    text = process_bold_with_mathtext(text)
+    text = process_italic_with_mathtext(text)
 
     return text
 
@@ -87,8 +145,8 @@ def format_legend_text(text, bold=False, italic=False):
         >>> format_legend_text("Messung", bold=True)
         '$\\mathbf{Messung}$'
 
-        >>> format_legend_text("**Messung** mit $\\alpha$", bold=False)
-        '$\\mathbf{Messung}$ mit $\\alpha$'
+        >>> format_legend_text("Messung $\\alpha$", bold=True)
+        '$\\mathbf{Messung }$$\\alpha$'
     """
     if not text:
         return text
@@ -96,16 +154,42 @@ def format_legend_text(text, bold=False, italic=False):
     # Zuerst Preprocessing für **/** Syntax
     processed = preprocess_mathtext(text)
 
-    # Wenn bold/italic-Flags gesetzt sind und der Text noch kein MathText ist,
-    # den gesamten Text einpacken
-    if (bold or italic) and not processed.strip().startswith('$'):
-        # Text ist nicht bereits vollständig in MathText
-        # Prüfe ob es Teile mit MathText gibt
+    # Wenn bold/italic-Flags gesetzt sind, Text entsprechend formatieren
+    if bold or italic:
+        # Prüfe ob es bereits MathText gibt
         if '$' in processed:
-            # Es gibt bereits MathText-Teile - nur die nicht-formatierten Teile einpacken
-            # Dies ist komplexer - für jetzt: wenn der User bold/italic im Editor setzt,
-            # sollte er ** oder * im Text selbst verwenden
-            pass
+            # Text enthält bereits MathText - formatiere nur die Nicht-MathText-Teile
+            parts = []
+            last_end = 0
+
+            # Finde alle $...$ Bereiche
+            for match in re.finditer(r'\$[^$]+\$', processed):
+                # Text vor dem $...$ Bereich
+                before = processed[last_end:match.start()]
+                if before:
+                    # Formatiere den normalen Text
+                    if bold and italic:
+                        parts.append(f'$\\mathbf{{\\mathit{{{before}}}}}$')
+                    elif bold:
+                        parts.append(f'$\\mathbf{{{before}}}$')
+                    elif italic:
+                        parts.append(f'$\\mathit{{{before}}}$')
+
+                # Füge den $...$ Bereich unverändert hinzu
+                parts.append(match.group(0))
+                last_end = match.end()
+
+            # Rest nach dem letzten $...$ Bereich
+            after = processed[last_end:]
+            if after:
+                if bold and italic:
+                    parts.append(f'$\\mathbf{{\\mathit{{{after}}}}}$')
+                elif bold:
+                    parts.append(f'$\\mathbf{{{after}}}$')
+                elif italic:
+                    parts.append(f'$\\mathit{{{after}}}$')
+
+            processed = ''.join(parts)
         else:
             # Kein MathText vorhanden - gesamten Text formatieren
             if bold and italic:

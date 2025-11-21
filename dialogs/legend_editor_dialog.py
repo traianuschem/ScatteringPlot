@@ -384,25 +384,35 @@ class LegendEditorDialog(QDialog):
             r'$\pm$': '±',
             r'$\times$': '×',
             r'$\cdot$': '·',
+            r'\AA': 'Å',
         }
 
         preview = text
         for mathtext, symbol in replacements.items():
             preview = preview.replace(mathtext, symbol)
 
-        # Ersetze \mathbf{...} mit <b>...</b>
+        # Ersetze \mathbf{...} und \mathit{...} mit HTML
         import re
         preview = re.sub(r'\$\\mathbf\{([^}]+)\}\$', r'<b>\1</b>', preview)
         preview = re.sub(r'\$\\mathit\{([^}]+)\}\$', r'<i>\1</i>', preview)
 
-        # Einfache Hochstellung/Tiefstellung (sehr vereinfacht)
-        preview = re.sub(r'\$([^$]*)\^(\d+)([^$]*)\$', r'\1<sup>\2</sup>\3', preview)
-        preview = re.sub(r'\$([^$]*)_(\d+)([^$]*)\$', r'\1<sub>\2</sub>\3', preview)
+        # Verschachtelte Formatierung
+        preview = re.sub(r'\\mathbf\{\\mathit\{([^}]+)\}\}', r'<b><i>\1</i></b>', preview)
 
-        # Entferne übrig gebliebene $
+        # Hochstellung und Tiefstellung (verbessert für {}-Syntax)
+        # ^{...} und ^x
+        preview = re.sub(r'\^{([^}]+)}', r'<sup>\1</sup>', preview)
+        preview = re.sub(r'\^(\w)', r'<sup>\1</sup>', preview)
+
+        # _{...} und _x
+        preview = re.sub(r'_{([^}]+)}', r'<sub>\1</sub>', preview)
+        preview = re.sub(r'_(\w)', r'<sub>\1</sub>', preview)
+
+        # Entferne übrig gebliebene $ und \
         preview = preview.replace('$', '')
+        preview = preview.replace('\\', '')
 
-        # Globale Formatierung anwenden
+        # Globale Formatierung anwenden (nur auf Teile ohne HTML-Tags)
         if is_bold and is_italic:
             preview = f"<b><i>{preview}</i></b>"
         elif is_bold:
