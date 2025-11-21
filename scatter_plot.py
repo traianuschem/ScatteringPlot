@@ -693,15 +693,17 @@ class ScatterPlotApp(QMainWindow):
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
 
-        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7)
+        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7, v7.0: MathText)
         if self.custom_xlabel:
-            xlabel = self.custom_xlabel
+            # v7.0: MathText-Formatierung auch für custom labels
+            xlabel = preprocess_mathtext(self.custom_xlabel)
         else:
             xlabel = self.format_axis_label(plot_info['xlabel'])
             xlabel = self.convert_to_mathtext(xlabel)
 
         if self.custom_ylabel:
-            ylabel = self.custom_ylabel
+            # v7.0: MathText-Formatierung auch für custom labels
+            ylabel = preprocess_mathtext(self.custom_ylabel)
         else:
             ylabel = self.format_axis_label(plot_info['ylabel'])
             ylabel = self.convert_to_mathtext(ylabel)
@@ -938,13 +940,16 @@ class ScatterPlotApp(QMainWindow):
                                      ha='right', va='bottom',
                                      fontsize=10, color=ref_line['color'])
 
-        # Annotations (Version 5.2, erweitert 5.3: draggable)
+        # Annotations (Version 5.2, erweitert 5.3: draggable, v7.0: MathText)
         self.annotation_texts = []  # Text-Objekte speichern für draggable
         for idx, annotation in enumerate(self.annotations):
+            # v7.0: MathText-Formatierung anwenden
+            formatted_text = preprocess_mathtext(annotation['text'])
+
             text_obj = self.ax_main.text(
                 annotation['x'],
                 annotation['y'],
-                annotation['text'],
+                formatted_text,
                 fontsize=annotation['fontsize'],
                 color=annotation['color'],
                 rotation=annotation['rotation'],
