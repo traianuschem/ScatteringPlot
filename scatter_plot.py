@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QMenu, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QColor, QPalette
+from PySide6.QtGui import QAction, QColor, QPalette, QShortcut, QKeySequence
 
 # Matplotlib mit Qt Backend
 import matplotlib
@@ -228,17 +228,25 @@ class ScatterPlotApp(QMainWindow):
 
         file_menu.addSeparator()
 
+        # v7.0: Shortcuts für Session-Management
         save_session_action = QAction("Session speichern", self)
+        save_session_action.setShortcut(QKeySequence("Ctrl+S"))
         save_session_action.triggered.connect(self.save_session)
         file_menu.addAction(save_session_action)
 
         load_session_action = QAction("Session laden", self)
+        load_session_action.setShortcut(QKeySequence("Ctrl+O"))
         load_session_action.triggered.connect(self.load_session)
         file_menu.addAction(load_session_action)
+
+        # v7.0: Alternativer Shortcut für Session laden
+        load_session_action2 = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        load_session_action2.activated.connect(self.load_session)
 
         file_menu.addSeparator()
 
         export_action = QAction("Exportieren...", self)
+        export_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
         export_action.triggered.connect(self.show_export_dialog)
         file_menu.addAction(export_action)
 
@@ -261,7 +269,9 @@ class ScatterPlotApp(QMainWindow):
         legend_action.triggered.connect(self.show_legend_settings)
         plot_menu.addAction(legend_action)
 
+        # v7.0: Shortcut für Legenden-Editor
         legend_editor_action = QAction("Legenden-Editor...", self)
+        legend_editor_action.setShortcut(QKeySequence("Ctrl+L"))
         legend_editor_action.triggered.connect(self.show_legend_editor)
         plot_menu.addAction(legend_editor_action)
 
@@ -308,6 +318,53 @@ class ScatterPlotApp(QMainWindow):
         about_action = QAction("Über", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
+
+        # v7.0: Zusätzliche Shortcuts (nicht im Menü sichtbar)
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        """
+        Richtet globale Shortcuts ein (v7.0)
+        """
+        # Plot-Typ-Shortcuts (Ctrl+Shift+1-7)
+        plot_types = ['Log-Log', 'Porod', 'Kratky', 'Guinier', 'Bragg Spacing', '2-Theta', 'PDDF']
+        for i, plot_type in enumerate(plot_types, start=1):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+Shift+{i}"), self)
+            shortcut.activated.connect(lambda pt=plot_type: self.change_plot_type_shortcut(pt))
+
+        # Kurven-Editor für ausgewähltes Element (Ctrl+E)
+        edit_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
+        edit_shortcut.activated.connect(self.edit_selected_curve)
+
+        # Neue Gruppe erstellen (Ctrl+G)
+        group_shortcut = QShortcut(QKeySequence("Ctrl+G"), self)
+        group_shortcut.activated.connect(self.create_group)
+
+        # Ausgewähltes Element löschen (Delete)
+        delete_shortcut = QShortcut(QKeySequence("Delete"), self)
+        delete_shortcut.activated.connect(self.delete_selected)
+
+    def change_plot_type_shortcut(self, plot_type):
+        """Ändert den Plot-Typ via Shortcut (v7.0)"""
+        index = self.plot_type_combo.findText(plot_type)
+        if index >= 0:
+            self.plot_type_combo.setCurrentIndex(index)
+            self.logger.info(f"Plot-Typ gewechselt zu '{plot_type}' via Shortcut")
+
+    def edit_selected_curve(self):
+        """Öffnet Kurven-Editor für ausgewähltes Element (v7.0)"""
+        item = self.tree.currentItem()
+        if item:
+            data = item.data(0, Qt.UserRole)
+            if data and data[0] == 'dataset':
+                self.edit_curve_settings(item)
+            elif data and data[0] == 'group':
+                # Für Gruppen: Gruppen-Editor
+                self.edit_group_curves(data[1])
+            else:
+                self.logger.debug("Kein Dataset oder Gruppe ausgewählt für Kurven-Editor")
+        else:
+            self.logger.debug("Nichts ausgewählt für Kurven-Editor")
 
     def create_main_widget(self):
         """Erstellt das Haupt-Widget"""
