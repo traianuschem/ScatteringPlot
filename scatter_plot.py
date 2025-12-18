@@ -59,6 +59,7 @@ from dialogs.group_dialog import CreateGroupDialog
 from dialogs.design_manager import DesignManagerDialog
 from dialogs.legend_dialog import LegendSettingsDialog
 from dialogs.legend_editor_dialog import LegendEditorDialog
+from dialogs.title_editor_dialog import TitleEditorDialog
 from dialogs.grid_dialog import GridSettingsDialog
 from dialogs.font_dialog import FontSettingsDialog
 from dialogs.export_dialog import ExportSettingsDialog
@@ -70,6 +71,36 @@ from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
 from utils.mathtext_formatter import preprocess_mathtext, format_legend_text
+
+
+def format_stack_factor(factor):
+    """
+    Formatiert einen Stack-Faktor für die Anzeige.
+    Wenn der Faktor eine Potenz von 10 ist, wird er als ($\\cdot 10^{n}$) dargestellt.
+    Andernfalls wird er als (×{factor:.1f}) angezeigt.
+
+    Args:
+        factor: Der Stack-Faktor (float)
+
+    Returns:
+        Formatierter String für die Anzeige
+    """
+    import math
+
+    # Prüfe ob der Faktor 1.0 ist (keine Formatierung nötig)
+    if abs(factor - 1.0) < 1e-10:
+        return ""
+
+    # Prüfe ob der Faktor eine Potenz von 10 ist
+    if factor > 0:
+        log_factor = math.log10(factor)
+        # Prüfe ob log_factor nahe an einer ganzen Zahl ist
+        if abs(log_factor - round(log_factor)) < 1e-6:
+            exponent = int(round(log_factor))
+            return f"($\\cdot 10^{{{exponent}}}$)"
+
+    # Fallback: normale Darstellung
+    return f"(×{factor:.1f})"
 
 
 class DataTreeWidget(QTreeWidget):
@@ -131,6 +162,17 @@ class ScatterPlotApp(QMainWindow):
             'shadow': False,
             'fancybox': True,
             'reverse_order': False  # v7.0: Reihenfolge invertieren
+        }
+        self.title_settings = {
+            'enabled': False,
+            'text': '',
+            'position': 'center',
+            'color': '#000000',
+            'background_color': None,
+            'background_alpha': 0.8,
+            'size': 14,
+            'bold': True,
+            'italic': False
         }
         self.grid_settings = {
             'major_enable': True,
@@ -266,27 +308,24 @@ class ScatterPlotApp(QMainWindow):
 
         plot_menu.addSeparator()
 
-        legend_action = QAction("Legenden-Einstellungen...", self)
-        legend_action.triggered.connect(self.show_legend_settings)
-        plot_menu.addAction(legend_action)
-
-        # v7.0: Shortcut für Legenden-Editor
+        # v7.0: Shortcut für Legenden-Editor (konsolidiert alle Legendeneinstellungen)
         legend_editor_action = QAction("Legenden-Editor...", self)
         legend_editor_action.setShortcut(QKeySequence("Ctrl+L"))
         legend_editor_action.triggered.connect(self.show_legend_editor)
         plot_menu.addAction(legend_editor_action)
 
-        grid_action = QAction("Grid- und Tick-Einstellungen...", self)
-        grid_action.triggered.connect(self.show_grid_settings)
-        plot_menu.addAction(grid_action)
+        title_editor_action = QAction("Titel-Editor...", self)
+        title_editor_action.setShortcut(QKeySequence("Ctrl+T"))
+        title_editor_action.triggered.connect(self.show_title_editor)
+        plot_menu.addAction(title_editor_action)
 
         axes_action = QAction("Achsen und Limits...", self)
         axes_action.triggered.connect(self.show_axes_settings)
         plot_menu.addAction(axes_action)
 
-        font_action = QAction("Schriftart-Einstellungen...", self)
-        font_action.triggered.connect(self.show_font_settings)
-        plot_menu.addAction(font_action)
+        grid_action = QAction("Grid- und Tick-Einstellungen...", self)
+        grid_action.triggered.connect(self.show_grid_settings)
+        plot_menu.addAction(grid_action)
 
         plot_menu.addSeparator()
 
@@ -612,7 +651,8 @@ class ScatterPlotApp(QMainWindow):
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
             if self.stack_mode and group.stack_factor != 1.0:
-                group_label = f"{group.name} (×{stack_factor:.1f})"
+                factor_display = format_stack_factor(stack_factor)
+                group_label = f"{group.name} {factor_display}"
             else:
                 group_label = group.name
 
@@ -1074,6 +1114,31 @@ class ScatterPlotApp(QMainWindow):
             text_obj._annotation_idx = idx  # Index speichern
             self.annotation_texts.append(text_obj)
 
+        # Titel rendern (v7.0)
+        if self.title_settings.get('enabled', False) and self.title_settings.get('text'):
+            title_text = self.title_settings['text']
+            title_weight = 'bold' if self.title_settings.get('bold', True) else 'normal'
+            title_style = 'italic' if self.title_settings.get('italic', False) else 'normal'
+
+            # Titel erstellen
+            title_obj = self.ax_main.set_title(
+                title_text,
+                fontsize=self.title_settings.get('size', 14),
+                fontweight=title_weight,
+                fontstyle=title_style,
+                color=self.title_settings.get('color', '#000000'),
+                loc=self.title_settings.get('position', 'center')
+            )
+
+            # Hintergrund (falls aktiviert)
+            if self.title_settings.get('background_color'):
+                title_obj.set_bbox(dict(
+                    boxstyle='round,pad=0.5',
+                    facecolor=self.title_settings['background_color'],
+                    alpha=self.title_settings.get('background_alpha', 0.8),
+                    edgecolor='none'
+                ))
+
         # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
         try:
             self.fig.tight_layout()
@@ -1242,7 +1307,8 @@ class ScatterPlotApp(QMainWindow):
             self.logger.info(f"Gruppe erstellt: '{name}' (Stack-Faktor: ×{stack_factor:.1f})")
 
             # In Tree einfügen
-            group_item = QTreeWidgetItem(self.tree, [name, f"×{stack_factor:.1f}"])
+            factor_display = format_stack_factor(stack_factor)
+            group_item = QTreeWidgetItem(self.tree, [name, factor_display])
             group_item.setExpanded(True)
             group_item.setData(0, Qt.UserRole, ('group', group))
 
@@ -1942,7 +2008,8 @@ class ScatterPlotApp(QMainWindow):
 
         # Gruppen
         for group in self.groups:
-            group_item = QTreeWidgetItem(self.tree, [group.name, f"×{group.stack_factor:.1f}"])
+            factor_display = format_stack_factor(group.stack_factor)
+            group_item = QTreeWidgetItem(self.tree, [group.name, factor_display])
             group_item.setExpanded(not group.collapsed)
             group_item.setData(0, Qt.UserRole, ('group', group))
 
@@ -2028,15 +2095,33 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_legend_editor(self):
-        """Zeigt erweiterten Legenden-Editor Dialog"""
-        dialog = LegendEditorDialog(self, self.groups, self.unassigned_datasets)
+        """Zeigt erweiterten Legenden-Editor Dialog (v7.0 - konsolidiert alle Legendeneinstellungen)"""
+        dialog = LegendEditorDialog(
+            self,
+            self.groups,
+            self.unassigned_datasets,
+            self.legend_settings,
+            self.font_settings
+        )
         if dialog.exec():
             # Die Änderungen wurden direkt an den Objekten vorgenommen
             # Reihenfolge aktualisieren (falls geändert)
             new_order = dialog.get_legend_order()
             self.apply_legend_order(new_order)
+            # Legendeneinstellungen aktualisieren
+            self.legend_settings.update(dialog.get_legend_settings())
+            # Schriftart-Einstellungen aktualisieren
+            font_updates = dialog.get_font_settings()
+            self.font_settings.update(font_updates)
             self.update_plot()
             self.rebuild_tree()
+
+    def show_title_editor(self):
+        """Zeigt Titel-Editor Dialog (v7.0)"""
+        dialog = TitleEditorDialog(self, self.title_settings)
+        if dialog.exec():
+            self.title_settings = dialog.get_settings()
+            self.update_plot()
 
     def apply_legend_order(self, legend_order):
         """Wendet die neue Legendenreihenfolge auf die Datenstrukturen an (v5.7)"""
@@ -2106,11 +2191,21 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_axes_settings(self):
-        """Zeigt Achsen und Limits Dialog (v6.2)"""
-        dialog = AxesSettingsDialog(self, self.custom_xlabel, self.custom_ylabel, self.plot_type, self.axis_limits)
+        """Zeigt Achsen und Limits Dialog (v7.0 - jetzt mit Schriftart-Einstellungen)"""
+        dialog = AxesSettingsDialog(
+            self,
+            self.custom_xlabel,
+            self.custom_ylabel,
+            self.plot_type,
+            self.axis_limits,
+            self.font_settings
+        )
         if dialog.exec():
             self.custom_xlabel, self.custom_ylabel = dialog.get_labels()
             self.axis_limits = dialog.get_axis_limits()
+            # Schriftart-Einstellungen aktualisieren
+            font_updates = dialog.get_font_settings()
+            self.font_settings.update(font_updates)
             self.update_plot()
 
     def show_font_settings(self):
@@ -2330,6 +2425,7 @@ class ScatterPlotApp(QMainWindow):
                     'axis_limits': self.axis_limits,
                     'wavelength': self.wavelength,  # v6.2
                     'legend_settings': self.legend_settings,
+                    'title_settings': self.title_settings,  # v7.0
                     'grid_settings': self.grid_settings,
                     'font_settings': self.font_settings,
                     'export_settings': self.export_settings,
@@ -2375,7 +2471,8 @@ class ScatterPlotApp(QMainWindow):
 
                 # Tree neu aufbauen
                 for group in self.groups:
-                    group_item = QTreeWidgetItem(self.tree, [group.name, f"×{group.stack_factor:.1f}"])
+                    factor_display = format_stack_factor(group.stack_factor)
+                    group_item = QTreeWidgetItem(self.tree, [group.name, factor_display])
                     group_item.setExpanded(not group.collapsed)
                     group_item.setData(0, Qt.UserRole, ('group', group))
 
@@ -2412,6 +2509,8 @@ class ScatterPlotApp(QMainWindow):
                 # Erweiterte Einstellungen (v5.1)
                 if 'legend_settings' in session:
                     self.legend_settings = session['legend_settings']
+                if 'title_settings' in session:  # v7.0
+                    self.title_settings = session['title_settings']
                 if 'grid_settings' in session:
                     self.grid_settings = session['grid_settings']
                 if 'font_settings' in session:
