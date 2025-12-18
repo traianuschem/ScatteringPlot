@@ -14,10 +14,15 @@ from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 class AxesSettingsDialog(QDialog):
     """Dialog für Achsen-Einstellungen"""
 
-    def __init__(self, parent, current_xlabel=None, current_ylabel=None, plot_type='Log-Log', axis_limits=None):
+    def __init__(self, parent, current_xlabel=None, current_ylabel=None, plot_type='Log-Log', axis_limits=None, font_settings=None):
         super().__init__(parent)
         self.setWindowTitle("Achsen und Limits")
-        self.resize(550, 550)
+        self.resize(650, 750)
+
+        # Font settings initialisieren
+        if font_settings is None:
+            font_settings = {}
+        self.font_settings = font_settings
 
         self.plot_type = plot_type
 
@@ -151,6 +156,50 @@ class AxesSettingsDialog(QDialog):
         math_group.setLayout(math_layout)
         layout.addWidget(math_group)
 
+        # Schriftart-Einstellungen für Achsenbeschriftungen
+        labels_font_group = QGroupBox("Schriftart Achsenbeschriftungen")
+        labels_font_layout = QGridLayout()
+
+        labels_font_layout.addWidget(QLabel("Schriftgröße:"), 0, 0)
+        self.labels_size_spin = QSpinBox()
+        self.labels_size_spin.setRange(6, 32)
+        self.labels_size_spin.setValue(self.font_settings.get('labels_size', 12))
+        self.labels_size_spin.setSuffix(" pt")
+        labels_font_layout.addWidget(self.labels_size_spin, 0, 1)
+
+        self.labels_bold = QCheckBox("Fett")
+        self.labels_bold.setChecked(self.font_settings.get('labels_bold', False))
+        labels_font_layout.addWidget(self.labels_bold, 1, 0)
+
+        self.labels_italic = QCheckBox("Kursiv")
+        self.labels_italic.setChecked(self.font_settings.get('labels_italic', False))
+        labels_font_layout.addWidget(self.labels_italic, 1, 1)
+
+        labels_font_group.setLayout(labels_font_layout)
+        layout.addWidget(labels_font_group)
+
+        # Schriftart-Einstellungen für Ticks
+        ticks_font_group = QGroupBox("Schriftart Achsen-Werte (Ticks)")
+        ticks_font_layout = QGridLayout()
+
+        ticks_font_layout.addWidget(QLabel("Schriftgröße:"), 0, 0)
+        self.ticks_size_spin = QSpinBox()
+        self.ticks_size_spin.setRange(6, 24)
+        self.ticks_size_spin.setValue(self.font_settings.get('ticks_size', 10))
+        self.ticks_size_spin.setSuffix(" pt")
+        ticks_font_layout.addWidget(self.ticks_size_spin, 0, 1)
+
+        self.ticks_bold = QCheckBox("Fett")
+        self.ticks_bold.setChecked(self.font_settings.get('ticks_bold', False))
+        ticks_font_layout.addWidget(self.ticks_bold, 1, 0)
+
+        self.ticks_italic = QCheckBox("Kursiv")
+        self.ticks_italic.setChecked(self.font_settings.get('ticks_italic', False))
+        ticks_font_layout.addWidget(self.ticks_italic, 1, 1)
+
+        ticks_font_group.setLayout(ticks_font_layout)
+        layout.addWidget(ticks_font_group)
+
         # Reset-Button
         reset_layout = QHBoxLayout()
         reset_btn = QPushButton("Auf Standard zurücksetzen")
@@ -217,6 +266,17 @@ class AxesSettingsDialog(QDialog):
             'ymin': ymin,
             'ymax': ymax,
             'auto': self.auto_checkbox.isChecked()
+        }
+
+    def get_font_settings(self):
+        """Gibt die Schriftart-Einstellungen zurück"""
+        return {
+            'labels_size': self.labels_size_spin.value(),
+            'labels_bold': self.labels_bold.isChecked(),
+            'labels_italic': self.labels_italic.isChecked(),
+            'ticks_size': self.ticks_size_spin.value(),
+            'ticks_bold': self.ticks_bold.isChecked(),
+            'ticks_italic': self.ticks_italic.isChecked()
         }
 
     def update_preview(self):
