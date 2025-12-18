@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QLabel, QWidget, QMessageBox, QTextEdit, QToolBar, QComboBox,
     QSpinBox, QDoubleSpinBox, QGridLayout, QTabWidget
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 
@@ -132,7 +132,7 @@ class LegendEditorDialog(QDialog):
         editor_layout.addWidget(toolbar_label)
 
         self.format_toolbar = QToolBar()
-        self.format_toolbar.setIconSize(Qt.ToolBarArea.TopToolBarArea.size() * 0.7)
+        self.format_toolbar.setIconSize(QSize(20, 20))
 
         # Fett Button
         bold_action = QAction("B", self)

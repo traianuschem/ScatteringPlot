@@ -6,7 +6,8 @@ This dialog allows users to configure axis labels and titles.
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
-    QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton, QMessageBox, QHBoxLayout
+    QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton, QMessageBox, QHBoxLayout,
+    QSpinBox
 )
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 

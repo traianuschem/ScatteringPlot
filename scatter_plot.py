@@ -97,10 +97,10 @@ def format_stack_factor(factor):
         # Prüfe ob log_factor nahe an einer ganzen Zahl ist
         if abs(log_factor - round(log_factor)) < 1e-6:
             exponent = int(round(log_factor))
-            return f"($\\cdot 10^{{{exponent}}}$)"
+            return f"$(\\cdot 10^{{{exponent}}})$"
 
     # Fallback: normale Darstellung
-    return f"(×{factor:.1f})"
+    return f"$(\\times {factor:.1f})$"
 
 
 class DataTreeWidget(QTreeWidget):
