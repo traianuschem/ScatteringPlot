@@ -21,7 +21,8 @@ class I18nManager:
         """Singleton Pattern"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._logger = get_logger('I18n')
+            # Logger wird später initialisiert, wenn setup_logger() bereits aufgerufen wurde
+            cls._logger = None
         return cls._instance
 
     def __init__(self):
@@ -29,6 +30,14 @@ class I18nManager:
         if not hasattr(self, '_initialized'):
             self._initialized = True
             self._translations_dir = Path(__file__).parent / 'translations'
+            # Logger initialisieren (falls noch nicht geschehen)
+            if self._logger is None:
+                try:
+                    self._logger = get_logger()
+                except:
+                    # Falls Logger noch nicht initialisiert, erstelle einen einfachen
+                    import logging
+                    self._logger = logging.getLogger('I18n')
             self._load_translations()
 
     def _load_translations(self):
