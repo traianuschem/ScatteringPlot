@@ -1,0 +1,635 @@
+{
+  "_language_name": "Deutsch",
+  "_language_code": "de",
+
+  "app": {
+    "title": "ScatterForge Plot v6.2"
+  },
+
+  "menu": {
+    "file": {
+      "title": "Datei",
+      "load": "Daten laden...",
+      "save_session": "Session speichern",
+      "load_session": "Session laden",
+      "export": "Exportieren...",
+      "quit": "Beenden"
+    },
+    "plot": {
+      "title": "Plot",
+      "refresh": "Aktualisieren",
+      "legend_editor": "Legenden-Editor...",
+      "title_editor": "Titel-Editor...",
+      "axes_limits": "Achsen und Limits...",
+      "grid_settings": "Grid- und Tick-Einstellungen...",
+      "add_annotation": "Annotation hinzufügen...",
+      "add_reference_line": "Referenzlinie hinzufügen..."
+    },
+    "design": {
+      "title": "Design",
+      "manager": "Design-Manager...",
+      "apply_style": "Stil '{preset_name}' anwenden"
+    },
+    "settings": {
+      "title": "Einstellungen",
+      "language": "Sprache"
+    },
+    "help": {
+      "title": "Hilfe",
+      "about": "Über"
+    }
+  },
+
+  "sidebar": {
+    "add_group": "➕ Gruppe",
+    "auto_group": "🔢 Auto-Gruppieren",
+    "load": "📁 Laden",
+    "delete": "🗑 Löschen"
+  },
+
+  "options": {
+    "plot_type": "Plot-Typ:",
+    "stack": "Stack:",
+    "color_scheme": "Farbschema:",
+    "wavelength": "Wellenlänge (nm):",
+    "update_plot": "🔄 Plot aktualisieren"
+  },
+
+  "context_menu": {
+    "edit": "Bearbeiten...",
+    "edit_curve": "🎨 Kurve bearbeiten...",
+    "edit_group": "🎨 Gruppe bearbeiten...",
+    "rename": "Umbenennen",
+    "select_palette": "Farbpalette wählen",
+    "use_globally": "(Global verwenden)",
+    "set_uniform_color": "Einheitliche Farbe setzen...",
+    "quick_colors": "Schnellfarben",
+    "assign_to_group": "Zu Gruppe zuordnen",
+    "apply_style": "Stil anwenden",
+    "reset_color": "Farbe zurücksetzen",
+    "set_plot_limits": "Plotgrenzen setzen...",
+    "delete": "Löschen"
+  },
+
+  "dialogs": {
+    "stack_factor": {
+      "title": "Stack-Faktor ändern",
+      "label": "Neuer Stack-Faktor:"
+    },
+    "group_settings": {
+      "title": "Gruppeneinstellungen für {name}"
+    },
+    "new_group": {
+      "title": "Neue Gruppe",
+      "group_name": "Gruppenname:",
+      "stack_factor": "Stack-Faktor:"
+    }
+  },
+
+  "messages": {
+    "success": "Erfolg",
+    "info": "Info",
+    "error": "Fehler",
+    "group_created": "Gruppe '{name}' erstellt",
+    "auto_group_success": "Auto-Gruppierung erfolgreich",
+    "invalid_input": "Ungültige Eingabe",
+    "select_datasets": "Bitte wählen Sie Datensätze aus",
+    "export_success": "Export erfolgreich",
+    "export_error": "Export-Fehler",
+    "about_title": "Über ScatterForge Plot",
+    "empty_group": "Die Gruppe enthält keine Datensätze",
+    "error_loading": "Fehler beim Laden von {file}",
+    "language_changed_restart": "Die Sprachänderung wird beim nächsten Programmstart wirksam."
+  },
+
+  "export": {
+    "title": "Export-Einstellungen",
+    "preview": "Vorschau:",
+    "zoom": "Zoom:",
+    "zoom_fit": "Anpassen",
+    "loading_preview": "Vorschau wird geladen...",
+    "estimated_size": "Geschätzte Dateigröße: {size}",
+    "estimated_size_default": "Geschätzte Dateigröße: --",
+    "preview_error": "Fehler bei Vorschau: {error}",
+    "save_preset": "Als Preset speichern",
+    "export_button": "Exportieren",
+
+    "presets": {
+      "title": "Presets",
+      "custom": "-- Benutzerdefiniert --",
+      "publication": "Publikation",
+      "presentation": "Präsentation",
+      "web": "Web",
+      "print": "Druck"
+    },
+
+    "format_size": {
+      "title": "Format & Größe",
+      "format": "Format:",
+      "dpi": "DPI:",
+      "size_preset": "Größen-Preset:",
+      "custom": "Benutzerdefiniert",
+      "a4_landscape": "A4 Querformat",
+      "a4_portrait": "A4 Hochformat",
+      "a5_landscape": "A5 Querformat",
+      "a5_portrait": "A5 Hochformat",
+      "slide_16_9": "Slide 16:9",
+      "slide_16_10": "Slide 16:10",
+      "slide_4_3": "Slide 4:3",
+      "width": "Breite:",
+      "height": "Höhe:",
+      "keep_aspect": "Seitenverhältnis beibehalten"
+    },
+
+    "layout": {
+      "title": "Layout-Optionen",
+      "transparent": "Transparenter Hintergrund",
+      "tight_layout": "Tight Layout (weniger Rand)",
+      "background_color": "Hintergrundfarbe:",
+      "choose": "Wählen..."
+    },
+
+    "metadata": {
+      "title": "Metadaten",
+      "doc_title": "Titel:",
+      "doc_title_placeholder": "Dokumenttitel",
+      "author": "Autor:",
+      "author_placeholder": "Ihr Name",
+      "description": "Beschreibung:",
+      "description_placeholder": "Kurzbeschreibung",
+      "keywords": "Keywords:",
+      "keywords_placeholder": "Komma-getrennt",
+      "copyright": "Copyright:",
+      "copyright_placeholder": "© 2025 ..."
+    },
+
+    "advanced": {
+      "title": "Erweiterte Optionen",
+      "pdf_options": "PDF-Optionen",
+      "embed_fonts": "Schriftarten einbetten",
+      "pdf_version": "PDF-Version:",
+      "png_options": "PNG-Optionen",
+      "compression": "Kompression (0-9):",
+      "svg_options": "SVG-Optionen",
+      "text_as_paths": "Text als Pfade (nicht editierbar)"
+    },
+
+    "background_color_dialog": "Hintergrundfarbe wählen",
+    "save_preset_dialog": "Preset speichern",
+    "preset_name_prompt": "Name für das Preset:",
+    "preset_saved": "Preset gespeichert",
+    "preset_saved_msg": "Preset '{name}' wurde gespeichert.",
+    "x_axis": "X-Achse",
+    "y_axis": "Y-Achse"
+  },
+
+  "axes": {
+    "title": "Achsen und Limits",
+    "info": "Passen Sie die Achsenbeschriftungen an. Leer lassen für automatische Beschriftung basierend auf dem Plot-Typ.",
+
+    "axis_titles": {
+      "title": "Achsentitel",
+      "x_title": "X-Achse Titel:",
+      "y_title": "Y-Achse Titel:",
+      "auto_based_on": "Auto: basiert auf '{plot_type}'",
+      "latex_help": "📖 LaTeX/MathText Syntax-Hilfe",
+      "preview": "Vorschau:",
+      "preview_placeholder": "Geben Sie Achsentitel ein für Vorschau..."
+    },
+
+    "limits": {
+      "title": "Achsenlimits",
+      "info": "Legen Sie feste Achsenlimits fest. Diese bleiben beim Plot-Update erhalten.",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:",
+      "placeholder": "z.B. {value}",
+      "auto_scaling": "Automatische Skalierung (ignoriert obige Werte)",
+      "reset": "Limits zurücksetzen"
+    },
+
+    "font_labels": {
+      "title": "Schriftart Achsenbeschriftungen",
+      "size": "Schriftgröße:",
+      "bold": "Fett",
+      "italic": "Kursiv"
+    },
+
+    "font_ticks": {
+      "title": "Schriftart Achsen-Werte (Ticks)"
+    },
+
+    "reset_default": "Auf Standard zurücksetzen"
+  },
+
+  "grid": {
+    "title": "Grid- und Tick-Einstellungen",
+
+    "tabs": {
+      "grid": "Grid",
+      "ticks": "Ticks"
+    },
+
+    "major": {
+      "title": "Major Grid (Hauptlinien)",
+      "show": "Major Grid anzeigen",
+      "axes": "Achsen:",
+      "line_style": "Linientyp:",
+      "line_width": "Liniendicke:",
+      "transparency": "Transparenz:",
+      "color": "Farbe:"
+    },
+
+    "minor": {
+      "title": "Minor Grid (Hilfslinien)",
+      "show": "Minor Grid anzeigen"
+    },
+
+    "major_ticks": {
+      "title": "Major Ticks (Hauptmarkierungen)",
+      "direction": "Richtung:",
+      "length": "Länge:",
+      "width": "Breite:"
+    },
+
+    "minor_ticks": {
+      "title": "Minor Ticks (Hilfsmarkierungen)",
+      "show": "Minor Ticks anzeigen"
+    },
+
+    "tick_labels": {
+      "title": "Tick-Label-Einstellungen",
+      "x_rotation": "X-Achse Rotation:",
+      "y_rotation": "Y-Achse Rotation:"
+    }
+  },
+
+  "legend": {
+    "title": "Legenden-Einstellungen",
+    "settings_title": "Legenden-Einstellungen",
+    "position": "Position:",
+    "font_size": "Schriftgröße:",
+    "columns": "Spalten:",
+    "transparency": "Transparenz:",
+    "show_frame": "Rahmen anzeigen",
+    "shadow": "Schatten",
+    "rounded_corners": "Abgerundete Ecken",
+    "reverse_order": "Reihenfolge invertieren (gestackte Kurven)"
+  },
+
+  "legend_editor": {
+    "title": "Legenden-Editor",
+    "info": "Bearbeiten Sie die Legendeneinträge, Einstellungen und Schriftarten. Verwenden Sie die Toolbar für schnelle LaTeX-Formatierung.",
+
+    "tabs": {
+      "entries": "Einträge bearbeiten",
+      "settings": "Legenden-Einstellungen",
+      "font": "Schriftart"
+    },
+
+    "entries": {
+      "title": "Legendeneinträge (in Anzeigereihenfolge)",
+      "move_up": "↑ Nach oben",
+      "move_down": "↓ Nach unten",
+      "edit_entry": "Eintrag bearbeiten",
+      "bold": "Fett (\\mathbf{...})",
+      "italic": "Kursiv (\\mathit{...})",
+      "subscript": "Subscript (_{...})",
+      "superscript": "Superscript (^{...})",
+      "display_name": "Anzeigename:",
+      "latex_help": "LaTeX/MathText Syntax-Hilfe",
+      "preview": "Vorschau:",
+      "show_in_legend": "In Legende anzeigen",
+      "formatting": "Formatierung:",
+      "placeholder": "Geben Sie einen Namen ein..."
+    },
+
+    "font": {
+      "title": "Legenden-Schriftart",
+      "size": "Schriftgröße:"
+    }
+  },
+
+  "title_editor": {
+    "title": "Titel-Editor",
+    "show_title": "Titel anzeigen",
+
+    "text": {
+      "title": "Titel-Text",
+      "label": "Titel:",
+      "placeholder": "Geben Sie den Titel ein..."
+    },
+
+    "position": {
+      "title": "Position und Ausrichtung",
+      "horizontal": "Horizontale Position:"
+    },
+
+    "colors": {
+      "title": "Farben",
+      "text_color": "Text-Farbe:",
+      "background": "Hintergrund:",
+      "show_background": "Hintergrund anzeigen",
+      "background_alpha": "Hintergrund-Alpha:"
+    },
+
+    "font": {
+      "title": "Schriftart",
+      "size": "Schriftgröße:",
+      "bold": "Fett",
+      "italic": "Kursiv"
+    },
+
+    "text_color_dialog": "Text-Farbe wählen",
+    "background_color_dialog": "Hintergrund-Farbe wählen"
+  },
+
+  "font_settings": {
+    "title": "Schriftart-Einstellungen",
+
+    "groups": {
+      "title": "Titel",
+      "labels": "Achsenbeschriftungen",
+      "ticks": "Achsen-Werte (Ticks)",
+      "legend": "Legende",
+      "font": "Schriftart"
+    },
+
+    "family": "Familie:",
+    "size": "Schriftgröße:",
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "underline": "Unterstrichen",
+
+    "scientific": {
+      "title": "Wissenschaftliche Notation",
+      "use_math_text": "Math Text für Exponenten verwenden",
+      "info": "Konvertiert: nm⁻¹ → nm$^{-1}$ für bessere Darstellung"
+    }
+  },
+
+  "annotations": {
+    "title": "Annotation hinzufügen",
+
+    "text": {
+      "title": "Text",
+      "label": "Text:",
+      "placeholder": "z.B.: Bereich A oder **wichtig** oder $\\alpha$",
+      "latex_help": "📖 LaTeX/MathText Syntax",
+      "preview": "Vorschau:",
+      "preview_placeholder": "Geben Sie einen Text ein..."
+    },
+
+    "position": {
+      "title": "Position",
+      "x": "X-Position:",
+      "y": "Y-Position:"
+    },
+
+    "style": {
+      "title": "Stil",
+      "font_size": "Schriftgröße:",
+      "color": "Farbe:",
+      "rotation": "Rotation:"
+    },
+
+    "text_color_dialog": "Textfarbe"
+  },
+
+  "reference_lines": {
+    "title": "Referenzlinie hinzufügen",
+
+    "type": {
+      "title": "Typ",
+      "orientation": "Orientierung:",
+      "vertical": "Vertikal",
+      "horizontal": "Horizontal"
+    },
+
+    "position": {
+      "title": "Position",
+      "value": "Wert:",
+      "label": "Label:",
+      "label_placeholder": "Optional (z.B.: q = 0.5)"
+    },
+
+    "style": {
+      "title": "Stil",
+      "line_type": "Linientyp:",
+      "line_width": "Liniendicke:",
+      "color": "Farbe:",
+      "alpha": "Alpha:"
+    },
+
+    "line_color_dialog": "Linienfarbe"
+  },
+
+  "plot_limits": {
+    "title": "Plotgrenzen für '{dataset}'",
+    "info": "Setzen Sie individuelle Plotgrenzen für diesen Datensatz. Nur Datenpunkte innerhalb dieser Grenzen werden angezeigt. Leer lassen = keine Beschränkung",
+
+    "limits": {
+      "title": "Plotgrenzen",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:"
+    },
+
+    "data_range": {
+      "title": "Verfügbarer Datenbereich",
+      "x_range": "X-Bereich:",
+      "y_range": "Y-Bereich:"
+    },
+
+    "reset_all": "Alle Grenzen zurücksetzen"
+  },
+
+  "curve_settings": {
+    "title": "Kurveneinstellungen für '{dataset}'",
+    "info": "Bearbeiten Sie alle visuellen Eigenschaften dieser Kurve.",
+
+    "color": {
+      "title": "Farbe",
+      "current": "Aktuelle Farbe:",
+      "picker": "Farbwähler...",
+      "quick_selection": "Schnellauswahl aus '{scheme}':",
+      "reset": "Farbe zurücksetzen (Auto)"
+    },
+
+    "marker": {
+      "title": "Marker",
+      "style": "Marker-Stil:",
+      "none": "Kein Marker",
+      "circle": "Kreis (o)",
+      "square": "Quadrat (s)",
+      "triangle_up": "Dreieck oben (^)",
+      "triangle_down": "Dreieck unten (v)",
+      "triangle_left": "Dreieck links (<)",
+      "triangle_right": "Dreieck rechts (>)",
+      "diamond": "Raute (D)",
+      "star": "Stern (*)",
+      "plus": "Plus (+)",
+      "cross": "Kreuz (x)",
+      "dot": "Punkt (.)",
+      "pixel": "Pixel (,)",
+      "size": "Marker-Größe:"
+    },
+
+    "line": {
+      "title": "Linie",
+      "style": "Linien-Stil:",
+      "none": "Keine Linie",
+      "solid": "Durchgezogen (-)",
+      "dashed": "Gestrichelt (--)",
+      "dashdot": "Strich-Punkt (-.)",
+      "dotted": "Gepunktet (:)",
+      "width": "Linien-Breite:"
+    },
+
+    "error_bars": {
+      "title": "Fehlerbalken",
+      "show": "Fehlerbalken anzeigen",
+      "available": "✓ Fehlerdaten verfügbar",
+      "not_available": "✗ Keine Fehlerdaten in Datei",
+      "representation": "Darstellung:",
+      "fill": "Transparente Fläche",
+      "bars": "Balken mit Caps",
+      "cap_size": "Cap-Größe:",
+      "transparency": "Transparenz:",
+      "transparency_bars": "Transparenz (Balken):",
+      "transparency_fill": "Transparenz (Fläche):",
+      "line_width": "Linienbreite:"
+    }
+  },
+
+  "design_manager": {
+    "title": "Design-Manager",
+    "close": "Schließen",
+    "new": "Neu...",
+    "edit": "Bearbeiten...",
+    "delete": "Löschen",
+    "new_rule": "Neue Regel...",
+    "apply": "Design anwenden",
+    "save_current": "Aktuelles speichern...",
+    "save_as_default": "⭐ Als Programmstandard speichern",
+
+    "tabs": {
+      "styles": "Stil-Vorlagen",
+      "colors": "Farbschemata",
+      "auto_detection": "Auto-Erkennung",
+      "plot_designs": "Plot-Designs"
+    },
+
+    "styles": {
+      "available": "Verfügbare Stil-Vorlagen:",
+      "new_style": "Neuer Stil",
+      "style_name": "Stil-Name:",
+      "edit_style": "Stil bearbeiten: {name}",
+      "name": "Name:",
+      "description": "Beschreibung:",
+      "line_type": "Linientyp:",
+      "marker": "Marker:",
+      "line_width": "Linienbreite:",
+      "marker_size": "Markergröße:",
+      "delete_confirm": "Stil '{name}' löschen?"
+    },
+
+    "colors": {
+      "available": "Verfügbare Farbschemata:",
+      "new_scheme": "Neues Schema",
+      "scheme_name": "Schema-Name:",
+      "color_n": "Farbe {n}",
+      "edit_scheme": "Farbschema bearbeiten: {name}",
+      "colors": "Farben:",
+      "add": "➕ Hinzufügen",
+      "change": "✏️ Ändern",
+      "move_up": "↑ Hoch",
+      "move_down": "↓ Runter",
+      "remove": "× Entfernen",
+      "choose_color": "Farbe wählen",
+      "change_color": "Farbe ändern",
+      "select_color": "Bitte wählen Sie eine Farbe aus",
+      "min_colors": "Mindestens 2 Farben erforderlich",
+      "scheme_saved": "Farbschema '{name}' gespeichert",
+      "cannot_delete_standard": "Standard-Schemata können nicht gelöscht werden"
+    },
+
+    "auto_detection": {
+      "mapping": "Keyword → Stil Zuordnung:",
+      "enabled": "Auto-Erkennung aktiviert",
+      "new_keyword": "Neues Keyword",
+      "keyword_label": "Keyword (z.B. 'fit'):",
+      "style": "Stil",
+      "select_style": "Stil wählen:",
+      "info_title": "Info",
+      "select_style_msg": "Bitte wählen Sie einen Stil aus"
+    },
+
+    "plot_designs": {
+      "description": "Plot-Designs kombinieren Grid-, Font- und Legenden-Einstellungen:",
+      "active_design": "Aktives Design: {name}",
+      "save_design": "Design speichern",
+      "design_name": "Name des neuen Designs:",
+      "success": "Erfolg",
+      "applied": "Design '{name}' wurde angewendet",
+      "saved": "Design '{name}' wurde gespeichert",
+      "save_as_default_title": "Als Standard speichern",
+      "save_as_default_msg": "Möchten Sie die aktuellen Plot-Einstellungen als Programmstandard speichern?\n\nDiese Einstellungen werden beim nächsten Start automatisch geladen.",
+      "saved_as_default": "Die aktuellen Plot-Einstellungen wurden als Programmstandard gespeichert.\n\nBeim nächsten Start werden diese Einstellungen automatisch geladen.",
+      "cannot_delete_standard": "Standard-Designs können nicht gelöscht werden",
+      "edit_design": "Plot-Design bearbeiten: {name}",
+      "standard_info": "ℹ️  Standard-Designs werden beim Speichern überschrieben und können wiederhergestellt werden.",
+      "main_grid": "Haupt-Grid",
+      "secondary_grid": "Neben-Grid",
+      "enabled": "Aktiviert",
+      "axis": "Achse:",
+      "line_style": "Linienstil:",
+      "line_width": "Linienbreite:",
+      "alpha": "Alpha:",
+      "font_family": "Schriftfamilie:",
+      "size": "Größe:",
+      "use_math_text": "Math Text verwenden (für Exponenten)",
+      "tick_labels": "Tick-Labels",
+      "legend": "Legende",
+      "height": "Höhe:",
+      "standard_overwritten": "Standard-Design '{name}' wurde überschrieben.\n\nLöschen Sie das Design in der Liste, um die Standardwerte wiederherzustellen.",
+
+      "predefined": {
+        "publication": "Publikation",
+        "presentation": "Präsentation",
+        "tubaf": "TUBAF",
+        "minimalist": "Minimalistisch"
+      }
+    }
+  },
+
+  "common": {
+    "ok": "OK",
+    "cancel": "Abbrechen",
+    "apply": "Anwenden",
+    "close": "Schließen",
+    "save": "Speichern",
+    "yes": "Ja",
+    "no": "Nein",
+    "both": "beide",
+    "x": "X",
+    "y": "Y",
+    "left": "links",
+    "center": "zentriert",
+    "right": "rechts",
+    "best": "beste",
+    "upper_right": "oben rechts",
+    "upper_left": "oben links",
+    "lower_left": "unten links",
+    "lower_right": "unten rechts",
+    "in": "in",
+    "out": "aus",
+    "inout": "in/aus",
+    "solid": "durchgezogen",
+    "dashed": "gestrichelt",
+    "dotted": "gepunktet",
+    "dashdot": "strich-punkt"
+  }
+}

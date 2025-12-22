@@ -166,7 +166,8 @@ class UserConfig:
             'window_geometry': '1600x1000',
             'auto_detection_enabled': True,
             'auto_detection_rules': DEFAULT_AUTO_DETECTION_RULES.copy(),
-            'dark_mode': False
+            'dark_mode': False,
+            'language': 'de'  # v6.2+: Standardsprache Deutsch
         }
 
     def save_config(self):
@@ -368,6 +369,15 @@ class UserConfig:
     def get_dark_mode(self):
         """Gibt die Dark Mode Einstellung zurück"""
         return self.config.get('dark_mode', False)
+
+    def set_language(self, language_code):
+        """Speichert die Spracheinstellung (v6.2+)"""
+        self.config['language'] = language_code
+        self.save_config()
+
+    def get_language(self):
+        """Gibt die Spracheinstellung zurück (v6.2+)"""
+        return self.config.get('language', 'de')
 
 
 # Globale Config-Instanz
