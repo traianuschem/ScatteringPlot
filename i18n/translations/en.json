@@ -48,6 +48,7 @@
   },
 
   "options": {
+    "title": "Options",
     "plot_type": "Plot Type:",
     "stack": "Stack:",
     "color_scheme": "Color Scheme:",
@@ -94,11 +95,22 @@
     "auto_group_success": "Auto-Grouping successful",
     "invalid_input": "Invalid Input",
     "select_datasets": "Please select datasets",
+    "select_datasets_from_unassigned": "Please select datasets from the 'Unassigned' list.",
     "export_success": "Export successful",
+    "export_success_file": "Plot was successfully exported:\n{filename}",
     "export_error": "Export Error",
+    "export_error_msg": "Error exporting:\n{error}",
+    "png_exported": "PNG exported ({dpi} DPI)",
+    "svg_exported": "SVG exported",
+    "export_failed": "Export failed:\n{error}",
     "about_title": "About ScatterForge Plot",
     "empty_group": "The group contains no datasets",
     "error_loading": "Error loading {file}",
+    "error_loading_msg": "Error loading {filepath}:\n{error}",
+    "session_saved": "Session saved",
+    "session_loaded": "Session loaded",
+    "session_save_error": "Error saving:\n{error}",
+    "session_load_error": "Error loading:\n{error}",
     "language_changed_restart": "The language change will take effect on next program start."
   },
 
@@ -613,6 +625,7 @@
     "save": "Save",
     "yes": "Yes",
     "no": "No",
+    "enabled": "Enabled",
     "both": "both",
     "x": "X",
     "y": "Y",

@@ -459,20 +459,20 @@ class ScatterPlotApp(QMainWindow):
         # Buttons
         button_layout = QHBoxLayout()
 
-        add_group_btn = QPushButton("➕ Gruppe")
+        add_group_btn = QPushButton(tr("sidebar.add_group"))
         add_group_btn.clicked.connect(self.create_group)
         button_layout.addWidget(add_group_btn)
 
-        auto_group_btn = QPushButton("🔢 Auto-Gruppieren")
+        auto_group_btn = QPushButton(tr("sidebar.auto_group"))
         auto_group_btn.clicked.connect(self.auto_group_by_magnitude)
         auto_group_btn.setToolTip("Erstellt für jedes ausgewählte Dataset eine eigene Gruppe mit automatischen Stack-Faktoren (10^0, 10^1, ...)")
         button_layout.addWidget(auto_group_btn)
 
-        load_btn = QPushButton("📁 Laden")
+        load_btn = QPushButton(tr("sidebar.load"))
         load_btn.clicked.connect(self.load_data_to_unassigned)
         button_layout.addWidget(load_btn)
 
-        delete_btn = QPushButton("🗑 Löschen")
+        delete_btn = QPushButton(tr("sidebar.delete"))
         delete_btn.clicked.connect(self.delete_selected)
         button_layout.addWidget(delete_btn)
 
@@ -501,25 +501,25 @@ class ScatterPlotApp(QMainWindow):
         layout.addWidget(self.tree)
 
         # Optionen
-        options_group = QGroupBox("Optionen")
+        options_group = QGroupBox(tr("options.title"))
         options_layout = QGridLayout()
 
         # Plot-Typ
-        options_layout.addWidget(QLabel("Plot-Typ:"), 0, 0)
+        options_layout.addWidget(QLabel(tr("options.plot_type")), 0, 0)
         self.plot_type_combo = QComboBox()
         self.plot_type_combo.addItems(list(PLOT_TYPES.keys()))
         self.plot_type_combo.currentTextChanged.connect(self.change_plot_type)
         options_layout.addWidget(self.plot_type_combo, 0, 1)
 
         # Stack-Modus
-        options_layout.addWidget(QLabel("Stack:"), 1, 0)
-        self.stack_checkbox = QCheckBox("Aktiviert")
+        options_layout.addWidget(QLabel(tr("options.stack")), 1, 0)
+        self.stack_checkbox = QCheckBox(tr("common.enabled"))
         self.stack_checkbox.setChecked(True)
         self.stack_checkbox.stateChanged.connect(self.update_plot)
         options_layout.addWidget(self.stack_checkbox, 1, 1)
 
         # Farbschema
-        options_layout.addWidget(QLabel("Farbschema:"), 2, 0)
+        options_layout.addWidget(QLabel(tr("options.color_scheme")), 2, 0)
         self.color_scheme_combo = QComboBox()
         self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
         self.color_scheme_combo.setCurrentText('TUBAF')
@@ -527,7 +527,7 @@ class ScatterPlotApp(QMainWindow):
         options_layout.addWidget(self.color_scheme_combo, 2, 1)
 
         # Wellenlänge (für 2-Theta Plot)
-        options_layout.addWidget(QLabel("Wellenlänge (nm):"), 3, 0)
+        options_layout.addWidget(QLabel(tr("options.wavelength")), 3, 0)
         self.wavelength_edit = QLineEdit()
         self.wavelength_edit.setText(str(self.wavelength))
         self.wavelength_edit.setToolTip("Wellenlänge für 2-Theta Berechnung (Standard: Cu K-alpha = 0.1524 nm)")
@@ -538,7 +538,7 @@ class ScatterPlotApp(QMainWindow):
         layout.addWidget(options_group)
 
         # Update Button
-        update_btn = QPushButton("🔄 Plot aktualisieren")
+        update_btn = QPushButton(tr("options.update_plot"))
         update_btn.clicked.connect(self.update_plot)
         layout.addWidget(update_btn)
 
@@ -1338,7 +1338,7 @@ class ScatterPlotApp(QMainWindow):
             group_item.setExpanded(True)
             group_item.setData(0, Qt.UserRole, ('group', group))
 
-            QMessageBox.information(self, "Erfolg", f"Gruppe '{name}' erstellt")
+            QMessageBox.information(self, tr("messages.success"), tr("messages.group_created", name=name))
         else:
             self.logger.debug("Gruppen-Dialog abgebrochen")
 
@@ -1416,7 +1416,7 @@ class ScatterPlotApp(QMainWindow):
         for name, factor in created_groups:
             msg += f"• {name}: Stack-Faktor ×{factor:.1f}\n"
 
-        QMessageBox.information(self, "Auto-Gruppierung erfolgreich", msg)
+        QMessageBox.information(self, tr("messages.auto_group_success"), msg)
 
     def load_data_to_unassigned(self):
         """Lädt Daten in Nicht zugeordnet"""
@@ -1444,7 +1444,7 @@ class ScatterPlotApp(QMainWindow):
 
                 except Exception as e:
                     self.logger.error(f"Fehler beim Laden von {Path(filepath).name}: {e}")
-                    QMessageBox.warning(self, "Fehler", f"Fehler beim Laden von {filepath}:\n{e}")
+                    QMessageBox.warning(self, tr("messages.error"), tr("messages.error_loading_msg", filepath=filepath, error=str(e)))
 
             self.logger.info(f"Erfolgreich {loaded_count}/{len(files)} Datei(en) geladen")
             self.update_plot()
@@ -1569,19 +1569,19 @@ class ScatterPlotApp(QMainWindow):
         # Bearbeiten für Annotations/Referenzlinien (v5.3)
         edit_action = None
         if data and data[0] in ['annotation', 'reference_line']:
-            edit_action = menu.addAction("Bearbeiten...")
+            edit_action = menu.addAction(tr("context_menu.edit"))
 
         # Kurve bearbeiten für Datensätze (v6.0)
         edit_curve_action = None
         if data and data[0] == 'dataset':
-            edit_curve_action = menu.addAction("🎨 Kurve bearbeiten...")
+            edit_curve_action = menu.addAction(tr("context_menu.edit_curve"))
 
         # Gruppe bearbeiten (v6.2)
         edit_group_action = None
         if data and data[0] == 'group':
-            edit_group_action = menu.addAction("🎨 Gruppe bearbeiten...")
+            edit_group_action = menu.addAction(tr("context_menu.edit_group"))
 
-        rename_action = menu.addAction("Umbenennen")
+        rename_action = menu.addAction(tr("context_menu.rename"))
 
         # Farbpalette für Gruppen (v5.4, v5.7: Erweitert um einheitliche Farbe)
         color_scheme_menu = None
@@ -1589,19 +1589,19 @@ class ScatterPlotApp(QMainWindow):
         set_group_color_action = None
         if data and data[0] == 'group':
             menu.addSeparator()
-            color_scheme_menu = menu.addMenu("Farbpalette wählen")
+            color_scheme_menu = menu.addMenu(tr("context_menu.select_palette"))
             # Option zum Zurücksetzen (globale Farbpalette verwenden)
-            color_scheme_actions[None] = color_scheme_menu.addAction("(Global verwenden)")
+            color_scheme_actions[None] = color_scheme_menu.addAction(tr("context_menu.use_globally"))
             color_scheme_menu.addSeparator()
             # Alle verfügbaren Farbpaletten
             for scheme_name in sorted(self.config.color_schemes.keys()):
                 color_scheme_actions[scheme_name] = color_scheme_menu.addAction(scheme_name)
 
             # Einheitliche Farbe für Gruppe setzen (v5.7)
-            set_group_color_action = menu.addAction("Einheitliche Farbe setzen...")
+            set_group_color_action = menu.addAction(tr("context_menu.set_uniform_color"))
 
             # Schnellfarben für Gruppen (v6.2)
-            group_quick_color_menu = menu.addMenu("Schnellfarben")
+            group_quick_color_menu = menu.addMenu(tr("context_menu.quick_colors"))
             group_quick_color_actions = {}
             # Bestimme welche Farbpalette die Gruppe verwendet
             group_obj = data[1]
@@ -1621,7 +1621,7 @@ class ScatterPlotApp(QMainWindow):
         group_actions = {}
         if data and data[0] == 'dataset' and self.groups:
             menu.addSeparator()
-            group_menu = menu.addMenu("Zu Gruppe zuordnen")
+            group_menu = menu.addMenu(tr("context_menu.assign_to_group"))
             for group in self.groups:
                 group_actions[group] = group_menu.addAction(group.name)
 
@@ -1630,7 +1630,7 @@ class ScatterPlotApp(QMainWindow):
         style_actions = {}
         if data and data[0] == 'dataset':
             menu.addSeparator()
-            style_menu = menu.addMenu("Stil anwenden")
+            style_menu = menu.addMenu(tr("context_menu.apply_style"))
             for preset_name in self.config.style_presets.keys():
                 style_actions[preset_name] = style_menu.addAction(preset_name)
 
@@ -1649,7 +1649,7 @@ class ScatterPlotApp(QMainWindow):
                     break
 
             if active_palette_name in self.config.color_schemes:
-                quick_color_menu = menu.addMenu("Schnellfarben")
+                quick_color_menu = menu.addMenu(tr("context_menu.quick_colors"))
                 palette_colors = self.config.color_schemes[active_palette_name]
 
                 for i, color in enumerate(palette_colors[:10], 1):  # Max 10 Farben
@@ -1660,15 +1660,15 @@ class ScatterPlotApp(QMainWindow):
         # Farbe zurücksetzen nur für Datensätze (v4.2+)
         reset_color_action = None
         if data and data[0] == 'dataset':
-            reset_color_action = menu.addAction("Farbe zurücksetzen")
+            reset_color_action = menu.addAction(tr("context_menu.reset_color"))
 
         # Plotgrenzen für Datensätze (v5.7)
         set_limits_action = None
         if data and data[0] == 'dataset':
-            set_limits_action = menu.addAction("Plotgrenzen setzen...")
+            set_limits_action = menu.addAction(tr("context_menu.set_plot_limits"))
 
         menu.addSeparator()
-        delete_action = menu.addAction("Löschen")
+        delete_action = menu.addAction(tr("context_menu.delete"))
 
         action = menu.exec(self.tree.viewport().mapToGlobal(position))
 
@@ -1821,7 +1821,7 @@ class ScatterPlotApp(QMainWindow):
         group = data[1]
 
         if not group.datasets:
-            QMessageBox.information(self, "Info", "Die Gruppe enthält keine Datensätze")
+            QMessageBox.information(self, tr("messages.info"), tr("messages.empty_group"))
             return
 
         # Verwende das erste Dataset als Template für die Voreinstellungen
@@ -2103,7 +2103,7 @@ class ScatterPlotApp(QMainWindow):
         """Wendet Stil auf ausgewählte Datensätze an"""
         items = self.tree.selectedItems()
         if not items:
-            QMessageBox.information(self, "Info", "Bitte wählen Sie Datensätze aus")
+            QMessageBox.information(self, tr("messages.info"), tr("messages.select_datasets"))
             return
 
         for item in items:
@@ -2467,11 +2467,11 @@ class ScatterPlotApp(QMainWindow):
                 # Verzeichnis merken
                 self.config.set_last_directory(str(Path(filename).parent))
 
-                QMessageBox.information(self, "Export erfolgreich",
-                                      f"Plot wurde erfolgreich exportiert:\n{filename}")
+                QMessageBox.information(self, tr("messages.export_success"),
+                                      tr("messages.export_success_file", filename=filename))
             except Exception as e:
-                QMessageBox.critical(self, "Export-Fehler",
-                                   f"Fehler beim Exportieren:\n{str(e)}")
+                QMessageBox.critical(self, tr("messages.export_error"),
+                                   tr("messages.export_error_msg", error=str(e)))
 
     def change_language(self, language_code):
         """
@@ -2545,10 +2545,10 @@ class ScatterPlotApp(QMainWindow):
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(session, f, indent=2)
                 self.logger.info("Session erfolgreich gespeichert")
-                QMessageBox.information(self, "Erfolg", "Session gespeichert")
+                QMessageBox.information(self, tr("messages.success"), tr("messages.session_saved"))
             except Exception as e:
                 self.logger.error(f"Fehler beim Speichern der Session: {e}")
-                QMessageBox.critical(self, "Fehler", f"Fehler beim Speichern:\n{e}")
+                QMessageBox.critical(self, tr("messages.error"), tr("messages.session_save_error", error=str(e)))
         else:
             self.logger.debug("Session-Speicher-Dialog abgebrochen")
 
@@ -2656,10 +2656,10 @@ class ScatterPlotApp(QMainWindow):
 
                 self.logger.info("Session erfolgreich geladen")
                 self.update_plot()
-                QMessageBox.information(self, "Erfolg", "Session geladen")
+                QMessageBox.information(self, tr("messages.success"), tr("messages.session_loaded"))
             except Exception as e:
                 self.logger.error(f"Fehler beim Laden der Session: {e}")
-                QMessageBox.critical(self, "Fehler", f"Fehler beim Laden:\n{e}")
+                QMessageBox.critical(self, tr("messages.error"), tr("messages.session_load_error", error=str(e)))
         else:
             self.logger.debug("Session-Lade-Dialog abgebrochen")
 
@@ -2672,9 +2672,9 @@ class ScatterPlotApp(QMainWindow):
             try:
                 dpi = self.config.get_export_dpi()
                 self.fig.savefig(filename, dpi=dpi, bbox_inches='tight')
-                QMessageBox.information(self, "Erfolg", f"PNG exportiert ({dpi} DPI)")
+                QMessageBox.information(self, tr("messages.success"), tr("messages.png_exported", dpi=dpi))
             except Exception as e:
-                QMessageBox.critical(self, "Fehler", f"Export fehlgeschlagen:\n{e}")
+                QMessageBox.critical(self, tr("messages.error"), tr("messages.export_failed", error=str(e)))
 
     def export_svg(self):
         """Exportiert als SVG"""
@@ -2684,9 +2684,9 @@ class ScatterPlotApp(QMainWindow):
         if filename:
             try:
                 self.fig.savefig(filename, format='svg', bbox_inches='tight')
-                QMessageBox.information(self, "Erfolg", "SVG exportiert")
+                QMessageBox.information(self, tr("messages.success"), tr("messages.svg_exported"))
             except Exception as e:
-                QMessageBox.critical(self, "Fehler", f"Export fehlgeschlagen:\n{e}")
+                QMessageBox.critical(self, tr("messages.error"), tr("messages.export_failed", error=str(e)))
 
 
 def main():

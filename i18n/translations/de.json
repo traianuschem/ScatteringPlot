@@ -48,6 +48,7 @@
   },
 
   "options": {
+    "title": "Optionen",
     "plot_type": "Plot-Typ:",
     "stack": "Stack:",
     "color_scheme": "Farbschema:",
@@ -94,11 +95,22 @@
     "auto_group_success": "Auto-Gruppierung erfolgreich",
     "invalid_input": "Ungültige Eingabe",
     "select_datasets": "Bitte wählen Sie Datensätze aus",
+    "select_datasets_from_unassigned": "Bitte wählen Sie Datasets aus der 'Nicht zugeordnet'-Liste aus.",
     "export_success": "Export erfolgreich",
+    "export_success_file": "Plot wurde erfolgreich exportiert:\n{filename}",
     "export_error": "Export-Fehler",
+    "export_error_msg": "Fehler beim Exportieren:\n{error}",
+    "png_exported": "PNG exportiert ({dpi} DPI)",
+    "svg_exported": "SVG exportiert",
+    "export_failed": "Export fehlgeschlagen:\n{error}",
     "about_title": "Über ScatterForge Plot",
     "empty_group": "Die Gruppe enthält keine Datensätze",
     "error_loading": "Fehler beim Laden von {file}",
+    "error_loading_msg": "Fehler beim Laden von {filepath}:\n{error}",
+    "session_saved": "Session gespeichert",
+    "session_loaded": "Session geladen",
+    "session_save_error": "Fehler beim Speichern:\n{error}",
+    "session_load_error": "Fehler beim Laden:\n{error}",
     "language_changed_restart": "Die Sprachänderung wird beim nächsten Programmstart wirksam."
   },
 
@@ -613,6 +625,7 @@
     "save": "Speichern",
     "yes": "Ja",
     "no": "Nein",
+    "enabled": "Aktiviert",
     "both": "beide",
     "x": "X",
     "y": "Y",
