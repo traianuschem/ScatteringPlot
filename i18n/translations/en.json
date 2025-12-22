@@ -255,7 +255,12 @@
 
     "minor": {
       "title": "Minor Grid (Helper Lines)",
-      "show": "Show Minor Grid"
+      "show": "Show Minor Grid",
+      "axes": "Axes:",
+      "line_style": "Line Style:",
+      "line_width": "Line Width:",
+      "transparency": "Transparency:",
+      "color": "Color:"
     },
 
     "major_ticks": {
@@ -267,13 +272,17 @@
 
     "minor_ticks": {
       "title": "Minor Ticks",
-      "show": "Show Minor Ticks"
+      "show": "Show Minor Ticks",
+      "direction": "Direction:",
+      "length": "Length:",
+      "width": "Width:"
     },
 
     "tick_labels": {
       "title": "Tick Label Settings",
       "x_rotation": "X-Axis Rotation:",
-      "y_rotation": "Y-Axis Rotation:"
+      "y_rotation": "Y-Axis Rotation:",
+      "font_size": "Font Size:"
     }
   },
 

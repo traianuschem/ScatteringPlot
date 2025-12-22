@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
+from i18n import tr
 
 
 class TitleEditorDialog(QDialog):
@@ -23,7 +24,7 @@ class TitleEditorDialog(QDialog):
 
     def __init__(self, parent, title_settings=None):
         super().__init__(parent)
-        self.setWindowTitle("Titel-Editor")
+        self.setWindowTitle(tr("title_editor.title"))
         self.resize(550, 500)
 
         # Title settings initialisieren
@@ -48,29 +49,29 @@ class TitleEditorDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Titel aktivieren/deaktivieren
-        self.enabled_check = QCheckBox("Titel anzeigen")
+        self.enabled_check = QCheckBox(tr("title_editor.show_title"))
         self.enabled_check.setChecked(self.title_settings.get('enabled', False))
         self.enabled_check.stateChanged.connect(self.on_enabled_changed)
         layout.addWidget(self.enabled_check)
 
         # Titel-Text Gruppe
-        text_group = QGroupBox("Titel-Text")
+        text_group = QGroupBox(tr("title_editor.text.title"))
         text_layout = QGridLayout()
 
-        text_layout.addWidget(QLabel("Titel:"), 0, 0)
+        text_layout.addWidget(QLabel(tr("title_editor.text.label")), 0, 0)
         self.title_edit = QLineEdit()
         self.title_edit.setText(self.title_settings.get('text', ''))
-        self.title_edit.setPlaceholderText("Geben Sie den Titel ein...")
+        self.title_edit.setPlaceholderText(tr("title_editor.text.placeholder"))
         text_layout.addWidget(self.title_edit, 0, 1)
 
         text_group.setLayout(text_layout)
         layout.addWidget(text_group)
 
         # Position und Ausrichtung
-        position_group = QGroupBox("Position und Ausrichtung")
+        position_group = QGroupBox(tr("title_editor.position.title"))
         position_layout = QGridLayout()
 
-        position_layout.addWidget(QLabel("Horizontale Position:"), 0, 0)
+        position_layout.addWidget(QLabel(tr("title_editor.position.horizontal")), 0, 0)
         self.position_combo = QComboBox()
         self.position_combo.addItems(['left', 'center', 'right'])
         current_pos = self.title_settings.get('position', 'center')
@@ -83,11 +84,11 @@ class TitleEditorDialog(QDialog):
         layout.addWidget(position_group)
 
         # Farben
-        colors_group = QGroupBox("Farben")
+        colors_group = QGroupBox(tr("title_editor.colors.title"))
         colors_layout = QGridLayout()
 
         # Text-Farbe
-        colors_layout.addWidget(QLabel("Text-Farbe:"), 0, 0)
+        colors_layout.addWidget(QLabel(tr("title_editor.colors.text_color")), 0, 0)
         self.text_color_btn = QPushButton()
         self.text_color = self.title_settings.get('color', '#000000')
         self.update_color_button(self.text_color_btn, self.text_color)
@@ -95,10 +96,10 @@ class TitleEditorDialog(QDialog):
         colors_layout.addWidget(self.text_color_btn, 0, 1)
 
         # Hintergrund-Farbe
-        colors_layout.addWidget(QLabel("Hintergrund:"), 1, 0)
+        colors_layout.addWidget(QLabel(tr("title_editor.colors.background")), 1, 0)
         bg_layout = QHBoxLayout()
 
-        self.background_check = QCheckBox("Hintergrund anzeigen")
+        self.background_check = QCheckBox(tr("title_editor.colors.show_background"))
         bg_color = self.title_settings.get('background_color')
         self.background_check.setChecked(bg_color is not None)
         bg_layout.addWidget(self.background_check)
@@ -116,7 +117,7 @@ class TitleEditorDialog(QDialog):
         colors_layout.addLayout(bg_layout, 1, 1)
 
         # Hintergrund-Transparenz
-        colors_layout.addWidget(QLabel("Hintergrund-Alpha:"), 2, 0)
+        colors_layout.addWidget(QLabel(tr("title_editor.colors.background_alpha")), 2, 0)
         self.bg_alpha_spin = QSpinBox()
         self.bg_alpha_spin.setRange(0, 100)
         self.bg_alpha_spin.setValue(int(self.title_settings.get('background_alpha', 0.8) * 100))
@@ -131,21 +132,21 @@ class TitleEditorDialog(QDialog):
         layout.addWidget(colors_group)
 
         # Schriftart
-        font_group = QGroupBox("Schriftart")
+        font_group = QGroupBox(tr("title_editor.font.title"))
         font_layout = QGridLayout()
 
-        font_layout.addWidget(QLabel("Schriftgröße:"), 0, 0)
+        font_layout.addWidget(QLabel(tr("title_editor.font.size")), 0, 0)
         self.size_spin = QSpinBox()
         self.size_spin.setRange(6, 48)
         self.size_spin.setValue(self.title_settings.get('size', 14))
         self.size_spin.setSuffix(" pt")
         font_layout.addWidget(self.size_spin, 0, 1)
 
-        self.bold_check = QCheckBox("Fett")
+        self.bold_check = QCheckBox(tr("title_editor.font.bold"))
         self.bold_check.setChecked(self.title_settings.get('bold', True))
         font_layout.addWidget(self.bold_check, 1, 0)
 
-        self.italic_check = QCheckBox("Kursiv")
+        self.italic_check = QCheckBox(tr("title_editor.font.italic"))
         self.italic_check.setChecked(self.title_settings.get('italic', False))
         font_layout.addWidget(self.italic_check, 1, 1)
 
@@ -183,14 +184,14 @@ class TitleEditorDialog(QDialog):
 
     def choose_text_color(self):
         """Öffnet Farbauswahl für Text-Farbe"""
-        color = QColorDialog.getColor(QColor(self.text_color), self, "Text-Farbe wählen")
+        color = QColorDialog.getColor(QColor(self.text_color), self, tr("title_editor.text_color_dialog"))
         if color.isValid():
             self.text_color = color.name()
             self.update_color_button(self.text_color_btn, self.text_color)
 
     def choose_bg_color(self):
         """Öffnet Farbauswahl für Hintergrund-Farbe"""
-        color = QColorDialog.getColor(QColor(self.bg_color), self, "Hintergrund-Farbe wählen")
+        color = QColorDialog.getColor(QColor(self.bg_color), self, tr("title_editor.background_color_dialog"))
         if color.isValid():
             self.bg_color = color.name()
             self.update_color_button(self.bg_color_btn, self.bg_color)
