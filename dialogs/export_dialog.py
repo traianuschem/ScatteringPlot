@@ -44,13 +44,14 @@ class CollapsibleSection(QWidget):
         self.toggle_button.setStyleSheet("""
             QToolButton {
                 border: none;
-                background: #f0f0f0;
+                background: palette(alternate-base);
                 padding: 8px;
                 text-align: left;
                 font-weight: bold;
+                color: palette(text);
             }
             QToolButton:hover {
-                background: #e0e0e0;
+                background: palette(mid);
             }
             QToolButton::indicator {
                 width: 0px;
