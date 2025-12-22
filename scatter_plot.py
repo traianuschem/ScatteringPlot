@@ -2322,7 +2322,7 @@ class ScatterPlotApp(QMainWindow):
 
     def show_export_dialog(self):
         """Zeigt Export-Dialog mit erweiterten Optionen"""
-        dialog = ExportSettingsDialog(self, self.export_settings)
+        dialog = ExportSettingsDialog(self, self.export_settings, main_figure=self.fig)
         if dialog.exec():
             self.export_settings = dialog.get_settings()
             # Nun Export durchführen
@@ -2367,10 +2367,54 @@ class ScatterPlotApp(QMainWindow):
                     'bbox_inches': 'tight' if settings['tight_layout'] else None
                 }
 
+                # Format-spezifische Optionen
                 if format_ext == 'png':
-                    save_kwargs['transparent'] = settings['transparent']
-                    if settings['facecolor_white'] and not settings['transparent']:
-                        save_kwargs['facecolor'] = 'white'
+                    save_kwargs['transparent'] = settings.get('transparent', False)
+                    if not settings.get('transparent', False):
+                        save_kwargs['facecolor'] = settings.get('bg_color', 'white')
+                    # PNG-Kompression
+                    if 'png_compression' in settings:
+                        save_kwargs['pil_kwargs'] = {'compress_level': settings['png_compression']}
+
+                elif format_ext == 'pdf':
+                    # PDF-Metadaten
+                    metadata = {}
+                    if settings.get('meta_title'):
+                        metadata['Title'] = settings['meta_title']
+                    if settings.get('meta_author'):
+                        metadata['Author'] = settings['meta_author']
+                    if settings.get('meta_subject'):
+                        metadata['Subject'] = settings['meta_subject']
+                    if settings.get('meta_keywords'):
+                        metadata['Keywords'] = settings['meta_keywords']
+                    if settings.get('meta_copyright'):
+                        metadata['Copyright'] = settings['meta_copyright']
+
+                    if metadata:
+                        save_kwargs['metadata'] = metadata
+
+                    # PDF-Version
+                    if 'pdf_version' in settings:
+                        import matplotlib
+                        matplotlib.rcParams['pdf.fonttype'] = 42 if settings.get('embed_fonts', True) else 3
+
+                elif format_ext == 'svg':
+                    # SVG-Optionen
+                    if settings.get('svg_text_as_path', False):
+                        import matplotlib
+                        matplotlib.rcParams['svg.fonttype'] = 'path'
+                    else:
+                        import matplotlib
+                        matplotlib.rcParams['svg.fonttype'] = 'none'
+
+                    # SVG-Metadaten
+                    metadata = {}
+                    if settings.get('meta_title'):
+                        metadata['Title'] = settings['meta_title']
+                    if settings.get('meta_author'):
+                        metadata['Author'] = settings['meta_author']
+                    if metadata:
+                        save_kwargs['metadata'] = metadata
 
                 # Speichern
                 self.fig.savefig(filename, **save_kwargs)
