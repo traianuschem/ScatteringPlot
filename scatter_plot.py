@@ -649,14 +649,8 @@ class ScatterPlotApp(QMainWindow):
             # Stack-Faktor direkt von der Gruppe verwenden (NICHT kumulativ!)
             stack_factor = group.stack_factor if self.stack_mode else 1.0
 
-            # Gruppen-Label für Legende (mit Stack-Faktor)
-            # v7.0: Verwende display_label falls vorhanden, sonst name
-            base_name = group.display_label if hasattr(group, 'display_label') else group.name
-            if self.stack_mode and group.stack_factor != 1.0:
-                factor_display = format_stack_factor(stack_factor)
-                group_label = f"{base_name} {factor_display}"
-            else:
-                group_label = base_name
+            # Gruppen-Label für Legende (v7.0: Verwendet display_label, das bereits den Faktor enthält)
+            group_label = group.display_label if hasattr(group, 'display_label') and group.display_label else group.name
 
             # Dummy-Plot für Gruppen-Header in Legende
             # v7.0: Verwende datasets_in_order (Tree-Order)
@@ -1305,6 +1299,14 @@ class ScatterPlotApp(QMainWindow):
             name, stack_factor = dialog.get_values()
 
             group = DataGroup(name, stack_factor)
+
+            # Display-Label mit Faktor setzen (v7.0)
+            if stack_factor != 1.0:
+                factor_display = format_stack_factor(stack_factor)
+                group.display_label = f"{name} {factor_display}"
+            else:
+                group.display_label = name
+
             self.groups.append(group)
             self.logger.info(f"Gruppe erstellt: '{name}' (Stack-Faktor: ×{stack_factor:.1f})")
 
@@ -1365,6 +1367,13 @@ class ScatterPlotApp(QMainWindow):
             # Gruppe erstellen
             group = DataGroup(group_name, stack_factor)
             group.add_dataset(dataset)
+
+            # Display-Label mit Faktor setzen (v7.0)
+            if stack_factor != 1.0:
+                factor_display = format_stack_factor(stack_factor)
+                group.display_label = f"{group_name} {factor_display}"
+            else:
+                group.display_label = group_name
 
             self.groups.append(group)
             created_groups.append((group_name, stack_factor))
@@ -1496,8 +1505,18 @@ class ScatterPlotApp(QMainWindow):
                 layout.addWidget(buttons)
 
                 if dialog.exec():
-                    obj.stack_factor = spin.value()
-                    item.setText(1, f"×{spin.value():.1f}")
+                    new_factor = spin.value()
+                    obj.stack_factor = new_factor
+
+                    # Display-Label mit neuem Faktor aktualisieren (v7.0)
+                    if new_factor != 1.0:
+                        factor_display = format_stack_factor(new_factor)
+                        obj.display_label = f"{obj.name} {factor_display}"
+                    else:
+                        obj.display_label = obj.name
+
+                    # Tree-Anzeige aktualisieren
+                    item.setText(1, format_stack_factor(new_factor))
                     self.update_plot()
             elif item_type == 'dataset':
                 # Optional: Dataset-Eigenschaften bearbeiten
@@ -2470,6 +2489,15 @@ class ScatterPlotApp(QMainWindow):
                 self.groups = [DataGroup.from_dict(g) for g in session.get('groups', [])]
                 self.unassigned_datasets = [DataSet.from_dict(ds) for ds in session.get('unassigned', [])]
                 self.logger.debug(f"  Gruppen: {len(self.groups)}, Unassigned: {len(self.unassigned_datasets)}")
+
+                # Display-Labels für Gruppen setzen, falls nicht vorhanden (v7.0)
+                for group in self.groups:
+                    if not hasattr(group, 'display_label') or group.display_label is None:
+                        if group.stack_factor != 1.0:
+                            factor_display = format_stack_factor(group.stack_factor)
+                            group.display_label = f"{group.name} {factor_display}"
+                        else:
+                            group.display_label = group.name
 
                 # Tree neu aufbauen
                 for group in self.groups:
