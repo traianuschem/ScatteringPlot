@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
+from i18n import tr
 
 
 class GridSettingsDialog(QDialog):
@@ -18,7 +19,7 @@ class GridSettingsDialog(QDialog):
 
     def __init__(self, parent, grid_settings):
         super().__init__(parent)
-        self.setWindowTitle("Grid- und Tick-Einstellungen")
+        self.setWindowTitle(tr("grid.title"))
         self.resize(500, 600)
         self.grid_settings = grid_settings.copy()
 
@@ -31,13 +32,13 @@ class GridSettingsDialog(QDialog):
         grid_tab = QWidget()
         grid_tab_layout = QVBoxLayout(grid_tab)
         self.setup_grid_tab(grid_tab_layout)
-        tabs.addTab(grid_tab, "Grid")
+        tabs.addTab(grid_tab, tr("grid.tabs.grid"))
 
         # Tab 2: Tick-Einstellungen
         tick_tab = QWidget()
         tick_tab_layout = QVBoxLayout(tick_tab)
         self.setup_tick_tab(tick_tab_layout)
-        tabs.addTab(tick_tab, "Ticks")
+        tabs.addTab(tick_tab, tr("grid.tabs.ticks"))
 
         layout.addWidget(tabs)
 
@@ -50,16 +51,16 @@ class GridSettingsDialog(QDialog):
     def setup_grid_tab(self, layout):
 
         # Major Grid Gruppe
-        major_group = QGroupBox("Major Grid (Hauptlinien)")
+        major_group = QGroupBox(tr("grid.major.title"))
         major_layout = QGridLayout()
 
         # Major Grid anzeigen
-        self.major_enable = QCheckBox("Major Grid anzeigen")
+        self.major_enable = QCheckBox(tr("grid.major.show"))
         self.major_enable.setChecked(self.grid_settings.get('major_enable', True))
         major_layout.addWidget(self.major_enable, 0, 0, 1, 2)
 
         # Major Grid Achsen
-        major_layout.addWidget(QLabel("Achsen:"), 1, 0)
+        major_layout.addWidget(QLabel(tr("grid.major.axes")), 1, 0)
         self.major_axis_combo = QComboBox()
         self.major_axis_combo.addItems(['both', 'x', 'y'])
         current_axis = self.grid_settings.get('major_axis', 'both')
@@ -69,7 +70,7 @@ class GridSettingsDialog(QDialog):
         major_layout.addWidget(self.major_axis_combo, 1, 1)
 
         # Major Grid Linientyp
-        major_layout.addWidget(QLabel("Linientyp:"), 2, 0)
+        major_layout.addWidget(QLabel(tr("grid.major.line_style")), 2, 0)
         self.major_linestyle_combo = QComboBox()
         self.major_linestyle_combo.addItems(['solid', 'dashed', 'dotted', 'dashdot'])
         current_style = self.grid_settings.get('major_linestyle', 'solid')
@@ -79,7 +80,7 @@ class GridSettingsDialog(QDialog):
         major_layout.addWidget(self.major_linestyle_combo, 2, 1)
 
         # Major Grid Liniendicke
-        major_layout.addWidget(QLabel("Liniendicke:"), 3, 0)
+        major_layout.addWidget(QLabel(tr("grid.major.line_width")), 3, 0)
         self.major_linewidth_spin = QDoubleSpinBox()
         self.major_linewidth_spin.setRange(0.1, 5.0)
         self.major_linewidth_spin.setSingleStep(0.1)
@@ -88,7 +89,7 @@ class GridSettingsDialog(QDialog):
         major_layout.addWidget(self.major_linewidth_spin, 3, 1)
 
         # Major Grid Alpha (Transparenz)
-        major_layout.addWidget(QLabel("Transparenz:"), 4, 0)
+        major_layout.addWidget(QLabel(tr("grid.major.transparency")), 4, 0)
         self.major_alpha_spin = QDoubleSpinBox()
         self.major_alpha_spin.setRange(0.0, 1.0)
         self.major_alpha_spin.setSingleStep(0.1)
@@ -97,7 +98,7 @@ class GridSettingsDialog(QDialog):
         major_layout.addWidget(self.major_alpha_spin, 4, 1)
 
         # Major Grid Farbe
-        major_layout.addWidget(QLabel("Farbe:"), 5, 0)
+        major_layout.addWidget(QLabel(tr("grid.major.color")), 5, 0)
         self.major_color_button = QPushButton()
         major_color = self.grid_settings.get('major_color', '#FFFFFF')
         self.major_color_button.setStyleSheet(f"background-color: {major_color}; border: 1px solid #555;")
@@ -109,11 +110,11 @@ class GridSettingsDialog(QDialog):
         layout.addWidget(major_group)
 
         # Minor Grid Gruppe
-        minor_group = QGroupBox("Minor Grid (Hilfslinien)")
+        minor_group = QGroupBox(tr("grid.minor.title"))
         minor_layout = QGridLayout()
 
         # Minor Grid anzeigen
-        self.minor_enable = QCheckBox("Minor Grid anzeigen")
+        self.minor_enable = QCheckBox(tr("grid.minor.show"))
         self.minor_enable.setChecked(self.grid_settings.get('minor_enable', False))
         minor_layout.addWidget(self.minor_enable, 0, 0, 1, 2)
 
