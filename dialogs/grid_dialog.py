@@ -119,7 +119,7 @@ class GridSettingsDialog(QDialog):
         minor_layout.addWidget(self.minor_enable, 0, 0, 1, 2)
 
         # Minor Grid Achsen
-        minor_layout.addWidget(QLabel("Achsen:"), 1, 0)
+        minor_layout.addWidget(QLabel(tr("grid.minor.axes")), 1, 0)
         self.minor_axis_combo = QComboBox()
         self.minor_axis_combo.addItems(['both', 'x', 'y'])
         current_axis = self.grid_settings.get('minor_axis', 'both')
@@ -129,7 +129,7 @@ class GridSettingsDialog(QDialog):
         minor_layout.addWidget(self.minor_axis_combo, 1, 1)
 
         # Minor Grid Linientyp
-        minor_layout.addWidget(QLabel("Linientyp:"), 2, 0)
+        minor_layout.addWidget(QLabel(tr("grid.minor.line_style")), 2, 0)
         self.minor_linestyle_combo = QComboBox()
         self.minor_linestyle_combo.addItems(['solid', 'dashed', 'dotted', 'dashdot'])
         current_style = self.grid_settings.get('minor_linestyle', 'dotted')
@@ -139,7 +139,7 @@ class GridSettingsDialog(QDialog):
         minor_layout.addWidget(self.minor_linestyle_combo, 2, 1)
 
         # Minor Grid Liniendicke
-        minor_layout.addWidget(QLabel("Liniendicke:"), 3, 0)
+        minor_layout.addWidget(QLabel(tr("grid.minor.line_width")), 3, 0)
         self.minor_linewidth_spin = QDoubleSpinBox()
         self.minor_linewidth_spin.setRange(0.1, 5.0)
         self.minor_linewidth_spin.setSingleStep(0.1)
@@ -148,7 +148,7 @@ class GridSettingsDialog(QDialog):
         minor_layout.addWidget(self.minor_linewidth_spin, 3, 1)
 
         # Minor Grid Alpha (Transparenz)
-        minor_layout.addWidget(QLabel("Transparenz:"), 4, 0)
+        minor_layout.addWidget(QLabel(tr("grid.minor.transparency")), 4, 0)
         self.minor_alpha_spin = QDoubleSpinBox()
         self.minor_alpha_spin.setRange(0.0, 1.0)
         self.minor_alpha_spin.setSingleStep(0.1)
@@ -157,7 +157,7 @@ class GridSettingsDialog(QDialog):
         minor_layout.addWidget(self.minor_alpha_spin, 4, 1)
 
         # Minor Grid Farbe
-        minor_layout.addWidget(QLabel("Farbe:"), 5, 0)
+        minor_layout.addWidget(QLabel(tr("grid.minor.color")), 5, 0)
         self.minor_color_button = QPushButton()
         minor_color = self.grid_settings.get('minor_color', '#FFFFFF')
         self.minor_color_button.setStyleSheet(f"background-color: {minor_color}; border: 1px solid #555;")
@@ -173,11 +173,11 @@ class GridSettingsDialog(QDialog):
         """Tick-Einstellungen Tab"""
 
         # Major Ticks
-        major_tick_group = QGroupBox("Major Ticks (Hauptmarkierungen)")
+        major_tick_group = QGroupBox(tr("grid.major_ticks.title"))
         major_tick_layout = QGridLayout()
 
         # Tick-Richtung
-        major_tick_layout.addWidget(QLabel("Richtung:"), 0, 0)
+        major_tick_layout.addWidget(QLabel(tr("grid.major_ticks.direction")), 0, 0)
         self.major_tick_direction = QComboBox()
         self.major_tick_direction.addItems(['in', 'out', 'inout'])
         current_dir = self.grid_settings.get('major_tick_direction', 'in')
@@ -187,7 +187,7 @@ class GridSettingsDialog(QDialog):
         major_tick_layout.addWidget(self.major_tick_direction, 0, 1)
 
         # Tick-Länge
-        major_tick_layout.addWidget(QLabel("Länge:"), 1, 0)
+        major_tick_layout.addWidget(QLabel(tr("grid.major_ticks.length")), 1, 0)
         self.major_tick_length = QDoubleSpinBox()
         self.major_tick_length.setRange(0.0, 20.0)
         self.major_tick_length.setSingleStep(0.5)
@@ -196,7 +196,7 @@ class GridSettingsDialog(QDialog):
         major_tick_layout.addWidget(self.major_tick_length, 1, 1)
 
         # Tick-Breite
-        major_tick_layout.addWidget(QLabel("Breite:"), 2, 0)
+        major_tick_layout.addWidget(QLabel(tr("grid.major_ticks.width")), 2, 0)
         self.major_tick_width = QDoubleSpinBox()
         self.major_tick_width.setRange(0.1, 5.0)
         self.major_tick_width.setSingleStep(0.1)
@@ -207,16 +207,16 @@ class GridSettingsDialog(QDialog):
         layout.addWidget(major_tick_group)
 
         # Minor Ticks
-        minor_tick_group = QGroupBox("Minor Ticks (Hilfsmarkierungen)")
+        minor_tick_group = QGroupBox(tr("grid.minor_ticks.title"))
         minor_tick_layout = QGridLayout()
 
         # Minor Ticks anzeigen
-        self.minor_ticks_enable = QCheckBox("Minor Ticks anzeigen")
+        self.minor_ticks_enable = QCheckBox(tr("grid.minor_ticks.show"))
         self.minor_ticks_enable.setChecked(self.grid_settings.get('minor_ticks_enable', True))
         minor_tick_layout.addWidget(self.minor_ticks_enable, 0, 0, 1, 2)
 
         # Tick-Richtung
-        minor_tick_layout.addWidget(QLabel("Richtung:"), 1, 0)
+        minor_tick_layout.addWidget(QLabel(tr("grid.minor_ticks.direction")), 1, 0)
         self.minor_tick_direction = QComboBox()
         self.minor_tick_direction.addItems(['in', 'out', 'inout'])
         current_dir = self.grid_settings.get('minor_tick_direction', 'in')
@@ -226,7 +226,7 @@ class GridSettingsDialog(QDialog):
         minor_tick_layout.addWidget(self.minor_tick_direction, 1, 1)
 
         # Tick-Länge
-        minor_tick_layout.addWidget(QLabel("Länge:"), 2, 0)
+        minor_tick_layout.addWidget(QLabel(tr("grid.minor_ticks.length")), 2, 0)
         self.minor_tick_length = QDoubleSpinBox()
         self.minor_tick_length.setRange(0.0, 20.0)
         self.minor_tick_length.setSingleStep(0.5)
@@ -235,7 +235,7 @@ class GridSettingsDialog(QDialog):
         minor_tick_layout.addWidget(self.minor_tick_length, 2, 1)
 
         # Tick-Breite
-        minor_tick_layout.addWidget(QLabel("Breite:"), 3, 0)
+        minor_tick_layout.addWidget(QLabel(tr("grid.minor_ticks.width")), 3, 0)
         self.minor_tick_width = QDoubleSpinBox()
         self.minor_tick_width.setRange(0.1, 5.0)
         self.minor_tick_width.setSingleStep(0.1)
@@ -246,11 +246,11 @@ class GridSettingsDialog(QDialog):
         layout.addWidget(minor_tick_group)
 
         # Tick-Label-Einstellungen
-        tick_label_group = QGroupBox("Tick-Label-Einstellungen")
+        tick_label_group = QGroupBox(tr("grid.tick_labels.title"))
         tick_label_layout = QGridLayout()
 
         # Label-Rotation
-        tick_label_layout.addWidget(QLabel("X-Achse Rotation:"), 0, 0)
+        tick_label_layout.addWidget(QLabel(tr("grid.tick_labels.x_rotation")), 0, 0)
         self.x_tick_rotation = QSpinBox()
         self.x_tick_rotation.setRange(-90, 90)
         self.x_tick_rotation.setSingleStep(15)
@@ -258,7 +258,7 @@ class GridSettingsDialog(QDialog):
         self.x_tick_rotation.setSuffix("°")
         tick_label_layout.addWidget(self.x_tick_rotation, 0, 1)
 
-        tick_label_layout.addWidget(QLabel("Y-Achse Rotation:"), 1, 0)
+        tick_label_layout.addWidget(QLabel(tr("grid.tick_labels.y_rotation")), 1, 0)
         self.y_tick_rotation = QSpinBox()
         self.y_tick_rotation.setRange(-90, 90)
         self.y_tick_rotation.setSingleStep(15)
@@ -267,7 +267,7 @@ class GridSettingsDialog(QDialog):
         tick_label_layout.addWidget(self.y_tick_rotation, 1, 1)
 
         # Label-Schriftgröße
-        tick_label_layout.addWidget(QLabel("Schriftgröße:"), 2, 0)
+        tick_label_layout.addWidget(QLabel(tr("grid.tick_labels.font_size")), 2, 0)
         self.tick_labelsize = QSpinBox()
         self.tick_labelsize.setRange(4, 32)
         self.tick_labelsize.setValue(self.grid_settings.get('tick_labelsize', 10))

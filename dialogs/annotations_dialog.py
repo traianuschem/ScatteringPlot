@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QColorDialog
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
+from i18n import tr
 
 
 class AnnotationsDialog(QDialog):
@@ -19,27 +20,27 @@ class AnnotationsDialog(QDialog):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle("Annotation hinzufügen")
+        self.setWindowTitle(tr("annotations.title"))
 
         layout = QVBoxLayout(self)
 
         # Text-Gruppe
-        text_group = QGroupBox("Text")
+        text_group = QGroupBox(tr("annotations.text.title"))
         text_layout = QGridLayout()
 
-        text_layout.addWidget(QLabel("Text:"), 0, 0)
+        text_layout.addWidget(QLabel(tr("annotations.text.label")), 0, 0)
         self.text_edit = QLineEdit()
-        self.text_edit.setPlaceholderText("z.B.: Bereich A oder **wichtig** oder $\\alpha$")
+        self.text_edit.setPlaceholderText(tr("annotations.text.placeholder"))
         self.text_edit.textChanged.connect(self.update_preview)
         text_layout.addWidget(self.text_edit, 0, 1)
 
         # Syntax-Hilfe Button (v7.0)
-        syntax_help_btn = QPushButton("📖 LaTeX/MathText Syntax")
+        syntax_help_btn = QPushButton(tr("annotations.text.latex_help"))
         syntax_help_btn.clicked.connect(self.show_syntax_help)
         text_layout.addWidget(syntax_help_btn, 1, 0, 1, 2)
 
         # Vorschau (v7.0)
-        text_layout.addWidget(QLabel("Vorschau:"), 2, 0)
+        text_layout.addWidget(QLabel(tr("annotations.text.preview")), 2, 0)
         self.preview_label = QLabel("")
         self.preview_label.setWordWrap(True)
         self.preview_label.setStyleSheet(
@@ -55,17 +56,17 @@ class AnnotationsDialog(QDialog):
         layout.addWidget(text_group)
 
         # Position-Gruppe
-        pos_group = QGroupBox("Position")
+        pos_group = QGroupBox(tr("annotations.position.title"))
         pos_layout = QGridLayout()
 
-        pos_layout.addWidget(QLabel("X-Position:"), 0, 0)
+        pos_layout.addWidget(QLabel(tr("annotations.position.x")), 0, 0)
         self.x_spin = QDoubleSpinBox()
         self.x_spin.setRange(-1e6, 1e6)
         self.x_spin.setDecimals(3)
         self.x_spin.setValue(0.1)
         pos_layout.addWidget(self.x_spin, 0, 1)
 
-        pos_layout.addWidget(QLabel("Y-Position:"), 1, 0)
+        pos_layout.addWidget(QLabel(tr("annotations.position.y")), 1, 0)
         self.y_spin = QDoubleSpinBox()
         self.y_spin.setRange(-1e6, 1e6)
         self.y_spin.setDecimals(3)
@@ -76,17 +77,17 @@ class AnnotationsDialog(QDialog):
         layout.addWidget(pos_group)
 
         # Stil-Gruppe
-        style_group = QGroupBox("Stil")
+        style_group = QGroupBox(tr("annotations.style.title"))
         style_layout = QGridLayout()
 
-        style_layout.addWidget(QLabel("Schriftgröße:"), 0, 0)
+        style_layout.addWidget(QLabel(tr("annotations.style.font_size")), 0, 0)
         self.fontsize_spin = QSpinBox()
         self.fontsize_spin.setRange(6, 32)
         self.fontsize_spin.setValue(12)
         self.fontsize_spin.setSuffix(" pt")
         style_layout.addWidget(self.fontsize_spin, 0, 1)
 
-        style_layout.addWidget(QLabel("Farbe:"), 1, 0)
+        style_layout.addWidget(QLabel(tr("annotations.style.color")), 1, 0)
         self.color_button = QPushButton()
         self.color = '#FFFFFF'
         self.color_button.setStyleSheet(f"background-color: {self.color}; border: 1px solid #555;")
@@ -94,7 +95,7 @@ class AnnotationsDialog(QDialog):
         self.color_button.clicked.connect(self.choose_color)
         style_layout.addWidget(self.color_button, 1, 1)
 
-        style_layout.addWidget(QLabel("Rotation:"), 2, 0)
+        style_layout.addWidget(QLabel(tr("annotations.style.rotation")), 2, 0)
         self.rotation_spin = QSpinBox()
         self.rotation_spin.setRange(0, 360)
         self.rotation_spin.setValue(0)
@@ -112,7 +113,7 @@ class AnnotationsDialog(QDialog):
 
     def choose_color(self):
         """Öffnet Farbwahl-Dialog"""
-        color = QColorDialog.getColor(QColor(self.color), self, "Textfarbe")
+        color = QColorDialog.getColor(QColor(self.color), self, tr("annotations.text_color_dialog"))
         if color.isValid():
             self.color = color.name()
             self.color_button.setStyleSheet(f"background-color: {self.color}; border: 1px solid #555;")
@@ -134,7 +135,7 @@ class AnnotationsDialog(QDialog):
         text = self.text_edit.text()
 
         if not text:
-            self.preview_label.setText("<i>Geben Sie einen Text ein...</i>")
+            self.preview_label.setText(f"<i>{tr('annotations.text.preview_placeholder')}</i>")
             return
 
         # MathText preprocessing

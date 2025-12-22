@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLabel, QComboBox, QSpinBox, QDoubleSpinBox,
     QCheckBox, QDialogButtonBox
 )
+from i18n import tr
 
 
 class LegendSettingsDialog(QDialog):
@@ -16,17 +17,17 @@ class LegendSettingsDialog(QDialog):
 
     def __init__(self, parent, legend_settings):
         super().__init__(parent)
-        self.setWindowTitle("Legenden-Einstellungen")
+        self.setWindowTitle(tr("legend.title"))
         self.legend_settings = legend_settings.copy()
 
         layout = QVBoxLayout(self)
 
         # Legenden-Gruppe
-        legend_group = QGroupBox("Legenden-Einstellungen")
+        legend_group = QGroupBox(tr("legend.settings_title"))
         legend_layout = QGridLayout()
 
         # Position
-        legend_layout.addWidget(QLabel("Position:"), 0, 0)
+        legend_layout.addWidget(QLabel(tr("legend.position")), 0, 0)
         self.position_combo = QComboBox()
         self.position_combo.addItems([
             'best',
@@ -49,7 +50,7 @@ class LegendSettingsDialog(QDialog):
         legend_layout.addWidget(self.position_combo, 0, 1)
 
         # Schriftgröße
-        legend_layout.addWidget(QLabel("Schriftgröße:"), 1, 0)
+        legend_layout.addWidget(QLabel(tr("legend.font_size")), 1, 0)
         self.fontsize_spin = QSpinBox()
         self.fontsize_spin.setRange(4, 32)
         self.fontsize_spin.setValue(legend_settings.get('fontsize', 10))
@@ -57,14 +58,14 @@ class LegendSettingsDialog(QDialog):
         legend_layout.addWidget(self.fontsize_spin, 1, 1)
 
         # Anzahl Spalten
-        legend_layout.addWidget(QLabel("Spalten:"), 2, 0)
+        legend_layout.addWidget(QLabel(tr("legend.columns")), 2, 0)
         self.ncol_spin = QSpinBox()
         self.ncol_spin.setRange(1, 10)
         self.ncol_spin.setValue(legend_settings.get('ncol', 1))
         legend_layout.addWidget(self.ncol_spin, 2, 1)
 
         # Transparenz (Alpha)
-        legend_layout.addWidget(QLabel("Transparenz:"), 3, 0)
+        legend_layout.addWidget(QLabel(tr("legend.transparency")), 3, 0)
         self.alpha_spin = QDoubleSpinBox()
         self.alpha_spin.setRange(0.0, 1.0)
         self.alpha_spin.setSingleStep(0.1)
@@ -73,27 +74,23 @@ class LegendSettingsDialog(QDialog):
         legend_layout.addWidget(self.alpha_spin, 3, 1)
 
         # Rahmen
-        self.frame_checkbox = QCheckBox("Rahmen anzeigen")
+        self.frame_checkbox = QCheckBox(tr("legend.show_frame"))
         self.frame_checkbox.setChecked(legend_settings.get('frameon', True))
         legend_layout.addWidget(self.frame_checkbox, 4, 0, 1, 2)
 
         # Schatten
-        self.shadow_checkbox = QCheckBox("Schatten")
+        self.shadow_checkbox = QCheckBox(tr("legend.shadow"))
         self.shadow_checkbox.setChecked(legend_settings.get('shadow', False))
         legend_layout.addWidget(self.shadow_checkbox, 5, 0, 1, 2)
 
         # Fancy Box
-        self.fancybox_checkbox = QCheckBox("Abgerundete Ecken")
+        self.fancybox_checkbox = QCheckBox(tr("legend.rounded_corners"))
         self.fancybox_checkbox.setChecked(legend_settings.get('fancybox', True))
         legend_layout.addWidget(self.fancybox_checkbox, 6, 0, 1, 2)
 
         # v7.0: Reihenfolge invertieren
-        self.reverse_order_checkbox = QCheckBox("Reihenfolge invertieren (gestackte Kurven)")
+        self.reverse_order_checkbox = QCheckBox(tr("legend.reverse_order"))
         self.reverse_order_checkbox.setChecked(legend_settings.get('reverse_order', False))
-        self.reverse_order_checkbox.setToolTip(
-            "Kehrt die Reihenfolge der Legenden-Einträge um.\n"
-            "Nützlich bei gestackten Kurven: oberste Kurve → oberster Legenden-Eintrag"
-        )
         legend_layout.addWidget(self.reverse_order_checkbox, 7, 0, 1, 2)
 
         legend_group.setLayout(legend_layout)
