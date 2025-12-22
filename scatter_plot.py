@@ -71,6 +71,7 @@ from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
 from utils.mathtext_formatter import preprocess_mathtext, format_legend_text
+from i18n import get_i18n, tr
 
 
 def format_stack_factor(factor):
@@ -141,6 +142,12 @@ class ScatterPlotApp(QMainWindow):
         self.logger.debug("Lade User-Config...")
         self.config = get_user_config()
         self.logger.info("User-Config geladen")
+
+        # i18n initialisieren (v6.2+)
+        self.i18n = get_i18n()
+        saved_lang = self.config.get_language()
+        self.i18n.set_language(saved_lang)
+        self.logger.info(f"Sprache initialisiert: {saved_lang}")
 
         # Datenverwaltung
         self.groups = []
@@ -263,21 +270,21 @@ class ScatterPlotApp(QMainWindow):
         menubar = self.menuBar()
 
         # Datei-Menü
-        file_menu = menubar.addMenu("Datei")
+        file_menu = menubar.addMenu(tr("menu.file.title"))
 
-        load_action = QAction("Daten laden...", self)
+        load_action = QAction(tr("menu.file.load"), self)
         load_action.triggered.connect(self.load_data_to_unassigned)
         file_menu.addAction(load_action)
 
         file_menu.addSeparator()
 
         # v7.0: Shortcuts für Session-Management
-        save_session_action = QAction("Session speichern", self)
+        save_session_action = QAction(tr("menu.file.save_session"), self)
         save_session_action.setShortcut(QKeySequence("Ctrl+S"))
         save_session_action.triggered.connect(self.save_session)
         file_menu.addAction(save_session_action)
 
-        load_session_action = QAction("Session laden", self)
+        load_session_action = QAction(tr("menu.file.load_session"), self)
         load_session_action.setShortcut(QKeySequence("Ctrl+O"))
         load_session_action.triggered.connect(self.load_session)
         file_menu.addAction(load_session_action)
@@ -288,59 +295,59 @@ class ScatterPlotApp(QMainWindow):
 
         file_menu.addSeparator()
 
-        export_action = QAction("Exportieren...", self)
+        export_action = QAction(tr("menu.file.export"), self)
         export_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
         export_action.triggered.connect(self.show_export_dialog)
         file_menu.addAction(export_action)
 
         file_menu.addSeparator()
 
-        quit_action = QAction("Beenden", self)
+        quit_action = QAction(tr("menu.file.quit"), self)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
 
         # Plot-Menü
-        plot_menu = menubar.addMenu("Plot")
+        plot_menu = menubar.addMenu(tr("menu.plot.title"))
 
-        update_action = QAction("Aktualisieren", self)
+        update_action = QAction(tr("menu.plot.refresh"), self)
         update_action.triggered.connect(self.update_plot)
         plot_menu.addAction(update_action)
 
         plot_menu.addSeparator()
 
         # v7.0: Shortcut für Legenden-Editor (konsolidiert alle Legendeneinstellungen)
-        legend_editor_action = QAction("Legenden-Editor...", self)
+        legend_editor_action = QAction(tr("menu.plot.legend_editor"), self)
         legend_editor_action.setShortcut(QKeySequence("Ctrl+L"))
         legend_editor_action.triggered.connect(self.show_legend_editor)
         plot_menu.addAction(legend_editor_action)
 
-        title_editor_action = QAction("Titel-Editor...", self)
+        title_editor_action = QAction(tr("menu.plot.title_editor"), self)
         title_editor_action.setShortcut(QKeySequence("Ctrl+T"))
         title_editor_action.triggered.connect(self.show_title_editor)
         plot_menu.addAction(title_editor_action)
 
-        axes_action = QAction("Achsen und Limits...", self)
+        axes_action = QAction(tr("menu.plot.axes_limits"), self)
         axes_action.triggered.connect(self.show_axes_settings)
         plot_menu.addAction(axes_action)
 
-        grid_action = QAction("Grid- und Tick-Einstellungen...", self)
+        grid_action = QAction(tr("menu.plot.grid_settings"), self)
         grid_action.triggered.connect(self.show_grid_settings)
         plot_menu.addAction(grid_action)
 
         plot_menu.addSeparator()
 
-        annotation_action = QAction("Annotation hinzufügen...", self)
+        annotation_action = QAction(tr("menu.plot.add_annotation"), self)
         annotation_action.triggered.connect(self.add_annotation)
         plot_menu.addAction(annotation_action)
 
-        refline_action = QAction("Referenzlinie hinzufügen...", self)
+        refline_action = QAction(tr("menu.plot.add_reference_line"), self)
         refline_action.triggered.connect(self.add_reference_line)
         plot_menu.addAction(refline_action)
 
         # Design-Menü
-        design_menu = menubar.addMenu("Design")
+        design_menu = menubar.addMenu(tr("menu.design.title"))
 
-        manager_action = QAction("Design-Manager...", self)
+        manager_action = QAction(tr("menu.design.manager"), self)
         manager_action.triggered.connect(self.show_design_manager)
         design_menu.addAction(manager_action)
 
@@ -348,14 +355,29 @@ class ScatterPlotApp(QMainWindow):
 
         # Schnell-Stile
         for preset_name in self.config.style_presets.keys():
-            action = QAction(f"Stil '{preset_name}' anwenden", self)
+            action = QAction(tr("menu.design.apply_style", preset_name=preset_name), self)
             action.triggered.connect(lambda checked, p=preset_name: self.apply_style_to_selected(p))
             design_menu.addAction(action)
 
-        # Hilfe-Menü
-        help_menu = menubar.addMenu("Hilfe")
+        # Einstellungen-Menü (v6.2+)
+        settings_menu = menubar.addMenu(tr("menu.settings.title"))
 
-        about_action = QAction("Über", self)
+        # Sprach-Untermenü
+        language_menu = settings_menu.addMenu(tr("menu.settings.language"))
+        available_langs = self.i18n.get_available_languages()
+        current_lang = self.i18n.get_language()
+
+        for lang_code, lang_name in available_langs.items():
+            lang_action = QAction(lang_name, self)
+            lang_action.setCheckable(True)
+            lang_action.setChecked(lang_code == current_lang)
+            lang_action.triggered.connect(lambda checked, lc=lang_code: self.change_language(lc))
+            language_menu.addAction(lang_action)
+
+        # Hilfe-Menü
+        help_menu = menubar.addMenu(tr("menu.help.title"))
+
+        about_action = QAction(tr("menu.help.about"), self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
@@ -2450,6 +2472,24 @@ class ScatterPlotApp(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Export-Fehler",
                                    f"Fehler beim Exportieren:\n{str(e)}")
+
+    def change_language(self, language_code):
+        """
+        Wechselt die Sprache der Anwendung (v6.2+)
+
+        Args:
+            language_code: Sprachcode (z.B. 'de', 'en')
+        """
+        self.logger.info(f"Sprachwechsel zu: {language_code}")
+        self.i18n.set_language(language_code)
+        self.config.set_language(language_code)
+
+        # Zeige Info-Dialog, dass Neustart erforderlich ist
+        QMessageBox.information(
+            self,
+            tr("messages.info"),
+            tr("messages.language_changed_restart")
+        )
 
     def show_about(self):
         """Zeigt Über-Dialog"""

@@ -1,0 +1,635 @@
+{
+  "_language_name": "English",
+  "_language_code": "en",
+
+  "app": {
+    "title": "ScatterForge Plot v6.2"
+  },
+
+  "menu": {
+    "file": {
+      "title": "File",
+      "load": "Load Data...",
+      "save_session": "Save Session",
+      "load_session": "Load Session",
+      "export": "Export...",
+      "quit": "Quit"
+    },
+    "plot": {
+      "title": "Plot",
+      "refresh": "Refresh",
+      "legend_editor": "Legend Editor...",
+      "title_editor": "Title Editor...",
+      "axes_limits": "Axes and Limits...",
+      "grid_settings": "Grid & Tick Settings...",
+      "add_annotation": "Add Annotation...",
+      "add_reference_line": "Add Reference Line..."
+    },
+    "design": {
+      "title": "Design",
+      "manager": "Design Manager...",
+      "apply_style": "Apply Style '{preset_name}'"
+    },
+    "settings": {
+      "title": "Settings",
+      "language": "Language"
+    },
+    "help": {
+      "title": "Help",
+      "about": "About"
+    }
+  },
+
+  "sidebar": {
+    "add_group": "➕ Add Group",
+    "auto_group": "🔢 Auto-Group",
+    "load": "📁 Load",
+    "delete": "🗑 Delete"
+  },
+
+  "options": {
+    "plot_type": "Plot Type:",
+    "stack": "Stack:",
+    "color_scheme": "Color Scheme:",
+    "wavelength": "Wavelength (nm):",
+    "update_plot": "🔄 Update Plot"
+  },
+
+  "context_menu": {
+    "edit": "Edit...",
+    "edit_curve": "🎨 Edit Curve...",
+    "edit_group": "🎨 Edit Group...",
+    "rename": "Rename",
+    "select_palette": "Select Color Palette",
+    "use_globally": "(Use Globally)",
+    "set_uniform_color": "Set Uniform Color...",
+    "quick_colors": "Quick Colors",
+    "assign_to_group": "Assign to Group",
+    "apply_style": "Apply Style",
+    "reset_color": "Reset Color",
+    "set_plot_limits": "Set Plot Limits...",
+    "delete": "Delete"
+  },
+
+  "dialogs": {
+    "stack_factor": {
+      "title": "Change Stack Factor",
+      "label": "New Stack Factor:"
+    },
+    "group_settings": {
+      "title": "Group Settings for {name}"
+    },
+    "new_group": {
+      "title": "New Group",
+      "group_name": "Group Name:",
+      "stack_factor": "Stack Factor:"
+    }
+  },
+
+  "messages": {
+    "success": "Success",
+    "info": "Information",
+    "error": "Error",
+    "group_created": "Group '{name}' created",
+    "auto_group_success": "Auto-Grouping successful",
+    "invalid_input": "Invalid Input",
+    "select_datasets": "Please select datasets",
+    "export_success": "Export successful",
+    "export_error": "Export Error",
+    "about_title": "About ScatterForge Plot",
+    "empty_group": "The group contains no datasets",
+    "error_loading": "Error loading {file}",
+    "language_changed_restart": "The language change will take effect on next program start."
+  },
+
+  "export": {
+    "title": "Export Settings",
+    "preview": "Preview:",
+    "zoom": "Zoom:",
+    "zoom_fit": "Fit",
+    "loading_preview": "Loading preview...",
+    "estimated_size": "Estimated file size: {size}",
+    "estimated_size_default": "Estimated file size: --",
+    "preview_error": "Preview error: {error}",
+    "save_preset": "Save as Preset",
+    "export_button": "Export",
+
+    "presets": {
+      "title": "Presets",
+      "custom": "-- Custom --",
+      "publication": "Publication",
+      "presentation": "Presentation",
+      "web": "Web",
+      "print": "Print"
+    },
+
+    "format_size": {
+      "title": "Format & Size",
+      "format": "Format:",
+      "dpi": "DPI:",
+      "size_preset": "Size Preset:",
+      "custom": "Custom",
+      "a4_landscape": "A4 Landscape",
+      "a4_portrait": "A4 Portrait",
+      "a5_landscape": "A5 Landscape",
+      "a5_portrait": "A5 Portrait",
+      "slide_16_9": "Slide 16:9",
+      "slide_16_10": "Slide 16:10",
+      "slide_4_3": "Slide 4:3",
+      "width": "Width:",
+      "height": "Height:",
+      "keep_aspect": "Keep Aspect Ratio"
+    },
+
+    "layout": {
+      "title": "Layout Options",
+      "transparent": "Transparent Background",
+      "tight_layout": "Tight Layout (less margin)",
+      "background_color": "Background Color:",
+      "choose": "Choose..."
+    },
+
+    "metadata": {
+      "title": "Metadata",
+      "doc_title": "Title:",
+      "doc_title_placeholder": "Document title",
+      "author": "Author:",
+      "author_placeholder": "Your name",
+      "description": "Description:",
+      "description_placeholder": "Short description",
+      "keywords": "Keywords:",
+      "keywords_placeholder": "Comma-separated",
+      "copyright": "Copyright:",
+      "copyright_placeholder": "© 2025 ..."
+    },
+
+    "advanced": {
+      "title": "Advanced Options",
+      "pdf_options": "PDF Options",
+      "embed_fonts": "Embed Fonts",
+      "pdf_version": "PDF Version:",
+      "png_options": "PNG Options",
+      "compression": "Compression (0-9):",
+      "svg_options": "SVG Options",
+      "text_as_paths": "Text as Paths (not editable)"
+    },
+
+    "background_color_dialog": "Choose Background Color",
+    "save_preset_dialog": "Save Preset",
+    "preset_name_prompt": "Name for the preset:",
+    "preset_saved": "Preset Saved",
+    "preset_saved_msg": "Preset '{name}' has been saved.",
+    "x_axis": "X-axis",
+    "y_axis": "Y-axis"
+  },
+
+  "axes": {
+    "title": "Axes and Limits",
+    "info": "Customize axis labels. Leave empty for automatic labeling based on plot type.",
+
+    "axis_titles": {
+      "title": "Axis Titles",
+      "x_title": "X-Axis Title:",
+      "y_title": "Y-Axis Title:",
+      "auto_based_on": "Auto: based on '{plot_type}'",
+      "latex_help": "📖 LaTeX/MathText Syntax Help",
+      "preview": "Preview:",
+      "preview_placeholder": "Enter axis titles for preview..."
+    },
+
+    "limits": {
+      "title": "Axis Limits",
+      "info": "Set fixed axis limits. These will persist when the plot updates.",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:",
+      "placeholder": "e.g. {value}",
+      "auto_scaling": "Automatic Scaling (ignores values above)",
+      "reset": "Reset Limits"
+    },
+
+    "font_labels": {
+      "title": "Axis Labels Font",
+      "size": "Font Size:",
+      "bold": "Bold",
+      "italic": "Italic"
+    },
+
+    "font_ticks": {
+      "title": "Axis Values (Ticks) Font"
+    },
+
+    "reset_default": "Reset to Default"
+  },
+
+  "grid": {
+    "title": "Grid & Tick Settings",
+
+    "tabs": {
+      "grid": "Grid",
+      "ticks": "Ticks"
+    },
+
+    "major": {
+      "title": "Major Grid (Main Lines)",
+      "show": "Show Major Grid",
+      "axes": "Axes:",
+      "line_style": "Line Style:",
+      "line_width": "Line Width:",
+      "transparency": "Transparency:",
+      "color": "Color:"
+    },
+
+    "minor": {
+      "title": "Minor Grid (Helper Lines)",
+      "show": "Show Minor Grid"
+    },
+
+    "major_ticks": {
+      "title": "Major Ticks",
+      "direction": "Direction:",
+      "length": "Length:",
+      "width": "Width:"
+    },
+
+    "minor_ticks": {
+      "title": "Minor Ticks",
+      "show": "Show Minor Ticks"
+    },
+
+    "tick_labels": {
+      "title": "Tick Label Settings",
+      "x_rotation": "X-Axis Rotation:",
+      "y_rotation": "Y-Axis Rotation:"
+    }
+  },
+
+  "legend": {
+    "title": "Legend Settings",
+    "settings_title": "Legend Settings",
+    "position": "Position:",
+    "font_size": "Font Size:",
+    "columns": "Columns:",
+    "transparency": "Transparency:",
+    "show_frame": "Show Frame",
+    "shadow": "Shadow",
+    "rounded_corners": "Rounded Corners",
+    "reverse_order": "Reverse Order (stacked curves)"
+  },
+
+  "legend_editor": {
+    "title": "Legend Editor",
+    "info": "Edit legend entries, settings, and fonts. Use the toolbar for quick LaTeX formatting.",
+
+    "tabs": {
+      "entries": "Edit Entries",
+      "settings": "Legend Settings",
+      "font": "Font"
+    },
+
+    "entries": {
+      "title": "Legend Entries (in display order)",
+      "move_up": "↑ Move Up",
+      "move_down": "↓ Move Down",
+      "edit_entry": "Edit Entry",
+      "bold": "Bold (\\mathbf{...})",
+      "italic": "Italic (\\mathit{...})",
+      "subscript": "Subscript (_{...})",
+      "superscript": "Superscript (^{...})",
+      "display_name": "Display Name:",
+      "latex_help": "LaTeX/MathText Syntax Help",
+      "preview": "Preview:",
+      "show_in_legend": "Show in Legend",
+      "formatting": "Formatting:",
+      "placeholder": "Enter a name..."
+    },
+
+    "font": {
+      "title": "Legend Font",
+      "size": "Font Size:"
+    }
+  },
+
+  "title_editor": {
+    "title": "Title Editor",
+    "show_title": "Show Title",
+
+    "text": {
+      "title": "Title Text",
+      "label": "Title:",
+      "placeholder": "Enter title..."
+    },
+
+    "position": {
+      "title": "Position and Alignment",
+      "horizontal": "Horizontal Position:"
+    },
+
+    "colors": {
+      "title": "Colors",
+      "text_color": "Text Color:",
+      "background": "Background:",
+      "show_background": "Show Background",
+      "background_alpha": "Background Alpha:"
+    },
+
+    "font": {
+      "title": "Font",
+      "size": "Font Size:",
+      "bold": "Bold",
+      "italic": "Italic"
+    },
+
+    "text_color_dialog": "Choose Text Color",
+    "background_color_dialog": "Choose Background Color"
+  },
+
+  "font_settings": {
+    "title": "Font Settings",
+
+    "groups": {
+      "title": "Title",
+      "labels": "Axis Labels",
+      "ticks": "Axis Values (Ticks)",
+      "legend": "Legend",
+      "font": "Font"
+    },
+
+    "family": "Family:",
+    "size": "Font Size:",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+
+    "scientific": {
+      "title": "Scientific Notation",
+      "use_math_text": "Use Math Text for Exponents",
+      "info": "Converts: nm⁻¹ → nm$^{-1}$ for better display"
+    }
+  },
+
+  "annotations": {
+    "title": "Add Annotation",
+
+    "text": {
+      "title": "Text",
+      "label": "Text:",
+      "placeholder": "e.g.: Region A or **important** or $\\alpha$",
+      "latex_help": "📖 LaTeX/MathText Syntax",
+      "preview": "Preview:",
+      "preview_placeholder": "Enter text..."
+    },
+
+    "position": {
+      "title": "Position",
+      "x": "X-Position:",
+      "y": "Y-Position:"
+    },
+
+    "style": {
+      "title": "Style",
+      "font_size": "Font Size:",
+      "color": "Color:",
+      "rotation": "Rotation:"
+    },
+
+    "text_color_dialog": "Text Color"
+  },
+
+  "reference_lines": {
+    "title": "Add Reference Line",
+
+    "type": {
+      "title": "Type",
+      "orientation": "Orientation:",
+      "vertical": "Vertical",
+      "horizontal": "Horizontal"
+    },
+
+    "position": {
+      "title": "Position",
+      "value": "Value:",
+      "label": "Label:",
+      "label_placeholder": "Optional (e.g.: q = 0.5)"
+    },
+
+    "style": {
+      "title": "Style",
+      "line_type": "Line Type:",
+      "line_width": "Line Width:",
+      "color": "Color:",
+      "alpha": "Alpha:"
+    },
+
+    "line_color_dialog": "Line Color"
+  },
+
+  "plot_limits": {
+    "title": "Plot Limits for '{dataset}'",
+    "info": "Set individual plot limits for this dataset. Only data points within these limits will be displayed. Leave empty = no restriction",
+
+    "limits": {
+      "title": "Plot Limits",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:"
+    },
+
+    "data_range": {
+      "title": "Available Data Range",
+      "x_range": "X-Range:",
+      "y_range": "Y-Range:"
+    },
+
+    "reset_all": "Reset All Limits"
+  },
+
+  "curve_settings": {
+    "title": "Curve Settings for '{dataset}'",
+    "info": "Edit all visual properties of this curve.",
+
+    "color": {
+      "title": "Color",
+      "current": "Current Color:",
+      "picker": "Color Picker...",
+      "quick_selection": "Quick Selection from '{scheme}':",
+      "reset": "Reset Color (Auto)"
+    },
+
+    "marker": {
+      "title": "Marker",
+      "style": "Marker Style:",
+      "none": "No Marker",
+      "circle": "Circle (o)",
+      "square": "Square (s)",
+      "triangle_up": "Triangle up (^)",
+      "triangle_down": "Triangle down (v)",
+      "triangle_left": "Triangle left (<)",
+      "triangle_right": "Triangle right (>)",
+      "diamond": "Diamond (D)",
+      "star": "Star (*)",
+      "plus": "Plus (+)",
+      "cross": "Cross (x)",
+      "dot": "Dot (.)",
+      "pixel": "Pixel (,)",
+      "size": "Marker Size:"
+    },
+
+    "line": {
+      "title": "Line",
+      "style": "Line Style:",
+      "none": "No Line",
+      "solid": "Solid (-)",
+      "dashed": "Dashed (--)",
+      "dashdot": "Dash-Dot (-.)",
+      "dotted": "Dotted (:)",
+      "width": "Line Width:"
+    },
+
+    "error_bars": {
+      "title": "Error Bars",
+      "show": "Show Error Bars",
+      "available": "✓ Error data available",
+      "not_available": "✗ No error data in file",
+      "representation": "Representation:",
+      "fill": "Transparent Fill",
+      "bars": "Bars with Caps",
+      "cap_size": "Cap Size:",
+      "transparency": "Transparency:",
+      "transparency_bars": "Transparency (Bars):",
+      "transparency_fill": "Transparency (Fill):",
+      "line_width": "Line Width:"
+    }
+  },
+
+  "design_manager": {
+    "title": "Design Manager",
+    "close": "Close",
+    "new": "New...",
+    "edit": "Edit...",
+    "delete": "Delete",
+    "new_rule": "New Rule...",
+    "apply": "Apply Design",
+    "save_current": "Save Current...",
+    "save_as_default": "⭐ Save as Program Default",
+
+    "tabs": {
+      "styles": "Style Presets",
+      "colors": "Color Schemes",
+      "auto_detection": "Auto-Detection",
+      "plot_designs": "Plot Designs"
+    },
+
+    "styles": {
+      "available": "Available Style Presets:",
+      "new_style": "New Style",
+      "style_name": "Style Name:",
+      "edit_style": "Edit Style: {name}",
+      "name": "Name:",
+      "description": "Description:",
+      "line_type": "Line Type:",
+      "marker": "Marker:",
+      "line_width": "Line Width:",
+      "marker_size": "Marker Size:",
+      "delete_confirm": "Delete style '{name}'?"
+    },
+
+    "colors": {
+      "available": "Available Color Schemes:",
+      "new_scheme": "New Scheme",
+      "scheme_name": "Scheme Name:",
+      "color_n": "Color {n}",
+      "edit_scheme": "Edit Color Scheme: {name}",
+      "colors": "Colors:",
+      "add": "➕ Add",
+      "change": "✏️ Change",
+      "move_up": "↑ Move Up",
+      "move_down": "↓ Move Down",
+      "remove": "× Remove",
+      "choose_color": "Choose Color",
+      "change_color": "Change Color",
+      "select_color": "Please select a color",
+      "min_colors": "At least 2 colors required",
+      "scheme_saved": "Color scheme '{name}' saved",
+      "cannot_delete_standard": "Standard schemes cannot be deleted"
+    },
+
+    "auto_detection": {
+      "mapping": "Keyword → Style Assignment:",
+      "enabled": "Auto-Detection Enabled",
+      "new_keyword": "New Keyword",
+      "keyword_label": "Keyword (e.g. 'fit'):",
+      "style": "Style",
+      "select_style": "Select Style:",
+      "info_title": "Information",
+      "select_style_msg": "Please select a style"
+    },
+
+    "plot_designs": {
+      "description": "Plot designs combine grid, font, and legend settings:",
+      "active_design": "Active Design: {name}",
+      "save_design": "Save Design",
+      "design_name": "Name of new design:",
+      "success": "Success",
+      "applied": "Design '{name}' has been applied",
+      "saved": "Design '{name}' has been saved",
+      "save_as_default_title": "Save as Default",
+      "save_as_default_msg": "Do you want to save the current plot settings as program default?\n\nThese settings will be loaded automatically on next startup.",
+      "saved_as_default": "Current plot settings have been saved as program default.\n\nThese settings will be loaded automatically on next startup.",
+      "cannot_delete_standard": "Standard designs cannot be deleted",
+      "edit_design": "Edit Plot Design: {name}",
+      "standard_info": "ℹ️  Standard designs will be overwritten when saved and can be restored.",
+      "main_grid": "Main Grid",
+      "secondary_grid": "Secondary Grid",
+      "enabled": "Enabled",
+      "axis": "Axis:",
+      "line_style": "Line Style:",
+      "line_width": "Line Width:",
+      "alpha": "Alpha:",
+      "font_family": "Font Family:",
+      "size": "Size:",
+      "use_math_text": "Use Math Text (for exponents)",
+      "tick_labels": "Tick Labels",
+      "legend": "Legend",
+      "height": "Height:",
+      "standard_overwritten": "Standard design '{name}' has been overwritten.\n\nDelete the design from the list to restore default values.",
+
+      "predefined": {
+        "publication": "Publication",
+        "presentation": "Presentation",
+        "tubaf": "TUBAF",
+        "minimalist": "Minimalist"
+      }
+    }
+  },
+
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "close": "Close",
+    "save": "Save",
+    "yes": "Yes",
+    "no": "No",
+    "both": "both",
+    "x": "X",
+    "y": "Y",
+    "left": "left",
+    "center": "center",
+    "right": "right",
+    "best": "best",
+    "upper_right": "upper right",
+    "upper_left": "upper left",
+    "lower_left": "lower left",
+    "lower_right": "lower right",
+    "in": "in",
+    "out": "out",
+    "inout": "in/out",
+    "solid": "solid",
+    "dashed": "dashed",
+    "dotted": "dotted",
+    "dashdot": "dash-dot"
+  }
+}
