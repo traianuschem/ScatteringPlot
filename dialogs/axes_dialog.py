@@ -138,25 +138,6 @@ class AxesSettingsDialog(QDialog):
         limits_group.setLayout(limits_layout)
         layout.addWidget(limits_group)
 
-        # LaTeX/Math-Text Unterstützung
-        math_group = QGroupBox("Formatierung")
-        math_layout = QGridLayout()
-
-        math_info = QLabel(
-            "Hinweis: Sie können LaTeX-Notation verwenden:\n"
-            "- Griechische Buchstaben: \\alpha, \\beta, \\gamma, etc.\n"
-            "- Hochgestellt: x^2, e^{-x}\n"
-            "- Tiefgestellt: H_2O, x_{max}\n"
-            "- Formeln: $\\frac{1}{x}$, $\\sqrt{x}$\n"
-            "Beispiel: $q$ [$\\AA^{-1}$] oder I(q) [cm$^{-1}$]"
-        )
-        math_info.setWordWrap(True)
-        math_info.setStyleSheet("QLabel { font-size: 9pt; color: #888; }")
-        math_layout.addWidget(math_info, 0, 0)
-
-        math_group.setLayout(math_layout)
-        layout.addWidget(math_group)
-
         # Schriftart-Einstellungen für Achsenbeschriftungen
         labels_font_group = QGroupBox("Schriftart Achsenbeschriftungen")
         labels_font_layout = QGridLayout()

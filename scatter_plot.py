@@ -650,11 +650,13 @@ class ScatterPlotApp(QMainWindow):
             stack_factor = group.stack_factor if self.stack_mode else 1.0
 
             # Gruppen-Label für Legende (mit Stack-Faktor)
+            # v7.0: Verwende display_label falls vorhanden, sonst name
+            base_name = group.display_label if hasattr(group, 'display_label') else group.name
             if self.stack_mode and group.stack_factor != 1.0:
                 factor_display = format_stack_factor(stack_factor)
-                group_label = f"{group.name} {factor_display}"
+                group_label = f"{base_name} {factor_display}"
             else:
-                group_label = group.name
+                group_label = base_name
 
             # Dummy-Plot für Gruppen-Header in Legende
             # v7.0: Verwende datasets_in_order (Tree-Order)

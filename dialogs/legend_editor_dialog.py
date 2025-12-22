@@ -127,10 +127,6 @@ class LegendEditorDialog(QDialog):
         editor_layout = QVBoxLayout()
 
         # Tiny Editor Toolbar
-        toolbar_label = QLabel("Formatierungs-Toolbar:")
-        toolbar_label.setStyleSheet("font-weight: bold;")
-        editor_layout.addWidget(toolbar_label)
-
         self.format_toolbar = QToolBar()
         self.format_toolbar.setIconSize(QSize(20, 20))
 
