@@ -13,6 +13,8 @@
       "save_session": "Save Session",
       "load_session": "Load Session",
       "export": "Export...",
+      "load_user_config": "Load User Config...",
+      "save_user_config_as": "Save User Config As...",
       "quit": "Quit"
     },
     "plot": {
@@ -46,6 +48,11 @@
     "auto_group": "🔢 Auto-Group",
     "load": "📁 Load",
     "delete": "🗑 Delete"
+  },
+
+  "tree": {
+    "unassigned": "▼ Unassigned",
+    "annotations": "▼ Annotations & Reference Lines"
   },
 
   "options": {
@@ -131,9 +138,12 @@
       "title": "Presets",
       "custom": "-- Custom --",
       "publication": "Publication",
+      "publikation": "Publication",
       "presentation": "Presentation",
+      "präsentation": "Presentation",
       "web": "Web",
-      "print": "Print"
+      "print": "Print",
+      "druck": "Print"
     },
 
     "format_size": {
@@ -142,10 +152,15 @@
       "dpi": "DPI:",
       "size_preset": "Size Preset:",
       "custom": "Custom",
+      "benutzerdefiniert": "Custom",
       "a4_landscape": "A4 Landscape",
+      "a4_querformat": "A4 Landscape",
       "a4_portrait": "A4 Portrait",
+      "a4_hochformat": "A4 Portrait",
       "a5_landscape": "A5 Landscape",
+      "a5_querformat": "A5 Landscape",
       "a5_portrait": "A5 Portrait",
+      "a5_hochformat": "A5 Portrait",
       "slide_16_9": "Slide 16:9",
       "slide_16_10": "Slide 16:10",
       "slide_4_3": "Slide 4:3",
@@ -159,7 +174,9 @@
       "transparent": "Transparent Background",
       "tight_layout": "Tight Layout (less margin)",
       "background_color": "Background Color:",
-      "choose": "Choose..."
+      "bg_color": "Background Color:",
+      "choose": "Choose...",
+      "choose_color": "Choose Color"
     },
 
     "metadata": {
@@ -173,7 +190,19 @@
       "keywords": "Keywords:",
       "keywords_placeholder": "Comma-separated",
       "copyright": "Copyright:",
-      "copyright_placeholder": "© 2025 ..."
+      "copyright_placeholder": "© 2025 ...",
+      "license": "License:",
+      "auto_metadata_title": "Automatic Metadata",
+      "auto_timestamp": "Add timestamp (ISO 8601)",
+      "auto_provenance": "Embed software information",
+      "generate_uuid": "Generate unique ID (UUID)"
+    },
+
+    "experiment": {
+      "title": "Experiment References (Optional)",
+      "experiment_id": "Experiment ID:",
+      "measurement_date": "Measurement Date:",
+      "sample_id": "Sample ID:"
     },
 
     "advanced": {
@@ -183,8 +212,10 @@
       "pdf_version": "PDF Version:",
       "png_options": "PNG Options",
       "compression": "Compression (0-9):",
+      "png_compression": "Compression (0-9):",
       "svg_options": "SVG Options",
-      "text_as_paths": "Text as Paths (not editable)"
+      "text_as_paths": "Text as Paths (not editable)",
+      "svg_text_as_path": "Text as Paths (not editable)"
     },
 
     "background_color_dialog": "Choose Background Color",

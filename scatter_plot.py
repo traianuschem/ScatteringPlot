@@ -308,11 +308,11 @@ class ScatterPlotApp(QMainWindow):
         file_menu.addSeparator()
 
         # v7.0: Benutzer-Config Management
-        load_user_config_action = QAction("Benutzer-Config laden...", self)
+        load_user_config_action = QAction(tr("menu.file.load_user_config"), self)
         load_user_config_action.triggered.connect(self.load_user_config)
         file_menu.addAction(load_user_config_action)
 
-        save_user_config_action = QAction("Benutzer-Config speichern unter...", self)
+        save_user_config_action = QAction(tr("menu.file.save_user_config_as"), self)
         save_user_config_action.triggered.connect(self.save_user_config_as)
         file_menu.addAction(save_user_config_action)
 
@@ -514,11 +514,11 @@ class ScatterPlotApp(QMainWindow):
         self.tree.customContextMenuRequested.connect(self.show_context_menu)
 
         # Unassigned Section
-        self.unassigned_item = QTreeWidgetItem(self.tree, ["▼ Nicht zugeordnet", ""])
+        self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
         self.unassigned_item.setExpanded(True)
 
         # Annotations & Referenzlinien Section (Version 5.3)
-        self.annotations_item = QTreeWidgetItem(self.tree, ["▼ Annotations & Referenzlinien", ""])
+        self.annotations_item = QTreeWidgetItem(self.tree, [tr("tree.annotations"), ""])
         self.annotations_item.setExpanded(True)
 
         layout.addWidget(self.tree)
@@ -2172,7 +2172,7 @@ class ScatterPlotApp(QMainWindow):
         self.tree.clear()
 
         # "Nicht zugeordnet" Sektion
-        self.unassigned_item = QTreeWidgetItem(self.tree, ["▼ Nicht zugeordnet", ""])
+        self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
         self.unassigned_item.setExpanded(True)
 
         for dataset in self.unassigned_datasets:
@@ -2195,7 +2195,7 @@ class ScatterPlotApp(QMainWindow):
                 item.setData(0, Qt.UserRole, ('dataset', dataset))
 
         # Annotations & Referenzlinien (v5.3)
-        self.annotations_item = QTreeWidgetItem(self.tree, ["▼ Annotations & Referenzlinien", ""])
+        self.annotations_item = QTreeWidgetItem(self.tree, [tr("tree.annotations"), ""])
         self.annotations_item.setExpanded(False)
         self.update_annotations_tree()
 
@@ -3009,7 +3009,7 @@ class ScatterPlotApp(QMainWindow):
 
                 # Tree leeren
                 self.tree.clear()
-                self.unassigned_item = QTreeWidgetItem(self.tree, ["▼ Nicht zugeordnet", ""])
+                self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
                 self.unassigned_item.setExpanded(True)
 
                 # Daten laden

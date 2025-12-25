@@ -585,7 +585,7 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # License
-        grid.addWidget(QLabel("Lizenz:"), row, 0)
+        grid.addWidget(QLabel(tr("export.metadata.license")), row, 0)
         self.meta_license = QComboBox()
         self.meta_license.addItems([
             "CC-BY-4.0",
@@ -605,24 +605,24 @@ class ExportSettingsDialog(QDialog):
         layout.addLayout(grid)
 
         # Automatic features (v7.0+)
-        auto_group = QGroupBox("Automatische Metadaten")
+        auto_group = QGroupBox(tr("export.metadata.auto_metadata_title"))
         auto_layout = QVBoxLayout()
 
-        self.meta_auto_timestamp = QCheckBox("Zeitstempel hinzufügen (ISO 8601)")
+        self.meta_auto_timestamp = QCheckBox(tr("export.metadata.auto_timestamp"))
         default_timestamp = self.export_settings.get('meta_auto_timestamp', True)
         if self.user_metadata:
             default_timestamp = self.user_metadata.metadata['export_defaults'].get('auto_timestamp', True)
         self.meta_auto_timestamp.setChecked(default_timestamp)
         self.meta_auto_timestamp.setToolTip("Fügt Erstellungsdatum und -zeit automatisch hinzu")
 
-        self.meta_auto_provenance = QCheckBox("Software-Informationen einbetten")
+        self.meta_auto_provenance = QCheckBox(tr("export.metadata.auto_provenance"))
         default_provenance = self.export_settings.get('meta_auto_provenance', True)
         if self.user_metadata:
             default_provenance = self.user_metadata.metadata['export_defaults'].get('include_provenance', True)
         self.meta_auto_provenance.setChecked(default_provenance)
         self.meta_auto_provenance.setToolTip("Fügt ScatterForge-Version und Python/matplotlib-Versionen hinzu")
 
-        self.meta_generate_uuid = QCheckBox("Eindeutige ID (UUID) generieren")
+        self.meta_generate_uuid = QCheckBox(tr("export.metadata.generate_uuid"))
         default_uuid = self.export_settings.get('meta_generate_uuid', False)
         if self.user_metadata:
             default_uuid = self.user_metadata.metadata['export_defaults'].get('generate_uuid', False)
@@ -673,7 +673,7 @@ class ExportSettingsDialog(QDialog):
 
     def create_experiment_section(self):
         """Create experimental metadata section (v7.0+)"""
-        section = CollapsibleSection("Experiment-Referenzen (Optional)")
+        section = CollapsibleSection(tr("export.experiment.title"))
         section.set_expanded(False)  # Collapsed by default
 
         layout = QVBoxLayout()
@@ -690,7 +690,7 @@ class ExportSettingsDialog(QDialog):
         row = 0
 
         # Experiment ID
-        grid.addWidget(QLabel("Experiment-ID:"), row, 0)
+        grid.addWidget(QLabel(tr("export.experiment.experiment_id")), row, 0)
         self.meta_experiment_id = QLineEdit()
         self.meta_experiment_id.setText(self.export_settings.get('meta_experiment_id', ''))
         self.meta_experiment_id.setPlaceholderText("z.B. UUID oder ELN-Referenz")
@@ -698,7 +698,7 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # Measurement Date
-        grid.addWidget(QLabel("Messdatum:"), row, 0)
+        grid.addWidget(QLabel(tr("export.experiment.measurement_date")), row, 0)
         self.meta_measurement_date = QLineEdit()
         self.meta_measurement_date.setText(self.export_settings.get('meta_measurement_date', ''))
         self.meta_measurement_date.setPlaceholderText("YYYY-MM-DD")
@@ -706,7 +706,7 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # Sample ID
-        grid.addWidget(QLabel("Proben-ID:"), row, 0)
+        grid.addWidget(QLabel(tr("export.experiment.sample_id")), row, 0)
         self.meta_sample_id = QLineEdit()
         self.meta_sample_id.setText(self.export_settings.get('meta_sample_id', ''))
         self.meta_sample_id.setPlaceholderText("Bezeichnung der Probe")
