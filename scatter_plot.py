@@ -2613,10 +2613,21 @@ class ScatterPlotApp(QMainWindow):
                         import matplotlib
                         matplotlib.rcParams['svg.fonttype'] = 'none'
 
-                    # SVG-Metadaten (v7.0: basic only)
-                    metadata = self._build_export_metadata(settings)
-                    if metadata:
-                        save_kwargs['metadata'] = metadata
+                    # SVG-Metadaten (v7.0: nur matplotlib-unterstützte Keys)
+                    # matplotlib's SVG backend unterstützt nur: Title, Date, Creator
+                    svg_metadata = {}
+                    if settings.get('meta_title'):
+                        svg_metadata['Title'] = settings['meta_title']
+                    if settings.get('meta_author'):
+                        svg_metadata['Creator'] = settings['meta_author']  # Author → Creator für SVG
+
+                    # Date im ISO-Format
+                    if settings.get('meta_auto_timestamp', True):
+                        from datetime import datetime, timezone
+                        svg_metadata['Date'] = datetime.now(timezone.utc).isoformat()
+
+                    if svg_metadata:
+                        save_kwargs['metadata'] = svg_metadata
 
                 # Speichern
                 self.fig.savefig(filename, **save_kwargs)
