@@ -2644,16 +2644,18 @@ class ScatterPlotApp(QMainWindow):
                         self.logger.warning(f"XMP-Metadaten konnten nicht eingebettet werden: {e}")
                         # Nicht kritisch - Datei ist trotzdem gespeichert
 
-                elif format_ext == 'svg':
-                    # Markdown-Sidecar-Datei für SVG erstellen
+                elif format_ext in ['svg', 'pdf', 'eps']:
+                    # XMP-Sidecar-Datei für SVG/PDF/EPS erstellen
+                    # PDF: Zusätzlich zu embedded Metadaten (doppelt hält besser)
+                    # SVG/EPS: Einzige vollständige Metadaten-Option
                     try:
-                        from utils.metadata_export import create_metadata_sidecar
+                        from utils.metadata_export import create_xmp_sidecar
                         full_metadata = self._build_export_metadata(settings, include_all=True)
-                        if create_metadata_sidecar(Path(filename), full_metadata):
-                            self.logger.info(f"Metadaten-Sidecar-Datei erstellt: {filename}.md")
+                        if create_xmp_sidecar(Path(filename), full_metadata):
+                            self.logger.info(f"XMP-Sidecar erstellt: {filename}.xmp")
                     except Exception as e:
-                        self.logger.warning(f"Metadaten-Sidecar konnte nicht erstellt werden: {e}")
-                        # Nicht kritisch - SVG ist trotzdem gespeichert
+                        self.logger.warning(f"XMP-Sidecar konnte nicht erstellt werden: {e}")
+                        # Nicht kritisch - Haupt-Datei ist trotzdem gespeichert
 
                 # Größe zurücksetzen
                 self.fig.set_size_inches(original_size)
