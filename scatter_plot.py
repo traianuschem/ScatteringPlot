@@ -642,8 +642,11 @@ class ScatterPlotApp(QMainWindow):
         ordered_groups, ordered_unassigned = self.get_tree_order()
         self.logger.debug(f"  Tree-Order: {len(ordered_groups)} Gruppen, {len(ordered_unassigned)} unassigned")
 
-        # Figure leeren
-        self.fig.clear()
+        # Figure leeren (Warnung bei log-Skala unterdrücken)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*non-positive.*')
+            self.fig.clear()
 
         # PDDF hat Subplot
         if self.plot_type == 'PDDF':
@@ -1194,8 +1197,12 @@ class ScatterPlotApp(QMainWindow):
                 ))
 
         # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
+        # und stem plots (die manchmal tight_layout stören)
         try:
-            self.fig.tight_layout()
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='.*tight_layout.*')
+                self.fig.tight_layout()
         except ValueError as e:
             # MathText-Parsing-Fehler (z.B. nicht geschlossene Klammern in LaTeX)
             error_msg = str(e)
@@ -1206,8 +1213,8 @@ class ScatterPlotApp(QMainWindow):
                 # Andere ValueError durchreichen
                 raise
         except Exception as e:
-            # Andere Fehler loggen aber nicht abstürzen
-            self.logger.error(f"Fehler bei tight_layout(): {e}")
+            # Andere Fehler loggen aber nicht abstürzen (z.B. stem plots)
+            self.logger.debug(f"tight_layout fehlgeschlagen: {e}")
 
         self.canvas.draw()
 
@@ -1593,7 +1600,15 @@ class ScatterPlotApp(QMainWindow):
 
         data = item.data(0, Qt.UserRole)
         if data:
-            item_type, obj = data
+            # Flexibles Entpacken: data kann 2 oder 3 Elemente haben
+            # Format: (item_type, obj) oder (item_type, idx, obj)
+            if len(data) == 2:
+                item_type, obj = data
+            elif len(data) == 3:
+                item_type, idx, obj = data
+            else:
+                return  # Unbekanntes Format
+
             if item_type == 'group':
                 # Stack-Faktor ändern mit Dialog
                 dialog = QDialog(self)
@@ -1632,6 +1647,10 @@ class ScatterPlotApp(QMainWindow):
                     self.update_plot()
             elif item_type == 'dataset':
                 # Optional: Dataset-Eigenschaften bearbeiten
+                pass
+            elif item_type == 'annotation' or item_type == 'reference_line':
+                # Annotations/Referenzlinien werden per Kontextmenü bearbeitet
+                # Doppelklick hier bewusst nichts tun
                 pass
 
     def on_tree_item_changed(self, item, column):
