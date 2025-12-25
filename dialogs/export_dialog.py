@@ -582,6 +582,25 @@ class ExportSettingsDialog(QDialog):
         self.meta_copyright.setText(self.export_settings.get('meta_copyright', ''))
         self.meta_copyright.setPlaceholderText(tr("export.metadata.copyright_placeholder"))
         grid.addWidget(self.meta_copyright, row, 1)
+        row += 1
+
+        # License
+        grid.addWidget(QLabel("Lizenz:"), row, 0)
+        self.meta_license = QComboBox()
+        self.meta_license.addItems([
+            "CC-BY-4.0",
+            "CC-BY-SA-4.0",
+            "CC-BY-NC-4.0",
+            "CC-BY-NC-SA-4.0",
+            "CC0-1.0",
+            "All Rights Reserved"
+        ])
+        default_license = self.export_settings.get('meta_license', '')
+        if not default_license and self.user_metadata:
+            default_license = self.user_metadata.metadata['export_defaults'].get('license', 'CC-BY-4.0')
+        if default_license:
+            self.meta_license.setCurrentText(default_license)
+        grid.addWidget(self.meta_license, row, 1)
 
         layout.addLayout(grid)
 
