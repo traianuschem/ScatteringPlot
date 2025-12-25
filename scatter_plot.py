@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 7.0-dev
-====================================
+ScatterForge Plot
 
 Professionelles Tool für Streudaten-Analyse mit:
 - Qt6-basierte moderne GUI mit modularer Architektur
@@ -54,6 +53,7 @@ from matplotlib.gridspec import GridSpec
 # Eigene Module
 from core.models import DataSet, DataGroup
 from core.constants import PLOT_TYPES
+from core.version import __version__, get_version_string
 from dialogs.settings_dialog import PlotSettingsDialog
 from dialogs.group_dialog import CreateGroupDialog
 from dialogs.design_manager import DesignManagerDialog
@@ -132,16 +132,21 @@ class ScatterPlotApp(QMainWindow):
         # Logger initialisieren (v5.6)
         self.logger = setup_logger('ScatterForge')
         self.logger.info("=" * 60)
-        self.logger.info("ScatterForge Plot v6.2 gestartet")
+        self.logger.info(f"{get_version_string()} gestartet")
         self.logger.info("=" * 60)
 
-        self.setWindowTitle("ScatterForge Plot v6.2")
+        self.setWindowTitle(get_version_string())
         self.resize(1600, 1000)
 
         # Config
         self.logger.debug("Lade User-Config...")
         self.config = get_user_config()
         self.logger.info("User-Config geladen")
+
+        # User Metadata Manager initialisieren (v7.0+)
+        from utils.user_metadata import get_user_metadata_manager
+        self.user_metadata = get_user_metadata_manager()
+        self.logger.info("User-Metadata-Manager geladen")
 
         # i18n initialisieren (v6.2+)
         self.i18n = get_i18n()
@@ -302,6 +307,17 @@ class ScatterPlotApp(QMainWindow):
 
         file_menu.addSeparator()
 
+        # v7.0: Benutzer-Config Management
+        load_user_config_action = QAction("Benutzer-Config laden...", self)
+        load_user_config_action.triggered.connect(self.load_user_config)
+        file_menu.addAction(load_user_config_action)
+
+        save_user_config_action = QAction("Benutzer-Config speichern unter...", self)
+        save_user_config_action.triggered.connect(self.save_user_config_as)
+        file_menu.addAction(save_user_config_action)
+
+        file_menu.addSeparator()
+
         quit_action = QAction(tr("menu.file.quit"), self)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
@@ -361,6 +377,13 @@ class ScatterPlotApp(QMainWindow):
 
         # Einstellungen-Menü (v6.2+)
         settings_menu = menubar.addMenu(tr("menu.settings.title"))
+
+        # v7.0: Benutzer-Metadaten Editor
+        user_metadata_action = QAction("Benutzer-Metadaten bearbeiten...", self)
+        user_metadata_action.triggered.connect(self.edit_user_metadata)
+        settings_menu.addAction(user_metadata_action)
+
+        settings_menu.addSeparator()
 
         # Sprach-Untermenü
         language_menu = settings_menu.addMenu(tr("menu.settings.language"))
@@ -521,7 +544,7 @@ class ScatterPlotApp(QMainWindow):
         # Farbschema
         options_layout.addWidget(QLabel(tr("options.color_scheme")), 2, 0)
         self.color_scheme_combo = QComboBox()
-        self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
+        self.color_scheme_combo.addItems(self.config.get_sorted_scheme_names())
         self.color_scheme_combo.setCurrentText('TUBAF')
         self.color_scheme_combo.currentTextChanged.connect(self.change_color_scheme)
         options_layout.addWidget(self.color_scheme_combo, 2, 1)
@@ -642,8 +665,11 @@ class ScatterPlotApp(QMainWindow):
         ordered_groups, ordered_unassigned = self.get_tree_order()
         self.logger.debug(f"  Tree-Order: {len(ordered_groups)} Gruppen, {len(ordered_unassigned)} unassigned")
 
-        # Figure leeren
-        self.fig.clear()
+        # Figure leeren (Warnung bei log-Skala unterdrücken)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*non-positive.*')
+            self.fig.clear()
 
         # PDDF hat Subplot
         if self.plot_type == 'PDDF':
@@ -733,14 +759,32 @@ class ScatterPlotApp(QMainWindow):
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
+                errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
+                # Spezialfall: stem plot für XRD-Referenz
+                if errorbar_style == 'stem':
+                    # Stem plot: Vertikale Linien von x-Achse zu Datenpunkten
+                    markerline, stemlines, baseline = self.ax_main.stem(
+                        x, y,
+                        linefmt=color,
+                        markerfmt=dataset.marker_style if dataset.marker_style else 'o',
+                        basefmt=' '  # Keine Basislinie
+                    )
+                    # Stil anpassen
+                    markerline.set_markerfacecolor(color)
+                    markerline.set_markeredgecolor(color)
+                    markerline.set_markersize(dataset.marker_size)
+                    stemlines.set_linewidth(dataset.line_width)
+                    stemlines.set_alpha(dataset.errorbar_alpha)
+                    # Label für Legende (manuell, da stem keinen label Parameter hat)
+                    self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
+                                     markersize=dataset.marker_size, linestyle='',
+                                     label=dataset.display_label)
                 # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-                if y_err_data is not None and dataset.show_errorbars:
+                elif y_err_data is not None and dataset.show_errorbars:
                     # Fehler transformieren
                     y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
-
-                    errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
                     if errorbar_style == 'fill':
                         # Transparente Fehlerfläche (klassische Methode)
@@ -817,13 +861,31 @@ class ScatterPlotApp(QMainWindow):
 
             # Plotten
             plot_style = dataset.get_plot_style()
+            errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
+            # Spezialfall: stem plot für XRD-Referenz
+            if errorbar_style == 'stem':
+                # Stem plot: Vertikale Linien von x-Achse zu Datenpunkten
+                markerline, stemlines, baseline = self.ax_main.stem(
+                    x, y,
+                    linefmt=color,
+                    markerfmt=dataset.marker_style if dataset.marker_style else 'o',
+                    basefmt=' '  # Keine Basislinie
+                )
+                # Stil anpassen
+                markerline.set_markerfacecolor(color)
+                markerline.set_markeredgecolor(color)
+                markerline.set_markersize(dataset.marker_size)
+                stemlines.set_linewidth(dataset.line_width)
+                stemlines.set_alpha(dataset.errorbar_alpha)
+                # Label für Legende (manuell, da stem keinen label Parameter hat)
+                self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
+                                 markersize=dataset.marker_size, linestyle='',
+                                 label=dataset.display_label)
             # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-            if y_err_data is not None and dataset.show_errorbars:
+            elif y_err_data is not None and dataset.show_errorbars:
                 # Fehler transformieren
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-
-                errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
                 if errorbar_style == 'fill':
                     # Transparente Fehlerfläche (klassische Methode)
@@ -1158,8 +1220,12 @@ class ScatterPlotApp(QMainWindow):
                 ))
 
         # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
+        # und stem plots (die manchmal tight_layout stören)
         try:
-            self.fig.tight_layout()
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='.*tight_layout.*')
+                self.fig.tight_layout()
         except ValueError as e:
             # MathText-Parsing-Fehler (z.B. nicht geschlossene Klammern in LaTeX)
             error_msg = str(e)
@@ -1170,8 +1236,8 @@ class ScatterPlotApp(QMainWindow):
                 # Andere ValueError durchreichen
                 raise
         except Exception as e:
-            # Andere Fehler loggen aber nicht abstürzen
-            self.logger.error(f"Fehler bei tight_layout(): {e}")
+            # Andere Fehler loggen aber nicht abstürzen (z.B. stem plots)
+            self.logger.debug(f"tight_layout fehlgeschlagen: {e}")
 
         self.canvas.draw()
 
@@ -1272,6 +1338,60 @@ class ScatterPlotApp(QMainWindow):
                 return two_theta, y
         else:
             return x, y
+
+    def convert_reference_line_value(self, value, from_plot_type, to_plot_type):
+        """
+        Konvertiert einen X-Wert einer Referenzlinie von einem Plottyp zu einem anderen.
+
+        Args:
+            value: Der X-Wert im Quell-Plottyp
+            from_plot_type: Der ursprüngliche Plottyp
+            to_plot_type: Der Ziel-Plottyp
+
+        Returns:
+            Der konvertierte X-Wert im Ziel-Plottyp
+        """
+        # Plottypen, die q verwenden (keine Transformation der X-Achse)
+        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF'}
+
+        # Zuerst auf q zurückrechnen (Basiseinheit)
+        if from_plot_type in q_types:
+            q = value
+        elif from_plot_type == 'Guinier':
+            # Guinier: x-Achse ist q²
+            q = np.sqrt(value) if value >= 0 else value
+        elif from_plot_type == 'Bragg Spacing':
+            # Bragg: x-Achse ist d = 2π/q
+            q = 2 * np.pi / value if value != 0 else value
+        elif from_plot_type == '2-Theta':
+            # 2-Theta: x-Achse ist 2θ in Grad
+            # q = 4π·sin(θ)/λ
+            theta_rad = value * np.pi / 360  # 2θ/2 in Radiant
+            q = 4 * np.pi * np.sin(theta_rad) / self.wavelength
+        else:
+            q = value
+
+        # Dann in Ziel-Plottyp umrechnen
+        if to_plot_type in q_types:
+            return q
+        elif to_plot_type == 'Guinier':
+            # Guinier: x-Achse ist q²
+            return q ** 2
+        elif to_plot_type == 'Bragg Spacing':
+            # Bragg: x-Achse ist d = 2π/q
+            return 2 * np.pi / q if q != 0 else q
+        elif to_plot_type == '2-Theta':
+            # 2-Theta: x-Achse ist 2θ in Grad
+            # 2θ = 2·arcsin(λq/(4π))
+            arg = self.wavelength * q / (4 * np.pi)
+            if arg <= 1:
+                theta_rad = np.arcsin(arg)
+                return 2 * theta_rad * 180 / np.pi
+            else:
+                # Ungültiger Bereich, behalte Wert
+                return value
+        else:
+            return q
 
     def on_annotation_press(self, event):
         """Maus-Press für Annotation-Drag (Version 5.3)"""
@@ -1503,7 +1623,15 @@ class ScatterPlotApp(QMainWindow):
 
         data = item.data(0, Qt.UserRole)
         if data:
-            item_type, obj = data
+            # Flexibles Entpacken: data kann 2 oder 3 Elemente haben
+            # Format: (item_type, obj) oder (item_type, idx, obj)
+            if len(data) == 2:
+                item_type, obj = data
+            elif len(data) == 3:
+                item_type, idx, obj = data
+            else:
+                return  # Unbekanntes Format
+
             if item_type == 'group':
                 # Stack-Faktor ändern mit Dialog
                 dialog = QDialog(self)
@@ -1542,6 +1670,10 @@ class ScatterPlotApp(QMainWindow):
                     self.update_plot()
             elif item_type == 'dataset':
                 # Optional: Dataset-Eigenschaften bearbeiten
+                pass
+            elif item_type == 'annotation' or item_type == 'reference_line':
+                # Annotations/Referenzlinien werden per Kontextmenü bearbeitet
+                # Doppelklick hier bewusst nichts tun
                 pass
 
     def on_tree_item_changed(self, item, column):
@@ -2068,8 +2200,27 @@ class ScatterPlotApp(QMainWindow):
         self.update_annotations_tree()
 
     def change_plot_type(self):
-        """Ändert Plot-Typ"""
-        self.plot_type = self.plot_type_combo.currentText()
+        """Ändert Plot-Typ und passt Referenzlinien an"""
+        old_plot_type = self.plot_type
+        new_plot_type = self.plot_type_combo.currentText()
+
+        # Vertikale Referenzlinien-X-Werte umrechnen
+        if old_plot_type != new_plot_type and hasattr(self, 'reference_lines'):
+            for ref_line in self.reference_lines:
+                if ref_line['type'] == 'vertical':
+                    old_value = ref_line['value']
+                    new_value = self.convert_reference_line_value(old_value, old_plot_type, new_plot_type)
+                    ref_line['value'] = new_value
+
+                    # Label aktualisieren, falls es ein auto-generiertes Label ist
+                    if ref_line.get('label') and ref_line['label'].startswith('x = '):
+                        ref_line['label'] = f"x = {new_value:.2f}"
+
+            # Annotations-Tree aktualisieren, um neue Werte anzuzeigen
+            if hasattr(self, 'update_annotations_tree'):
+                self.update_annotations_tree()
+
+        self.plot_type = new_plot_type
         self.update_plot()
 
     def change_color_scheme(self):
@@ -2127,7 +2278,7 @@ class ScatterPlotApp(QMainWindow):
         dialog.exec()
         # Config neu laden
         self.color_scheme_combo.clear()
-        self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
+        self.color_scheme_combo.addItems(self.config.get_sorted_scheme_names())
         self.update_plot()
 
     def show_legend_settings(self):
@@ -2376,6 +2527,8 @@ class ScatterPlotApp(QMainWindow):
 
         if format_ext == 'png':
             filter_str = "PNG Dateien (*.png)"
+        elif format_ext == 'tiff':
+            filter_str = "TIFF Dateien (*.tiff *.tif)"
         elif format_ext == 'svg':
             filter_str = "SVG Dateien (*.svg)"
         elif format_ext == 'pdf':
@@ -2417,19 +2570,31 @@ class ScatterPlotApp(QMainWindow):
                     if 'png_compression' in settings:
                         save_kwargs['pil_kwargs'] = {'compress_level': settings['png_compression']}
 
+                elif format_ext == 'tiff':
+                    # TIFF-Optionen
+                    save_kwargs['transparent'] = settings.get('transparent', False)
+                    if not settings.get('transparent', False):
+                        save_kwargs['facecolor'] = settings.get('bg_color', 'white')
+
+                    # TIFF-Kompression
+                    tiff_comp = settings.get('tiff_compression', 'tiff_deflate')
+                    pil_kwargs = {}
+
+                    if tiff_comp == 'tiff_lzw':
+                        pil_kwargs['compression'] = 'tiff_lzw'
+                    elif tiff_comp == 'tiff_jpeg':
+                        pil_kwargs['compression'] = 'tiff_jpeg'
+                        pil_kwargs['quality'] = settings.get('tiff_quality', 95)
+                    elif tiff_comp == 'tiff_deflate':
+                        pil_kwargs['compression'] = 'tiff_deflate'
+                    # else: no compression (None)
+
+                    if pil_kwargs:
+                        save_kwargs['pil_kwargs'] = pil_kwargs
+
                 elif format_ext == 'pdf':
-                    # PDF-Metadaten
-                    metadata = {}
-                    if settings.get('meta_title'):
-                        metadata['Title'] = settings['meta_title']
-                    if settings.get('meta_author'):
-                        metadata['Author'] = settings['meta_author']
-                    if settings.get('meta_subject'):
-                        metadata['Subject'] = settings['meta_subject']
-                    if settings.get('meta_keywords'):
-                        metadata['Keywords'] = settings['meta_keywords']
-                    if settings.get('meta_copyright'):
-                        metadata['Copyright'] = settings['meta_copyright']
+                    # PDF-Metadaten (v7.0: erweitert mit allen Infos in Subject)
+                    metadata = self._build_export_metadata(settings, format_type='pdf')
 
                     if metadata:
                         save_kwargs['metadata'] = metadata
@@ -2448,17 +2613,49 @@ class ScatterPlotApp(QMainWindow):
                         import matplotlib
                         matplotlib.rcParams['svg.fonttype'] = 'none'
 
-                    # SVG-Metadaten
-                    metadata = {}
+                    # SVG-Metadaten (v7.0: nur matplotlib-unterstützte Keys)
+                    # matplotlib's SVG backend unterstützt nur: Title, Date, Creator
+                    svg_metadata = {}
                     if settings.get('meta_title'):
-                        metadata['Title'] = settings['meta_title']
+                        svg_metadata['Title'] = settings['meta_title']
                     if settings.get('meta_author'):
-                        metadata['Author'] = settings['meta_author']
-                    if metadata:
-                        save_kwargs['metadata'] = metadata
+                        svg_metadata['Creator'] = settings['meta_author']  # Author → Creator für SVG
+
+                    # Date im ISO-Format
+                    if settings.get('meta_auto_timestamp', True):
+                        from datetime import datetime, timezone
+                        svg_metadata['Date'] = datetime.now(timezone.utc).isoformat()
+
+                    if svg_metadata:
+                        save_kwargs['metadata'] = svg_metadata
 
                 # Speichern
                 self.fig.savefig(filename, **save_kwargs)
+
+                # v7.0: Post-Export Metadaten-Handling
+                if format_ext in ['png', 'tiff', 'tif']:
+                    # XMP-Metadaten für PNG/TIFF einbetten
+                    try:
+                        from utils.metadata_export import add_metadata_to_export
+                        full_metadata = self._build_export_metadata(settings, include_all=True)
+                        add_metadata_to_export(Path(filename), full_metadata, format_ext.upper())
+                        self.logger.info(f"XMP-Metadaten in {format_ext.upper()} eingebettet")
+                    except Exception as e:
+                        self.logger.warning(f"XMP-Metadaten konnten nicht eingebettet werden: {e}")
+                        # Nicht kritisch - Datei ist trotzdem gespeichert
+
+                elif format_ext in ['svg', 'pdf', 'eps']:
+                    # XMP-Sidecar-Datei für SVG/PDF/EPS erstellen
+                    # PDF: Zusätzlich zu embedded Metadaten (doppelt hält besser)
+                    # SVG/EPS: Einzige vollständige Metadaten-Option
+                    try:
+                        from utils.metadata_export import create_xmp_sidecar
+                        full_metadata = self._build_export_metadata(settings, include_all=True)
+                        if create_xmp_sidecar(Path(filename), full_metadata):
+                            self.logger.info(f"XMP-Sidecar erstellt: {filename}.xmp")
+                    except Exception as e:
+                        self.logger.warning(f"XMP-Sidecar konnte nicht erstellt werden: {e}")
+                        # Nicht kritisch - Haupt-Datei ist trotzdem gespeichert
 
                 # Größe zurücksetzen
                 self.fig.set_size_inches(original_size)
@@ -2472,6 +2669,164 @@ class ScatterPlotApp(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, tr("messages.export_error"),
                                    tr("messages.export_error_msg", error=str(e)))
+
+    def _build_export_metadata(self, settings: dict, include_all: bool = False, format_type: str = None) -> dict:
+        """
+        Erstellt vollständige Metadaten für Export (v7.0+)
+
+        Args:
+            settings: Export-Settings Dictionary
+            include_all: Wenn True, werden alle erweiterten Metadaten inkludiert
+                        (für XMP). Wenn False, nur matplotlib-kompatible Felder
+                        (für PDF/SVG savefig).
+            format_type: 'pdf', 'svg', oder None - für format-spezifische Anpassungen
+
+        Returns:
+            dict: Metadaten-Dictionary
+        """
+        from datetime import datetime, timezone
+        from core.version import get_metadata_provenance
+        import uuid
+
+        metadata = {}
+
+        # Basic metadata (immer dabei)
+        if settings.get('meta_title'):
+            metadata['Title'] = settings['meta_title']
+
+        if settings.get('meta_author'):
+            metadata['Author'] = settings['meta_author']
+
+        if settings.get('meta_subject'):
+            metadata['Subject'] = settings['meta_subject']
+
+        if settings.get('meta_keywords'):
+            metadata['Keywords'] = settings['meta_keywords']
+
+        # Für matplotlib savefig (PDF/SVG): erweiterte Metadaten sammeln
+        if not include_all:
+            # Erweiterte Metadaten temporär sammeln für PDF-Subject-Erweiterung
+            extended_meta = {}
+
+            # ORCID
+            if settings.get('meta_orcid'):
+                orcid = settings['meta_orcid'].strip()
+                if orcid:
+                    if not orcid.startswith('http'):
+                        extended_meta['Creator_ORCID'] = f"https://orcid.org/{orcid}"
+                    else:
+                        extended_meta['Creator_ORCID'] = orcid
+
+            # Affiliation
+            if settings.get('meta_affiliation'):
+                extended_meta['Affiliation'] = settings['meta_affiliation']
+
+            # License
+            if settings.get('meta_license'):
+                extended_meta['License'] = settings['meta_license']
+
+            # Timestamp
+            if settings.get('meta_auto_timestamp', True):
+                now = datetime.now(timezone.utc)
+                extended_meta['CreationDate'] = now.isoformat()
+                extended_meta['CreationDate_Unix'] = int(now.timestamp())
+
+            # Provenance
+            if settings.get('meta_auto_provenance', True):
+                prov = get_metadata_provenance()
+                extended_meta['Creator_Tool'] = f"{prov['software']} v{prov['version']}"
+                extended_meta['Creator_Tool_Version'] = prov['version']
+                extended_meta['Python_Version'] = prov['python_version']
+                extended_meta['Matplotlib_Version'] = prov['matplotlib_version']
+
+            # UUID
+            if settings.get('meta_generate_uuid', False):
+                extended_meta['Image_UUID'] = str(uuid.uuid4())
+
+            # Experiment metadata
+            if settings.get('meta_experiment_id'):
+                extended_meta['Experiment_ID'] = settings['meta_experiment_id']
+            if settings.get('meta_measurement_date'):
+                extended_meta['Measurement_Date'] = settings['meta_measurement_date']
+            if settings.get('meta_sample_id'):
+                extended_meta['Sample_ID'] = settings['meta_sample_id']
+
+            # Für PDF: Alle erweiterten Metadaten in Subject-Feld packen
+            if format_type == 'pdf':
+                from utils.metadata_export import format_metadata_as_text
+
+                # Kombiniere basis metadata mit erweiterten
+                full_meta = {**metadata, **extended_meta}
+
+                # Formatiere als kompakten Text
+                extended_text = format_metadata_as_text(full_meta, format='plain')
+
+                # Überschreibe Subject mit erweitertem Text
+                metadata['Subject'] = extended_text
+
+            return metadata
+
+        # Erweiterte Metadaten (nur für XMP/PNG/TIFF)
+
+        # ORCID
+        if settings.get('meta_orcid'):
+            orcid = settings['meta_orcid'].strip()
+            if orcid:
+                if not orcid.startswith('http'):
+                    metadata['Creator_ORCID'] = f"https://orcid.org/{orcid}"
+                else:
+                    metadata['Creator_ORCID'] = orcid
+
+        # Affiliation
+        if settings.get('meta_affiliation'):
+            metadata['Affiliation'] = settings['meta_affiliation']
+
+        # License
+        if settings.get('meta_license'):
+            metadata['License'] = settings['meta_license']
+
+            # License URL für bekannte CC-Lizenzen
+            license_urls = {
+                'CC-BY-4.0': 'https://creativecommons.org/licenses/by/4.0/',
+                'CC-BY-SA-4.0': 'https://creativecommons.org/licenses/by-sa/4.0/',
+                'CC-BY-NC-4.0': 'https://creativecommons.org/licenses/by-nc/4.0/',
+                'CC-BY-NC-SA-4.0': 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+                'CC0-1.0': 'https://creativecommons.org/publicdomain/zero/1.0/',
+            }
+            if settings['meta_license'] in license_urls:
+                metadata['License_URL'] = license_urls[settings['meta_license']]
+
+        # Automatische Metadaten
+
+        # Timestamp (wenn aktiviert)
+        if settings.get('meta_auto_timestamp', True):
+            now = datetime.now(timezone.utc)
+            metadata['CreationDate'] = now.isoformat()
+            metadata['CreationDate_Unix'] = int(now.timestamp())
+
+        # Software-Provenienz (wenn aktiviert)
+        if settings.get('meta_auto_provenance', True):
+            prov = get_metadata_provenance()
+            metadata['Creator_Tool'] = f"{prov['software']} v{prov['version']}"
+            metadata['Creator_Tool_Version'] = prov['version']
+            metadata['Python_Version'] = prov['python_version']
+            metadata['Matplotlib_Version'] = prov['matplotlib_version']
+
+        # UUID (wenn aktiviert)
+        if settings.get('meta_generate_uuid', False):
+            metadata['Image_UUID'] = str(uuid.uuid4())
+
+        # Experiment metadata (optional)
+        if settings.get('meta_experiment_id'):
+            metadata['Experiment_ID'] = settings['meta_experiment_id']
+
+        if settings.get('meta_measurement_date'):
+            metadata['Measurement_Date'] = settings['meta_measurement_date']
+
+        if settings.get('meta_sample_id'):
+            metadata['Sample_ID'] = settings['meta_sample_id']
+
+        return metadata
 
     def change_language(self, language_code):
         """
@@ -2491,17 +2846,105 @@ class ScatterPlotApp(QMainWindow):
             tr("messages.language_changed_restart")
         )
 
+    def edit_user_metadata(self):
+        """
+        Öffnet Editor für Benutzer-Metadaten (v7.0+)
+        """
+        from dialogs.user_metadata_dialog import UserMetadataDialog
+
+        self.logger.debug("Öffne Benutzer-Metadaten-Editor...")
+        dialog = UserMetadataDialog(self.user_metadata, self)
+        dialog.exec()
+
+    def load_user_config(self):
+        """
+        Lädt Benutzer-Config von einer Datei (v7.0+)
+        """
+        self.logger.debug("Öffne Benutzer-Config-Laden-Dialog...")
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            "Benutzer-Config laden",
+            str(Path.home()),
+            "JSON Files (*.json)"
+        )
+
+        if filepath:
+            try:
+                self.user_metadata.load_from_file(filepath)
+                self.logger.info(f"Benutzer-Config geladen: {filepath}")
+
+                QMessageBox.information(
+                    self,
+                    "Erfolg",
+                    f"Benutzer-Config wurde erfolgreich geladen:\n\n{filepath}"
+                )
+
+                # In Haupt-Config merken
+                self.config.config['last_user_metadata_file'] = filepath
+                self.config.save_config()
+
+            except Exception as e:
+                self.logger.error(f"Fehler beim Laden der Benutzer-Config: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Fehler",
+                    f"Fehler beim Laden der Benutzer-Config:\n\n{str(e)}"
+                )
+
+    def save_user_config_as(self):
+        """
+        Speichert Benutzer-Config unter einem neuen Namen (v7.0+)
+        """
+        self.logger.debug("Öffne Benutzer-Config-Speichern-Dialog...")
+
+        # Default-Pfad
+        if self.user_metadata.current_file:
+            default_path = str(self.user_metadata.current_file)
+        else:
+            default_path = str(Path.home() / ".scatterforge" / "user_metadata.json")
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Benutzer-Config speichern unter",
+            default_path,
+            "JSON Files (*.json)"
+        )
+
+        if filepath:
+            try:
+                self.user_metadata.save(Path(filepath))
+                self.logger.info(f"Benutzer-Config gespeichert: {filepath}")
+
+                QMessageBox.information(
+                    self,
+                    "Erfolg",
+                    f"Benutzer-Config wurde erfolgreich gespeichert:\n\n{filepath}"
+                )
+
+                # In Haupt-Config merken
+                self.config.config['last_user_metadata_file'] = filepath
+                self.config.save_config()
+
+            except Exception as e:
+                self.logger.error(f"Fehler beim Speichern der Benutzer-Config: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Fehler",
+                    f"Fehler beim Speichern der Benutzer-Config:\n\n{str(e)}"
+                )
+
     def show_about(self):
         """Zeigt Über-Dialog"""
         QMessageBox.about(self, "Über ScatterForge Plot",
-                         "ScatterForge Plot - Version 5.6\n\n"
+                         f"{get_version_string()}\n\n"
                          "Professionelles Tool für Streudaten-Analyse\n\n"
-                         "Neue Features in v5.6:\n"
-                         "• Export-Optimierung (16:10 Standard-Format)\n"
-                         "• Gruppenspezifische Farbpaletten\n"
-                         "• Auto-Gruppierung mit automatischen Stack-Faktoren\n"
-                         "• Programmweite Standard-Plot-Einstellungen\n"
-                         "• Umfassendes Logging-System für Debugging\n\n"
+                         "Neue Features in v7.0:\n"
+                         "• Erweiterte Metadaten für Export (FAIR-Prinzipien)\n"
+                         "• Benutzer-Metadaten-Manager (ORCID, Affiliation)\n"
+                         "• XMP-Support für PNG/TIFF\n"
+                         "• Automatische Zeitstempel & Software-Provenienz\n"
+                         "• Lizenz-Management für wissenschaftliche Publikationen\n\n"
                          "Features:\n"
                          "• Qt6-basierte moderne GUI mit modularer Architektur\n"
                          "• Erweiterte Legenden-, Grid- und Font-Einstellungen\n"
@@ -2694,9 +3137,9 @@ def main():
     app = QApplication(sys.argv)
 
     # App-Metadaten
-    app.setApplicationName("TUBAF Scattering Plot Tool")
+    app.setApplicationName("ScatterForge Plot")
     app.setOrganizationName("TU Bergakademie Freiberg")
-    app.setApplicationVersion("5.0")
+    app.setApplicationVersion(__version__)
 
     # Hauptfenster
     window = ScatterPlotApp()
