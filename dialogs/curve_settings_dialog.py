@@ -15,35 +15,40 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
+from i18n import tr
 
 
 class CurveSettingsDialog(QDialog):
     """Dialog zur umfassenden Bearbeitung von Kurveneinstellungen"""
 
-    # Verfügbare Marker und Linien-Stile
-    MARKER_STYLES = {
-        'Kein Marker': '',
-        'Kreis (o)': 'o',
-        'Quadrat (s)': 's',
-        'Dreieck oben (^)': '^',
-        'Dreieck unten (v)': 'v',
-        'Dreieck links (<)': '<',
-        'Dreieck rechts (>)': '>',
-        'Raute (D)': 'D',
-        'Stern (*)': '*',
-        'Plus (+)': '+',
-        'Kreuz (x)': 'x',
-        'Punkt (.)': '.',
-        'Pixel (,)': ',',
-    }
+    # Verfügbare Marker und Linien-Stile (diese werden dynamisch übersetzt)
+    @staticmethod
+    def get_marker_styles():
+        return {
+            tr("curve_settings.marker.none"): '',
+            tr("curve_settings.marker.circle"): 'o',
+            tr("curve_settings.marker.square"): 's',
+            tr("curve_settings.marker.triangle_up"): '^',
+            tr("curve_settings.marker.triangle_down"): 'v',
+            tr("curve_settings.marker.triangle_left"): '<',
+            tr("curve_settings.marker.triangle_right"): '>',
+            tr("curve_settings.marker.diamond"): 'D',
+            tr("curve_settings.marker.star"): '*',
+            tr("curve_settings.marker.plus"): '+',
+            tr("curve_settings.marker.cross"): 'x',
+            tr("curve_settings.marker.dot"): '.',
+            tr("curve_settings.marker.pixel"): ',',
+        }
 
-    LINE_STYLES = {
-        'Keine Linie': '',
-        'Durchgezogen (-)': '-',
-        'Gestrichelt (--)': '--',
-        'Strich-Punkt (-.)': '-.',
-        'Gepunktet (:)': ':',
-    }
+    @staticmethod
+    def get_line_styles():
+        return {
+            tr("curve_settings.line.none"): '',
+            tr("curve_settings.line.solid"): '-',
+            tr("curve_settings.line.dashed"): '--',
+            tr("curve_settings.line.dashdot"): '-.',
+            tr("curve_settings.line.dotted"): ':',
+        }
 
     def __init__(self, parent, dataset, current_color_scheme=None, color_schemes=None):
         """
@@ -59,25 +64,23 @@ class CurveSettingsDialog(QDialog):
         self.color_schemes = color_schemes or {}
         self.selected_color = dataset.color
 
-        self.setWindowTitle(f"Kurveneinstellungen für '{dataset.name}'")
+        self.setWindowTitle(tr("curve_settings.title", dataset=dataset.name))
         self.resize(600, 700)
 
         layout = QVBoxLayout(self)
 
         # Info-Label
-        info_label = QLabel(
-            "Bearbeiten Sie alle visuellen Eigenschaften dieser Kurve."
-        )
+        info_label = QLabel(tr("curve_settings.info"))
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
         # === FARBE ===
-        color_group = QGroupBox("Farbe")
+        color_group = QGroupBox(tr("curve_settings.color.title"))
         color_layout = QVBoxLayout()
 
         # Aktuelle Farbe anzeigen
         color_display_layout = QHBoxLayout()
-        color_display_layout.addWidget(QLabel("Aktuelle Farbe:"))
+        color_display_layout.addWidget(QLabel(tr("curve_settings.color.current")))
 
         self.color_preview = QFrame()
         self.color_preview.setFixedSize(100, 30)
@@ -85,7 +88,7 @@ class CurveSettingsDialog(QDialog):
         self.update_color_preview()
         color_display_layout.addWidget(self.color_preview)
 
-        self.color_picker_btn = QPushButton("Farbwähler...")
+        self.color_picker_btn = QPushButton(tr("curve_settings.color.picker"))
         self.color_picker_btn.clicked.connect(self.open_color_picker)
         color_display_layout.addWidget(self.color_picker_btn)
 
@@ -96,7 +99,7 @@ class CurveSettingsDialog(QDialog):
         if current_color_scheme and current_color_scheme in self.color_schemes:
             palette_colors = self.color_schemes[current_color_scheme]
 
-            color_layout.addWidget(QLabel(f"Schnellauswahl aus '{current_color_scheme}':"))
+            color_layout.addWidget(QLabel(tr("curve_settings.color.quick_selection", scheme=current_color_scheme)))
 
             # Farb-Buttons in Grid
             quick_colors_layout = QGridLayout()
@@ -110,7 +113,7 @@ class CurveSettingsDialog(QDialog):
             color_layout.addLayout(quick_colors_layout)
 
         # Reset-Button für Farbe
-        reset_color_btn = QPushButton("Farbe zurücksetzen (Auto)")
+        reset_color_btn = QPushButton(tr("curve_settings.color.reset"))
         reset_color_btn.clicked.connect(self.reset_color)
         color_layout.addWidget(reset_color_btn)
 
@@ -118,22 +121,23 @@ class CurveSettingsDialog(QDialog):
         layout.addWidget(color_group)
 
         # === MARKER ===
-        marker_group = QGroupBox("Marker")
+        marker_group = QGroupBox(tr("curve_settings.marker.title"))
         marker_layout = QGridLayout()
 
-        marker_layout.addWidget(QLabel("Marker-Stil:"), 0, 0)
+        marker_layout.addWidget(QLabel(tr("curve_settings.marker.style")), 0, 0)
         self.marker_combo = QComboBox()
-        for name, style in self.MARKER_STYLES.items():
+        marker_styles = self.get_marker_styles()
+        for name, style in marker_styles.items():
             self.marker_combo.addItem(name, style)
         # Aktuellen Marker setzen
         current_marker = dataset.marker_style or ''
-        for i, (name, style) in enumerate(self.MARKER_STYLES.items()):
+        for i, (name, style) in enumerate(marker_styles.items()):
             if style == current_marker:
                 self.marker_combo.setCurrentIndex(i)
                 break
         marker_layout.addWidget(self.marker_combo, 0, 1)
 
-        marker_layout.addWidget(QLabel("Marker-Größe:"), 1, 0)
+        marker_layout.addWidget(QLabel(tr("curve_settings.marker.size")), 1, 0)
         self.marker_size_spin = QDoubleSpinBox()
         self.marker_size_spin.setRange(0, 20)
         self.marker_size_spin.setSingleStep(0.5)
@@ -144,22 +148,23 @@ class CurveSettingsDialog(QDialog):
         layout.addWidget(marker_group)
 
         # === LINIE ===
-        line_group = QGroupBox("Linie")
+        line_group = QGroupBox(tr("curve_settings.line.title"))
         line_layout = QGridLayout()
 
-        line_layout.addWidget(QLabel("Linien-Stil:"), 0, 0)
+        line_layout.addWidget(QLabel(tr("curve_settings.line.style")), 0, 0)
         self.line_combo = QComboBox()
-        for name, style in self.LINE_STYLES.items():
+        line_styles = self.get_line_styles()
+        for name, style in line_styles.items():
             self.line_combo.addItem(name, style)
         # Aktuelle Linie setzen
         current_line = dataset.line_style or ''
-        for i, (name, style) in enumerate(self.LINE_STYLES.items()):
+        for i, (name, style) in enumerate(line_styles.items()):
             if style == current_line:
                 self.line_combo.setCurrentIndex(i)
                 break
         line_layout.addWidget(self.line_combo, 0, 1)
 
-        line_layout.addWidget(QLabel("Linien-Breite:"), 1, 0)
+        line_layout.addWidget(QLabel(tr("curve_settings.line.width")), 1, 0)
         self.line_width_spin = QDoubleSpinBox()
         self.line_width_spin.setRange(0, 10)
         self.line_width_spin.setSingleStep(0.5)
@@ -170,11 +175,11 @@ class CurveSettingsDialog(QDialog):
         layout.addWidget(line_group)
 
         # === FEHLERBALKEN ===
-        error_group = QGroupBox("Fehlerbalken")
+        error_group = QGroupBox(tr("curve_settings.error_bars.title"))
         error_layout = QGridLayout()
 
         # Checkbox zum Aktivieren/Deaktivieren
-        self.show_errorbars_check = QCheckBox("Fehlerbalken anzeigen")
+        self.show_errorbars_check = QCheckBox(tr("curve_settings.error_bars.show"))
         self.show_errorbars_check.setChecked(getattr(dataset, 'show_errorbars', True))
         self.show_errorbars_check.stateChanged.connect(self.toggle_errorbar_settings)
         error_layout.addWidget(self.show_errorbars_check, 0, 0, 1, 2)
@@ -183,19 +188,19 @@ class CurveSettingsDialog(QDialog):
         has_errors = dataset.y_err is not None
         error_info = QLabel()
         if has_errors:
-            error_info.setText("✓ Fehlerdaten verfügbar")
+            error_info.setText(tr("curve_settings.error_bars.available"))
             error_info.setStyleSheet("color: green;")
         else:
-            error_info.setText("✗ Keine Fehlerdaten in Datei")
+            error_info.setText(tr("curve_settings.error_bars.not_available"))
             error_info.setStyleSheet("color: #888;")
             self.show_errorbars_check.setEnabled(False)
         error_layout.addWidget(error_info, 1, 0, 1, 2)
 
         # Fehlerbalken-Stil (v6.0)
-        error_layout.addWidget(QLabel("Darstellung:"), 2, 0)
+        error_layout.addWidget(QLabel(tr("curve_settings.error_bars.representation")), 2, 0)
         self.errorbar_style_combo = QComboBox()
-        self.errorbar_style_combo.addItem("Transparente Fläche", "fill")
-        self.errorbar_style_combo.addItem("Balken mit Caps", "bars")
+        self.errorbar_style_combo.addItem(tr("curve_settings.error_bars.fill"), "fill")
+        self.errorbar_style_combo.addItem(tr("curve_settings.error_bars.bars"), "bars")
         # Aktuellen Stil setzen
         current_style = getattr(dataset, 'errorbar_style', 'fill')
         if current_style == 'bars':
@@ -206,7 +211,7 @@ class CurveSettingsDialog(QDialog):
         error_layout.addWidget(self.errorbar_style_combo, 2, 1)
 
         # Capsize (Breite der Endkappen) - nur für 'bars'
-        self.errorbar_capsize_label = QLabel("Cap-Größe:")
+        self.errorbar_capsize_label = QLabel(tr("curve_settings.error_bars.cap_size"))
         error_layout.addWidget(self.errorbar_capsize_label, 3, 0)
         self.errorbar_capsize_spin = QDoubleSpinBox()
         self.errorbar_capsize_spin.setRange(0, 10)
@@ -215,7 +220,7 @@ class CurveSettingsDialog(QDialog):
         error_layout.addWidget(self.errorbar_capsize_spin, 3, 1)
 
         # Transparenz
-        self.errorbar_alpha_label = QLabel("Transparenz:")
+        self.errorbar_alpha_label = QLabel(tr("curve_settings.error_bars.transparency"))
         error_layout.addWidget(self.errorbar_alpha_label, 4, 0)
         self.errorbar_alpha_spin = QDoubleSpinBox()
         self.errorbar_alpha_spin.setRange(0, 1)
@@ -224,7 +229,7 @@ class CurveSettingsDialog(QDialog):
         error_layout.addWidget(self.errorbar_alpha_spin, 4, 1)
 
         # Linienbreite der Fehlerbalken - nur für 'bars'
-        self.errorbar_linewidth_label = QLabel("Linienbreite:")
+        self.errorbar_linewidth_label = QLabel(tr("curve_settings.error_bars.line_width"))
         error_layout.addWidget(self.errorbar_linewidth_label, 5, 0)
         self.errorbar_linewidth_spin = QDoubleSpinBox()
         self.errorbar_linewidth_spin.setRange(0.1, 5)

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
+from i18n import tr
 
 
 class LegendEditorDialog(QDialog):
@@ -24,7 +25,7 @@ class LegendEditorDialog(QDialog):
 
     def __init__(self, parent, groups, unassigned_datasets, legend_settings=None, font_settings=None):
         super().__init__(parent)
-        self.setWindowTitle("Legenden-Editor")
+        self.setWindowTitle(tr("legend_editor.title"))
         self.resize(800, 700)
 
         self.groups = groups
@@ -61,10 +62,7 @@ class LegendEditorDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Info-Label
-        info_label = QLabel(
-            "Bearbeiten Sie die Legendeneinträge, Einstellungen und Schriftarten. "
-            "Verwenden Sie die Toolbar für schnelle LaTeX-Formatierung."
-        )
+        info_label = QLabel(tr("legend_editor.info"))
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
@@ -74,17 +72,17 @@ class LegendEditorDialog(QDialog):
         # Tab 1: Einträge bearbeiten
         entries_tab = QWidget()
         self.setup_entries_tab(entries_tab)
-        self.tab_widget.addTab(entries_tab, "Einträge bearbeiten")
+        self.tab_widget.addTab(entries_tab, tr("legend_editor.tabs.entries"))
 
         # Tab 2: Legenden-Einstellungen
         settings_tab = QWidget()
         self.setup_settings_tab(settings_tab)
-        self.tab_widget.addTab(settings_tab, "Legenden-Einstellungen")
+        self.tab_widget.addTab(settings_tab, tr("legend_editor.tabs.settings"))
 
         # Tab 3: Schriftart
         font_tab = QWidget()
         self.setup_font_tab(font_tab)
-        self.tab_widget.addTab(font_tab, "Schriftart")
+        self.tab_widget.addTab(font_tab, tr("legend_editor.tabs.font"))
 
         layout.addWidget(self.tab_widget)
 
@@ -102,7 +100,7 @@ class LegendEditorDialog(QDialog):
         main_layout = QHBoxLayout()
 
         # Linke Seite: Liste der Einträge
-        list_group = QGroupBox("Legendeneinträge (in Anzeigereihenfolge)")
+        list_group = QGroupBox(tr("legend_editor.entries.title"))
         list_layout = QVBoxLayout()
 
         self.entry_list = QListWidget()
@@ -111,8 +109,8 @@ class LegendEditorDialog(QDialog):
 
         # Buttons für Reihenfolge
         order_buttons = QHBoxLayout()
-        self.move_up_btn = QPushButton("↑ Nach oben")
-        self.move_down_btn = QPushButton("↓ Nach unten")
+        self.move_up_btn = QPushButton(tr("legend_editor.entries.move_up"))
+        self.move_down_btn = QPushButton(tr("legend_editor.entries.move_down"))
         self.move_up_btn.clicked.connect(self.move_up)
         self.move_down_btn.clicked.connect(self.move_down)
         order_buttons.addWidget(self.move_up_btn)
@@ -123,7 +121,7 @@ class LegendEditorDialog(QDialog):
         main_layout.addWidget(list_group, 2)
 
         # Rechte Seite: Editor-Bereich mit Tiny Editor
-        editor_group = QGroupBox("Eintrag bearbeiten")
+        editor_group = QGroupBox(tr("legend_editor.entries.edit_entry"))
         editor_layout = QVBoxLayout()
 
         # Tiny Editor Toolbar
@@ -132,14 +130,14 @@ class LegendEditorDialog(QDialog):
 
         # Fett Button
         bold_action = QAction("B", self)
-        bold_action.setToolTip("Fett (\\mathbf{...})")
+        bold_action.setToolTip(tr("legend_editor.entries.bold"))
         bold_action.triggered.connect(lambda: self.insert_latex_command("\\mathbf{", "}"))
         bold_action.setFont(self.format_toolbar.font())
         self.format_toolbar.addAction(bold_action)
 
         # Kursiv Button
         italic_action = QAction("I", self)
-        italic_action.setToolTip("Kursiv (\\mathit{...})")
+        italic_action.setToolTip(tr("legend_editor.entries.italic"))
         italic_action.triggered.connect(lambda: self.insert_latex_command("\\mathit{", "}"))
         self.format_toolbar.addAction(italic_action)
 
@@ -147,13 +145,13 @@ class LegendEditorDialog(QDialog):
 
         # Subscript Button
         sub_action = QAction("x₂", self)
-        sub_action.setToolTip("Subscript (_{...})")
+        sub_action.setToolTip(tr("legend_editor.entries.subscript"))
         sub_action.triggered.connect(lambda: self.insert_latex_command("_{", "}"))
         self.format_toolbar.addAction(sub_action)
 
         # Superscript Button
         sup_action = QAction("x²", self)
-        sup_action.setToolTip("Superscript (^{...})")
+        sup_action.setToolTip(tr("legend_editor.entries.superscript"))
         sup_action.triggered.connect(lambda: self.insert_latex_command("^{", "}"))
         self.format_toolbar.addAction(sup_action)
 
@@ -194,19 +192,19 @@ class LegendEditorDialog(QDialog):
 
         # Name Eingabefeld
         name_layout = QHBoxLayout()
-        name_layout.addWidget(QLabel("Anzeigename:"))
+        name_layout.addWidget(QLabel(tr("legend_editor.entries.display_name")))
         self.name_edit = QLineEdit()
         self.name_edit.textChanged.connect(self.on_name_changed)
         name_layout.addWidget(self.name_edit)
         editor_layout.addLayout(name_layout)
 
         # Syntax-Hilfe Button
-        syntax_help_btn = QPushButton("📖 LaTeX/MathText Syntax-Hilfe")
+        syntax_help_btn = QPushButton(tr("legend_editor.entries.latex_help"))
         syntax_help_btn.clicked.connect(self.show_syntax_help)
         editor_layout.addWidget(syntax_help_btn)
 
         # Preview-Label
-        preview_label = QLabel("Vorschau:")
+        preview_label = QLabel(tr("legend_editor.entries.preview"))
         preview_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
         editor_layout.addWidget(preview_label)
 
@@ -222,19 +220,19 @@ class LegendEditorDialog(QDialog):
         editor_layout.addWidget(self.preview_text)
 
         # Sichtbarkeit
-        self.visible_check = QCheckBox("In Legende anzeigen")
+        self.visible_check = QCheckBox(tr("legend_editor.entries.show_in_legend"))
         self.visible_check.stateChanged.connect(self.on_visibility_changed)
         editor_layout.addWidget(self.visible_check)
 
         # Formatierung
-        format_label = QLabel("Formatierung:")
+        format_label = QLabel(tr("legend_editor.entries.formatting"))
         editor_layout.addWidget(format_label)
 
-        self.bold_check = QCheckBox("Fett")
+        self.bold_check = QCheckBox(tr("title_editor.font.bold"))
         self.bold_check.stateChanged.connect(self.on_format_changed)
         editor_layout.addWidget(self.bold_check)
 
-        self.italic_check = QCheckBox("Kursiv")
+        self.italic_check = QCheckBox(tr("title_editor.font.italic"))
         self.italic_check.stateChanged.connect(self.on_format_changed)
         editor_layout.addWidget(self.italic_check)
 
@@ -251,11 +249,11 @@ class LegendEditorDialog(QDialog):
         """Tab für Legenden-Einstellungen aufbauen"""
         layout = QVBoxLayout(parent)
 
-        settings_group = QGroupBox("Legenden-Einstellungen")
+        settings_group = QGroupBox(tr("legend.settings_title"))
         settings_layout = QGridLayout()
 
         # Position
-        settings_layout.addWidget(QLabel("Position:"), 0, 0)
+        settings_layout.addWidget(QLabel(tr("legend.position")), 0, 0)
         self.position_combo = QComboBox()
         self.position_combo.addItems([
             'best', 'upper right', 'upper left', 'lower right', 'lower left',
@@ -269,14 +267,14 @@ class LegendEditorDialog(QDialog):
         settings_layout.addWidget(self.position_combo, 0, 1)
 
         # Anzahl Spalten
-        settings_layout.addWidget(QLabel("Spalten:"), 1, 0)
+        settings_layout.addWidget(QLabel(tr("legend.columns")), 1, 0)
         self.ncol_spin = QSpinBox()
         self.ncol_spin.setRange(1, 10)
         self.ncol_spin.setValue(self.legend_settings.get('ncol', 1))
         settings_layout.addWidget(self.ncol_spin, 1, 1)
 
         # Transparenz (Alpha)
-        settings_layout.addWidget(QLabel("Transparenz:"), 2, 0)
+        settings_layout.addWidget(QLabel(tr("legend.transparency")), 2, 0)
         self.alpha_spin = QDoubleSpinBox()
         self.alpha_spin.setRange(0.0, 1.0)
         self.alpha_spin.setSingleStep(0.1)
@@ -285,22 +283,22 @@ class LegendEditorDialog(QDialog):
         settings_layout.addWidget(self.alpha_spin, 2, 1)
 
         # Rahmen
-        self.frame_checkbox = QCheckBox("Rahmen anzeigen")
+        self.frame_checkbox = QCheckBox(tr("legend.show_frame"))
         self.frame_checkbox.setChecked(self.legend_settings.get('frameon', True))
         settings_layout.addWidget(self.frame_checkbox, 3, 0, 1, 2)
 
         # Schatten
-        self.shadow_checkbox = QCheckBox("Schatten")
+        self.shadow_checkbox = QCheckBox(tr("legend.shadow"))
         self.shadow_checkbox.setChecked(self.legend_settings.get('shadow', False))
         settings_layout.addWidget(self.shadow_checkbox, 4, 0, 1, 2)
 
         # Fancy Box
-        self.fancybox_checkbox = QCheckBox("Abgerundete Ecken")
+        self.fancybox_checkbox = QCheckBox(tr("legend.rounded_corners"))
         self.fancybox_checkbox.setChecked(self.legend_settings.get('fancybox', True))
         settings_layout.addWidget(self.fancybox_checkbox, 5, 0, 1, 2)
 
         # Reihenfolge invertieren
-        self.reverse_order_checkbox = QCheckBox("Reihenfolge invertieren (gestackte Kurven)")
+        self.reverse_order_checkbox = QCheckBox(tr("legend.reverse_order"))
         self.reverse_order_checkbox.setChecked(self.legend_settings.get('reverse_order', False))
         self.reverse_order_checkbox.setToolTip(
             "Kehrt die Reihenfolge der Legenden-Einträge um.\n"
@@ -316,11 +314,11 @@ class LegendEditorDialog(QDialog):
         """Tab für Schriftart-Einstellungen aufbauen"""
         layout = QVBoxLayout(parent)
 
-        font_group = QGroupBox("Legenden-Schriftart")
+        font_group = QGroupBox(tr("legend_editor.font.title"))
         font_layout = QGridLayout()
 
         # Schriftgröße
-        font_layout.addWidget(QLabel("Schriftgröße:"), 0, 0)
+        font_layout.addWidget(QLabel(tr("legend_editor.font.size")), 0, 0)
         self.legend_size_spin = QSpinBox()
         self.legend_size_spin.setRange(6, 24)
         self.legend_size_spin.setValue(self.font_settings.get('legend_size', 10))
@@ -662,7 +660,7 @@ class LegendEditorDialog(QDialog):
     def show_syntax_help(self):
         """Zeigt Syntax-Hilfe für LaTeX/MathText an (v7.0)"""
         msg = QMessageBox(self)
-        msg.setWindowTitle("LaTeX/MathText Syntax-Hilfe")
+        msg.setWindowTitle(tr("legend_editor.entries.latex_help"))
         msg.setIcon(QMessageBox.Information)
         msg.setText(get_syntax_help_text())
         msg.setStandardButtons(QMessageBox.Ok)
