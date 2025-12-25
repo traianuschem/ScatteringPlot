@@ -193,10 +193,25 @@ class ExportPreview(QWidget):
             preview_dpi = min(actual_dpi, 150)
 
             # Size scales roughly with (DPI ratio)^2 for raster formats
-            if settings.get('format', 'PNG') == 'PNG':
+            format_type = settings.get('format', 'PNG')
+            if format_type == 'PNG':
                 dpi_factor = (actual_dpi / preview_dpi) ** 2
                 estimated_bytes = int(preview_bytes * dpi_factor)
-            elif settings.get('format', 'PNG') == 'SVG':
+            elif format_type == 'TIFF':
+                # TIFF size depends on compression
+                dpi_factor = (actual_dpi / preview_dpi) ** 2
+                compression = settings.get('tiff_compression', 'tiff_deflate')
+                if compression == 'tiff_jpeg':
+                    # JPEG compression can be much smaller
+                    quality_factor = settings.get('tiff_quality', 95) / 100.0
+                    estimated_bytes = int(preview_bytes * dpi_factor * quality_factor * 0.5)
+                elif compression in ['tiff_lzw', 'tiff_deflate']:
+                    # Lossless compression, moderate reduction
+                    estimated_bytes = int(preview_bytes * dpi_factor * 0.7)
+                else:
+                    # No compression
+                    estimated_bytes = int(preview_bytes * dpi_factor * 1.2)
+            elif format_type == 'SVG':
                 # SVG is usually much smaller and DPI-independent
                 estimated_bytes = preview_bytes // 2
             else:
@@ -392,7 +407,7 @@ class ExportSettingsDialog(QDialog):
         # Format
         grid.addWidget(QLabel("Format:"), row, 0)
         self.format_combo = QComboBox()
-        self.format_combo.addItems(['PNG', 'SVG', 'PDF', 'EPS'])
+        self.format_combo.addItems(['PNG', 'TIFF', 'SVG', 'PDF', 'EPS'])
         current_format = self.export_settings.get('format', 'PNG')
         index = self.format_combo.findText(current_format)
         if index >= 0:
@@ -567,6 +582,60 @@ class ExportSettingsDialog(QDialog):
         self.png_group.setLayout(png_layout)
         layout.addWidget(self.png_group)
 
+        # TIFF options
+        self.tiff_group = QGroupBox("TIFF-Optionen")
+        tiff_layout = QVBoxLayout()
+
+        compression_layout_tiff = QHBoxLayout()
+        compression_layout_tiff.addWidget(QLabel("Kompression:"))
+        self.tiff_compression = QComboBox()
+        self.tiff_compression.addItems([
+            "Keine",
+            "LZW (verlustfrei)",
+            "JPEG (verlustbehaftet)",
+            "Deflate (verlustfrei)"
+        ])
+        # Map to matplotlib values
+        self.tiff_compression_map = {
+            "Keine": None,
+            "LZW (verlustfrei)": "tiff_lzw",
+            "JPEG (verlustbehaftet)": "tiff_jpeg",
+            "Deflate (verlustfrei)": "tiff_deflate"
+        }
+        current_tiff_comp = self.export_settings.get('tiff_compression', 'tiff_deflate')
+        # Find index from map
+        for idx, (name, value) in enumerate(self.tiff_compression_map.items()):
+            if value == current_tiff_comp:
+                self.tiff_compression.setCurrentIndex(idx)
+                break
+        compression_layout_tiff.addWidget(self.tiff_compression)
+        compression_layout_tiff.addStretch()
+        tiff_layout.addLayout(compression_layout_tiff)
+
+        # JPEG quality (only for JPEG compression)
+        self.tiff_quality_layout = QHBoxLayout()
+        self.tiff_quality_label = QLabel("JPEG-Qualität (1-100):")
+        self.tiff_quality_layout.addWidget(self.tiff_quality_label)
+        self.tiff_quality = QSpinBox()
+        self.tiff_quality.setRange(1, 100)
+        self.tiff_quality.setValue(self.export_settings.get('tiff_quality', 95))
+        self.tiff_quality_layout.addWidget(self.tiff_quality)
+        self.tiff_quality_layout.addStretch()
+        tiff_layout.addLayout(self.tiff_quality_layout)
+
+        # Info label
+        self.tiff_info = QLabel("TIFF eignet sich für hochqualitative Drucke und Archivierung.")
+        self.tiff_info.setWordWrap(True)
+        self.tiff_info.setStyleSheet("color: #666; font-style: italic; font-size: 10px;")
+        tiff_layout.addWidget(self.tiff_info)
+
+        self.tiff_group.setLayout(tiff_layout)
+        layout.addWidget(self.tiff_group)
+
+        # Connect TIFF compression change to update JPEG quality visibility
+        self.tiff_compression.currentTextChanged.connect(self.update_tiff_quality_visibility)
+        self.update_tiff_quality_visibility()
+
         # SVG options
         self.svg_group = QGroupBox("SVG-Optionen")
         svg_layout = QVBoxLayout()
@@ -625,6 +694,7 @@ class ExportSettingsDialog(QDialog):
         format_type = self.format_combo.currentText()
         self.pdf_group.setVisible(format_type == 'PDF')
         self.png_group.setVisible(format_type == 'PNG')
+        self.tiff_group.setVisible(format_type == 'TIFF')
         self.svg_group.setVisible(format_type == 'SVG')
 
         # Update size preset to "Benutzerdefiniert" if manual changes
@@ -634,6 +704,12 @@ class ExportSettingsDialog(QDialog):
             self.size_preset_combo.blockSignals(False)
 
         self.update_preview()
+
+    def update_tiff_quality_visibility(self):
+        """Show/hide TIFF JPEG quality based on compression type"""
+        is_jpeg = self.tiff_compression.currentText() == "JPEG (verlustbehaftet)"
+        self.tiff_quality_label.setVisible(is_jpeg)
+        self.tiff_quality.setVisible(is_jpeg)
 
     def apply_preset(self, preset_name):
         """Apply a preset configuration"""
@@ -744,6 +820,8 @@ class ExportSettingsDialog(QDialog):
             'embed_fonts': self.embed_fonts.isChecked(),
             'pdf_version': self.pdf_version_combo.currentText(),
             'png_compression': self.png_compression.value(),
+            'tiff_compression': self.tiff_compression_map[self.tiff_compression.currentText()],
+            'tiff_quality': self.tiff_quality.value(),
             'svg_text_as_path': self.svg_text_as_path.isChecked(),
         }
 
