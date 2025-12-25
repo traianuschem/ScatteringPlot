@@ -32,6 +32,7 @@
     },
     "settings": {
       "title": "Settings",
+      "user_metadata": "Edit User Metadata...",
       "language": "Language"
     },
     "help": {
@@ -623,6 +624,84 @@
         "tubaf": "TUBAF",
         "minimalist": "Minimalist"
       }
+    }
+  },
+
+  "user_metadata": {
+    "title": "Edit User Metadata",
+    "info": "These metadata will be automatically embedded in exported plots.\nYou can change them at any time.",
+
+    "personal": {
+      "title": "Personal Data",
+      "name": "Name:*",
+      "name_placeholder": "e.g. John Doe",
+      "email": "Email:",
+      "email_placeholder": "e.g. john.doe@university.edu",
+      "orcid": "ORCID:",
+      "orcid_placeholder": "e.g. 0000-0002-1234-5678",
+      "orcid_info": "ℹ️ Optional: Your unique researcher ID (16 digits, format: 0000-0002-1234-5678)\nDon't have an ORCID yet? Register for free at https://orcid.org",
+      "orcid_valid": "✓ ORCID format correct",
+      "orcid_invalid": "✗ Invalid ORCID format (expected: 0000-0002-1234-5678)"
+    },
+
+    "affiliation": {
+      "title": "Affiliation",
+      "institution": "Institution:*",
+      "institution_placeholder": "e.g. University of Example",
+      "department": "Department:",
+      "department_placeholder": "e.g. Department of Physics",
+      "ror": "ROR ID:",
+      "ror_placeholder": "e.g. https://ror.org/03v4gjf40",
+      "ror_info": "ℹ️ Optional: Research Organization Registry ID\nSearch at https://ror.org"
+    },
+
+    "export_defaults": {
+      "title": "Export Default Settings",
+      "license": "Default License:",
+      "timestamp": "Automatically add timestamp",
+      "timestamp_tooltip": "Adds creation date and time (ISO 8601 + Unix timestamp) automatically",
+      "provenance": "Embed software information",
+      "provenance_tooltip": "Adds information about used software versions (ScatterForge, Python, matplotlib)",
+      "uuid": "Generate UUID for images",
+      "uuid_tooltip": "Generates a unique ID (UUID v4) for each exported image"
+    },
+
+    "licenses": {
+      "cc_by": "🌐 Attribution 4.0 - Attribution required, commercial use allowed",
+      "cc_by_sa": "🔄 Attribution-ShareAlike 4.0 - Attribution + same license required for derivatives",
+      "cc_by_nc": "🚫💰 Attribution-NonCommercial 4.0 - Attribution required, no commercial use",
+      "cc_by_nc_sa": "🚫💰🔄 Attribution-NonCommercial-ShareAlike 4.0",
+      "cc0": "🆓 Public Domain - No rights reserved",
+      "all_rights": "©️ All Rights Reserved - Copyright"
+    },
+
+    "path": {
+      "title": "Storage Location",
+      "change": "Change...",
+      "change_tooltip": "Change storage location for this config (e.g. cloud directory)",
+      "not_saved": "Not saved yet (will be created when saving)"
+    },
+
+    "required": "* Required fields for meaningful metadata",
+
+    "buttons": {
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+
+    "dialogs": {
+      "missing_name_title": "Missing Data",
+      "missing_name_message": "Please enter at least your name.",
+      "missing_institution_title": "Missing Data",
+      "missing_institution_message": "Please enter your institution.",
+      "invalid_orcid_title": "Invalid ORCID Format",
+      "invalid_orcid_message": "The ORCID format is invalid. Save anyway?",
+      "saved_title": "Saved",
+      "saved_message": "User metadata successfully saved:\n{path}",
+      "error_title": "Save Error",
+      "error_message": "The metadata could not be saved:\n{error}",
+      "change_location_title": "Save User Config As",
+      "json_filter": "JSON Files (*.json)"
     }
   },
 
