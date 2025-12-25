@@ -21,7 +21,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 - Drag & Drop zwischen Gruppen, Auto-Gruppierung mit Zehnerpotenzen
 
 **2. Wissenschaftliches Metadaten-System**
-- XMP-Sidecar-Dateien (.xmp) für alle Export-Formate
+- XMP-Sidecar-Dateien (.xmp) für alle Export-Formate, die XMP nicht eingebettet unterstützen
 - Eingebettete Metadaten (Autor, Institution, Projekt, Lizenz)
 - Benutzer-Konfigurationssystem für dauerhafte Metadaten
 - Volle Rückverfolgbarkeit für wissenschaftliche Publikationen
