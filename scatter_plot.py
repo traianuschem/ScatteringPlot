@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-ScatterForge Plot - Version 7.0-dev
-====================================
+ScatterForge Plot
 
 Professionelles Tool für Streudaten-Analyse mit:
 - Qt6-basierte moderne GUI mit modularer Architektur
@@ -54,6 +53,7 @@ from matplotlib.gridspec import GridSpec
 # Eigene Module
 from core.models import DataSet, DataGroup
 from core.constants import PLOT_TYPES
+from core.version import __version__, get_version_string
 from dialogs.settings_dialog import PlotSettingsDialog
 from dialogs.group_dialog import CreateGroupDialog
 from dialogs.design_manager import DesignManagerDialog
@@ -132,16 +132,21 @@ class ScatterPlotApp(QMainWindow):
         # Logger initialisieren (v5.6)
         self.logger = setup_logger('ScatterForge')
         self.logger.info("=" * 60)
-        self.logger.info("ScatterForge Plot v6.2 gestartet")
+        self.logger.info(f"{get_version_string()} gestartet")
         self.logger.info("=" * 60)
 
-        self.setWindowTitle("ScatterForge Plot v6.2")
+        self.setWindowTitle(get_version_string())
         self.resize(1600, 1000)
 
         # Config
         self.logger.debug("Lade User-Config...")
         self.config = get_user_config()
         self.logger.info("User-Config geladen")
+
+        # User Metadata Manager initialisieren (v7.0+)
+        from utils.user_metadata import get_user_metadata_manager
+        self.user_metadata = get_user_metadata_manager()
+        self.logger.info("User-Metadata-Manager geladen")
 
         # i18n initialisieren (v6.2+)
         self.i18n = get_i18n()
@@ -302,6 +307,17 @@ class ScatterPlotApp(QMainWindow):
 
         file_menu.addSeparator()
 
+        # v7.0: Benutzer-Config Management
+        load_user_config_action = QAction("Benutzer-Config laden...", self)
+        load_user_config_action.triggered.connect(self.load_user_config)
+        file_menu.addAction(load_user_config_action)
+
+        save_user_config_action = QAction("Benutzer-Config speichern unter...", self)
+        save_user_config_action.triggered.connect(self.save_user_config_as)
+        file_menu.addAction(save_user_config_action)
+
+        file_menu.addSeparator()
+
         quit_action = QAction(tr("menu.file.quit"), self)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
@@ -361,6 +377,13 @@ class ScatterPlotApp(QMainWindow):
 
         # Einstellungen-Menü (v6.2+)
         settings_menu = menubar.addMenu(tr("menu.settings.title"))
+
+        # v7.0: Benutzer-Metadaten Editor
+        user_metadata_action = QAction("Benutzer-Metadaten bearbeiten...", self)
+        user_metadata_action.triggered.connect(self.edit_user_metadata)
+        settings_menu.addAction(user_metadata_action)
+
+        settings_menu.addSeparator()
 
         # Sprach-Untermenü
         language_menu = settings_menu.addMenu(tr("menu.settings.language"))
@@ -2643,17 +2666,105 @@ class ScatterPlotApp(QMainWindow):
             tr("messages.language_changed_restart")
         )
 
+    def edit_user_metadata(self):
+        """
+        Öffnet Editor für Benutzer-Metadaten (v7.0+)
+        """
+        from dialogs.user_metadata_dialog import UserMetadataDialog
+
+        self.logger.debug("Öffne Benutzer-Metadaten-Editor...")
+        dialog = UserMetadataDialog(self.user_metadata, self)
+        dialog.exec()
+
+    def load_user_config(self):
+        """
+        Lädt Benutzer-Config von einer Datei (v7.0+)
+        """
+        self.logger.debug("Öffne Benutzer-Config-Laden-Dialog...")
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            "Benutzer-Config laden",
+            str(Path.home()),
+            "JSON Files (*.json)"
+        )
+
+        if filepath:
+            try:
+                self.user_metadata.load_from_file(filepath)
+                self.logger.info(f"Benutzer-Config geladen: {filepath}")
+
+                QMessageBox.information(
+                    self,
+                    "Erfolg",
+                    f"Benutzer-Config wurde erfolgreich geladen:\n\n{filepath}"
+                )
+
+                # In Haupt-Config merken
+                self.config.config['last_user_metadata_file'] = filepath
+                self.config.save_config()
+
+            except Exception as e:
+                self.logger.error(f"Fehler beim Laden der Benutzer-Config: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Fehler",
+                    f"Fehler beim Laden der Benutzer-Config:\n\n{str(e)}"
+                )
+
+    def save_user_config_as(self):
+        """
+        Speichert Benutzer-Config unter einem neuen Namen (v7.0+)
+        """
+        self.logger.debug("Öffne Benutzer-Config-Speichern-Dialog...")
+
+        # Default-Pfad
+        if self.user_metadata.current_file:
+            default_path = str(self.user_metadata.current_file)
+        else:
+            default_path = str(Path.home() / ".scatterforge" / "user_metadata.json")
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Benutzer-Config speichern unter",
+            default_path,
+            "JSON Files (*.json)"
+        )
+
+        if filepath:
+            try:
+                self.user_metadata.save(Path(filepath))
+                self.logger.info(f"Benutzer-Config gespeichert: {filepath}")
+
+                QMessageBox.information(
+                    self,
+                    "Erfolg",
+                    f"Benutzer-Config wurde erfolgreich gespeichert:\n\n{filepath}"
+                )
+
+                # In Haupt-Config merken
+                self.config.config['last_user_metadata_file'] = filepath
+                self.config.save_config()
+
+            except Exception as e:
+                self.logger.error(f"Fehler beim Speichern der Benutzer-Config: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Fehler",
+                    f"Fehler beim Speichern der Benutzer-Config:\n\n{str(e)}"
+                )
+
     def show_about(self):
         """Zeigt Über-Dialog"""
         QMessageBox.about(self, "Über ScatterForge Plot",
-                         "ScatterForge Plot - Version 5.6\n\n"
+                         f"{get_version_string()}\n\n"
                          "Professionelles Tool für Streudaten-Analyse\n\n"
-                         "Neue Features in v5.6:\n"
-                         "• Export-Optimierung (16:10 Standard-Format)\n"
-                         "• Gruppenspezifische Farbpaletten\n"
-                         "• Auto-Gruppierung mit automatischen Stack-Faktoren\n"
-                         "• Programmweite Standard-Plot-Einstellungen\n"
-                         "• Umfassendes Logging-System für Debugging\n\n"
+                         "Neue Features in v7.0:\n"
+                         "• Erweiterte Metadaten für Export (FAIR-Prinzipien)\n"
+                         "• Benutzer-Metadaten-Manager (ORCID, Affiliation)\n"
+                         "• XMP-Support für PNG/TIFF\n"
+                         "• Automatische Zeitstempel & Software-Provenienz\n"
+                         "• Lizenz-Management für wissenschaftliche Publikationen\n\n"
                          "Features:\n"
                          "• Qt6-basierte moderne GUI mit modularer Architektur\n"
                          "• Erweiterte Legenden-, Grid- und Font-Einstellungen\n"
@@ -2846,9 +2957,9 @@ def main():
     app = QApplication(sys.argv)
 
     # App-Metadaten
-    app.setApplicationName("TUBAF Scattering Plot Tool")
+    app.setApplicationName("ScatterForge Plot")
     app.setOrganizationName("TU Bergakademie Freiberg")
-    app.setApplicationVersion("5.0")
+    app.setApplicationVersion(__version__)
 
     # Hauptfenster
     window = ScatterPlotApp()
