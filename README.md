@@ -571,13 +571,11 @@ Datei → Exportieren...
 
 | Format | Verwendung | Metadaten |
 |--------|------------|-----------|
-| PNG | Präsentationen, Web | tEXt chunks + XMP |
-| TIFF | Publikationen, Druck | TIFF tags + XMP |
+| PNG | Präsentationen, Web | tEXt chunks |
+| TIFF | Publikationen, Druck | TIFF tags  |
 | PDF | Dokumente | PDF Info + XMP |
 | SVG | Vektorgrafik | XML + XMP |
 | EPS | LaTeX-Dokumente | Comments + XMP |
-
-**Alle Formate** erhalten eine `.xmp` Sidecar-Datei!
 
 **3. Größe & Auflösung**
 - Vordefinierte Formate: 16:10 (25.4×15.875 cm), 4:3
@@ -768,9 +766,6 @@ ScatterForge Plot ist vollständig zweisprachig.
 ```
 Einstellungen → Einstellungen... → Sprache auswählen
 ```
-
-**Vorteil:** Änderung sofort aktiv, kein Neustart nötig!
-
 **Persistenz:** Sprachwahl wird gespeichert und beim nächsten Start geladen.
 
 #### Was ist übersetzt?
@@ -955,90 +950,9 @@ rm ~/.tubaf_scatter_plots/config.json
 
 ---
 
-## 🐛 Troubleshooting
 
-### Logging-System
 
-ScatterForge Plot loggt alle Aktionen:
-
-**Log-Dateien:**
-```
-~/.tubaf_scatter_plots/logs/scatterplot_YYYYMMDD.log
-```
-
-**Log-Levels:**
-- **INFO:** Wichtige Aktionen (auch in Console)
-- **DEBUG:** Detaillierte Informationen (nur in Datei)
-- **WARNING:** Warnungen
-- **ERROR:** Fehler
-
-**Heutiges Log anzeigen:**
-```bash
-cat ~/.tubaf_scatter_plots/logs/scatterplot_$(date +%Y%m%d).log
-```
-
-### Häufige Probleme
-
-**1. Daten werden nicht geladen**
-```
-Ursache: Ungültiges Dateiformat
-Lösung: Prüfen Sie, ob Datei Whitespace-getrennt ist
-Log: Suchen Sie nach "Fehler beim Laden" im Log
-```
-
-**2. Export schlägt fehl**
-```
-Ursache: Schreibrechte fehlen
-Lösung: Prüfen Sie Zielverzeichnis-Rechte
-Log: Suchen Sie nach "Export failed" im Log
-```
-
-**3. LaTeX wird nicht gerendert**
-```
-Ursache: Ungültige Syntax
-Lösung: Prüfen Sie geschlossene Klammern {}
-Vorschau: Nutzen Sie Live-Vorschau im Editor
-```
-
-**4. Metadaten fehlen im Export**
-```
-Ursache: Benutzer-Metadaten nicht konfiguriert
-Lösung: Datei → Benutzer-Metadaten... ausfüllen
-Prüfen: .xmp-Datei neben Bild sollte existieren
-```
-
-### Debug-Modus
-
-Für erweiterte Fehlersuche:
-
-```bash
-# Programm mit erhöhtem Logging starten
-python scatter_plot.py --debug
-```
-
----
-
-## 🤝 Mitwirken & Lizenz
-
-### Mitwirken
-
-Contributions sind willkommen!
-
-**Prozess:**
-1. Repository forken
-2. Feature-Branch erstellen: `git checkout -b feature/AmazingFeature`
-3. Changes committen: `git commit -m 'Add AmazingFeature'`
-4. Branch pushen: `git push origin feature/AmazingFeature`
-5. Pull Request öffnen
-
-**Bereiche:**
-- 🌍 Neue Sprachen hinzufügen (i18n)
-- 🎨 Neue Farbpaletten erstellen
-- 📊 Neue Plot-Typen implementieren
-- 🐛 Bugs fixen
-- 📖 Dokumentation verbessern
-
-### Lizenz
+## Lizenz
 
 **GPL-3.0 License**
 
@@ -1066,19 +980,17 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
 }
 ```
 
-### Kontakt & Support
+## Kontakt & Support
 
 **Issues:** [GitHub Issues](https://github.com/traianuschem/ScatteringPlot/issues)
 
 **Vor dem Erstellen eines Issues:**
-1. Log-Datei prüfen: `~/.tubaf_scatter_plots/logs/`
-2. FAQ/Troubleshooting durchlesen
-3. Issue mit Log-Auszug erstellen
+1. Log prüfen
+2. Issue mit Log-Auszug erstellen
 
 ### Autoren
 
 - **Richard Neubert** - *Initial work & Hauptentwicklung*
-- **Contributors** - [Liste der Contributors](https://github.com/traianuschem/ScatteringPlot/contributors)
 
 ---
 
@@ -1095,13 +1007,3 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
 *ScatterForge Plot v7.0.0dev - Dezember 2025*
 
 ---
-
-## 🏆 Highlights v7.0.0dev
-
-- 📝 **LaTeX/MathText** - Wissenschaftliche Notation überall
-- 🌍 **Mehrsprachigkeit** - Deutsch/Englisch mit Live-Wechsel
-- 📊 **Advanced Export** - Live-Vorschau + XMP-Metadaten
-- ⌨️ **Keyboard Shortcuts** - Effizienter Workflow
-- 🎨 **Konsolidierte UI** - Tree-Reihenfolge = Legende
-- 🧪 **XRD/SAXS** - Bragg Spacing, 2-Theta
-- 🖼️ **TIFF-Export** - Hochwertiges Format für Publikationen
