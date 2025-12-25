@@ -2504,6 +2504,8 @@ class ScatterPlotApp(QMainWindow):
 
         if format_ext == 'png':
             filter_str = "PNG Dateien (*.png)"
+        elif format_ext == 'tiff':
+            filter_str = "TIFF Dateien (*.tiff *.tif)"
         elif format_ext == 'svg':
             filter_str = "SVG Dateien (*.svg)"
         elif format_ext == 'pdf':
@@ -2544,6 +2546,28 @@ class ScatterPlotApp(QMainWindow):
                     # PNG-Kompression
                     if 'png_compression' in settings:
                         save_kwargs['pil_kwargs'] = {'compress_level': settings['png_compression']}
+
+                elif format_ext == 'tiff':
+                    # TIFF-Optionen
+                    save_kwargs['transparent'] = settings.get('transparent', False)
+                    if not settings.get('transparent', False):
+                        save_kwargs['facecolor'] = settings.get('bg_color', 'white')
+
+                    # TIFF-Kompression
+                    tiff_comp = settings.get('tiff_compression', 'tiff_deflate')
+                    pil_kwargs = {}
+
+                    if tiff_comp == 'tiff_lzw':
+                        pil_kwargs['compression'] = 'tiff_lzw'
+                    elif tiff_comp == 'tiff_jpeg':
+                        pil_kwargs['compression'] = 'tiff_jpeg'
+                        pil_kwargs['quality'] = settings.get('tiff_quality', 95)
+                    elif tiff_comp == 'tiff_deflate':
+                        pil_kwargs['compression'] = 'tiff_deflate'
+                    # else: no compression (None)
+
+                    if pil_kwargs:
+                        save_kwargs['pil_kwargs'] = pil_kwargs
 
                 elif format_ext == 'pdf':
                     # PDF-Metadaten
