@@ -23,6 +23,7 @@ from PySide6.QtGui import QPixmap, QImage
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+from i18n import tr
 
 
 class CollapsibleSection(QWidget):
@@ -107,13 +108,13 @@ class ExportPreview(QWidget):
 
         # Toolbar
         toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("Vorschau:"))
+        toolbar.addWidget(QLabel(tr("export.preview")))
         toolbar.addStretch()
 
         self.zoom_combo = QComboBox()
-        self.zoom_combo.addItems(["25%", "50%", "75%", "100%", "150%", "200%", "Anpassen"])
+        self.zoom_combo.addItems(["25%", "50%", "75%", "100%", "150%", "200%", tr("export.zoom_fit")])
         self.zoom_combo.setCurrentText("100%")
-        toolbar.addWidget(QLabel("Zoom:"))
+        toolbar.addWidget(QLabel(tr("export.zoom")))
         toolbar.addWidget(self.zoom_combo)
 
         layout.addLayout(toolbar)
@@ -126,13 +127,13 @@ class ExportPreview(QWidget):
         self.preview_label = QLabel()
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setStyleSheet("background: white; border: 1px solid #ccc;")
-        self.preview_label.setText("Vorschau wird geladen...")
+        self.preview_label.setText(tr("export.loading_preview"))
 
         scroll.setWidget(self.preview_label)
         layout.addWidget(scroll)
 
         # File size info
-        self.size_label = QLabel("Geschätzte Dateigröße: --")
+        self.size_label = QLabel(tr("export.estimated_size_default"))
         self.size_label.setStyleSheet("color: #666; font-style: italic;")
         layout.addWidget(self.size_label)
 
@@ -174,7 +175,7 @@ class ExportPreview(QWidget):
 
             # Apply zoom
             zoom_text = self.zoom_combo.currentText()
-            if zoom_text != "Anpassen":
+            if zoom_text != tr("export.zoom_fit"):
                 zoom = int(zoom_text.replace('%', '')) / 100.0
                 scaled_pixmap = pixmap.scaled(
                     pixmap.size() * zoom,
@@ -210,11 +211,11 @@ class ExportPreview(QWidget):
             else:
                 size_str = f"{estimated_bytes / (1024 * 1024):.2f} MB"
 
-            self.size_label.setText(f"Geschätzte Dateigröße: ~{size_str}")
+            self.size_label.setText(tr("export.estimated_size", size=size_str))
 
         except Exception as e:
-            self.preview_label.setText(f"Fehler bei Vorschau:\n{str(e)}")
-            self.size_label.setText("Dateigröße: --")
+            self.preview_label.setText(tr("export.preview_error", error=str(e)))
+            self.size_label.setText(tr("export.estimated_size_default"))
 
 
 class ExportSettingsDialog(QDialog):
@@ -279,7 +280,7 @@ class ExportSettingsDialog(QDialog):
 
     def __init__(self, parent, export_settings, main_figure=None):
         super().__init__(parent)
-        self.setWindowTitle("Export-Einstellungen")
+        self.setWindowTitle(tr("export.title"))
         self.resize(1200, 700)
 
         self.export_settings = export_settings.copy()
@@ -335,7 +336,7 @@ class ExportSettingsDialog(QDialog):
 
         # Bottom buttons for left side
         left_buttons = QHBoxLayout()
-        self.save_preset_btn = QPushButton("Als Preset speichern")
+        self.save_preset_btn = QPushButton(tr("export.save_preset"))
         self.save_preset_btn.clicked.connect(self.save_custom_preset)
         left_buttons.addWidget(self.save_preset_btn)
         left_buttons.addStretch()
@@ -355,20 +356,20 @@ class ExportSettingsDialog(QDialog):
 
         # Bottom dialog buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
-        buttons.button(QDialogButtonBox.Ok).setText("Exportieren")
+        buttons.button(QDialogButtonBox.Ok).setText(tr("export.export_button"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         main_layout.addWidget(buttons)
 
     def create_presets_section(self):
         """Create presets selection section"""
-        group = QGroupBox("Presets")
+        group = QGroupBox(tr("export.presets.title"))
         layout = QVBoxLayout()
 
         self.preset_combo = QComboBox()
-        self.preset_combo.addItem("-- Benutzerdefiniert --")
+        self.preset_combo.addItem(tr("export.presets.custom"))
         for preset_name in self.PRESETS.keys():
-            self.preset_combo.addItem(preset_name)
+            self.preset_combo.addItem(tr(f"export.presets.{preset_name.lower()}"))
 
         # Add user presets
         if self.user_presets:
@@ -384,13 +385,13 @@ class ExportSettingsDialog(QDialog):
 
     def create_format_section(self):
         """Create format and size section"""
-        section = CollapsibleSection("Format & Größe")
+        section = CollapsibleSection(tr("export.format_size.title"))
 
         grid = QGridLayout()
         row = 0
 
         # Format
-        grid.addWidget(QLabel("Format:"), row, 0)
+        grid.addWidget(QLabel(tr("export.format_size.format")), row, 0)
         self.format_combo = QComboBox()
         self.format_combo.addItems(['PNG', 'SVG', 'PDF', 'EPS'])
         current_format = self.export_settings.get('format', 'PNG')
@@ -401,7 +402,7 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # DPI
-        grid.addWidget(QLabel("DPI:"), row, 0)
+        grid.addWidget(QLabel(tr("export.format_size.dpi")), row, 0)
         self.dpi_spin = QSpinBox()
         self.dpi_spin.setRange(72, 1200)
         self.dpi_spin.setSingleStep(50)
@@ -410,16 +411,16 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # Size presets
-        grid.addWidget(QLabel("Größen-Preset:"), row, 0)
+        grid.addWidget(QLabel(tr("export.format_size.size_preset")), row, 0)
         self.size_preset_combo = QComboBox()
         for preset_name in self.SIZE_PRESETS.keys():
-            self.size_preset_combo.addItem(preset_name)
+            self.size_preset_combo.addItem(tr(f"export.format_size.{preset_name.lower().replace(' ', '_').replace(':', '_')}"))
         self.size_preset_combo.currentTextChanged.connect(self.apply_size_preset)
         grid.addWidget(self.size_preset_combo, row, 1)
         row += 1
 
         # Width
-        grid.addWidget(QLabel("Breite:"), row, 0)
+        grid.addWidget(QLabel(tr("export.format_size.width")), row, 0)
         self.width_spin = QDoubleSpinBox()
         self.width_spin.setRange(2.5, 127.0)
         self.width_spin.setSingleStep(1.0)
@@ -430,7 +431,7 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # Height
-        grid.addWidget(QLabel("Höhe:"), row, 0)
+        grid.addWidget(QLabel(tr("export.format_size.height")), row, 0)
         self.height_spin = QDoubleSpinBox()
         self.height_spin.setRange(2.5, 127.0)
         self.height_spin.setSingleStep(1.0)
@@ -441,7 +442,7 @@ class ExportSettingsDialog(QDialog):
         row += 1
 
         # Keep aspect ratio
-        self.keep_aspect = QCheckBox("Seitenverhältnis beibehalten")
+        self.keep_aspect = QCheckBox(tr("export.format_size.keep_aspect"))
         self.keep_aspect.setChecked(self.export_settings.get('keep_aspect', True))
         grid.addWidget(self.keep_aspect, row, 0, 1, 2)
 
@@ -450,22 +451,22 @@ class ExportSettingsDialog(QDialog):
 
     def create_layout_section(self):
         """Create layout options section"""
-        section = CollapsibleSection("Layout-Optionen")
+        section = CollapsibleSection(tr("export.layout.title"))
 
         layout = QVBoxLayout()
 
-        self.transparent_bg = QCheckBox("Transparenter Hintergrund")
+        self.transparent_bg = QCheckBox(tr("export.layout.transparent"))
         self.transparent_bg.setChecked(self.export_settings.get('transparent', False))
         layout.addWidget(self.transparent_bg)
 
-        self.tight_layout = QCheckBox("Tight Layout (weniger Rand)")
+        self.tight_layout = QCheckBox(tr("export.layout.tight_layout"))
         self.tight_layout.setChecked(self.export_settings.get('tight_layout', True))
         layout.addWidget(self.tight_layout)
 
         # Background color
         bg_layout = QHBoxLayout()
-        bg_layout.addWidget(QLabel("Hintergrundfarbe:"))
-        self.bg_color_btn = QPushButton("Wählen...")
+        bg_layout.addWidget(QLabel(tr("export.layout.bg_color")))
+        self.bg_color_btn = QPushButton(tr("export.layout.choose_color"))
         self.bg_color_btn.clicked.connect(self.choose_bg_color)
         self.current_bg_color = self.export_settings.get('bg_color', '#FFFFFF')
         self.bg_color_btn.setStyleSheet(f"background-color: {self.current_bg_color};")
@@ -478,48 +479,48 @@ class ExportSettingsDialog(QDialog):
 
     def create_metadata_section(self):
         """Create metadata editor section"""
-        section = CollapsibleSection("Metadaten")
+        section = CollapsibleSection(tr("export.metadata.title"))
 
         grid = QGridLayout()
         row = 0
 
         # Title
-        grid.addWidget(QLabel("Titel:"), row, 0)
+        grid.addWidget(QLabel(tr("export.metadata.doc_title")), row, 0)
         self.meta_title = QLineEdit()
         self.meta_title.setText(self.export_settings.get('meta_title', ''))
-        self.meta_title.setPlaceholderText("Dokumenttitel")
+        self.meta_title.setPlaceholderText(tr("export.metadata.doc_title_placeholder"))
         grid.addWidget(self.meta_title, row, 1)
         row += 1
 
         # Author
-        grid.addWidget(QLabel("Autor:"), row, 0)
+        grid.addWidget(QLabel(tr("export.metadata.author")), row, 0)
         self.meta_author = QLineEdit()
         self.meta_author.setText(self.export_settings.get('meta_author', ''))
-        self.meta_author.setPlaceholderText("Ihr Name")
+        self.meta_author.setPlaceholderText(tr("export.metadata.author_placeholder"))
         grid.addWidget(self.meta_author, row, 1)
         row += 1
 
         # Subject
-        grid.addWidget(QLabel("Beschreibung:"), row, 0)
+        grid.addWidget(QLabel(tr("export.metadata.description")), row, 0)
         self.meta_subject = QLineEdit()
         self.meta_subject.setText(self.export_settings.get('meta_subject', ''))
-        self.meta_subject.setPlaceholderText("Kurzbeschreibung")
+        self.meta_subject.setPlaceholderText(tr("export.metadata.description_placeholder"))
         grid.addWidget(self.meta_subject, row, 1)
         row += 1
 
         # Keywords
-        grid.addWidget(QLabel("Keywords:"), row, 0)
+        grid.addWidget(QLabel(tr("export.metadata.keywords")), row, 0)
         self.meta_keywords = QLineEdit()
         self.meta_keywords.setText(self.export_settings.get('meta_keywords', ''))
-        self.meta_keywords.setPlaceholderText("Komma-getrennt")
+        self.meta_keywords.setPlaceholderText(tr("export.metadata.keywords_placeholder"))
         grid.addWidget(self.meta_keywords, row, 1)
         row += 1
 
         # Copyright
-        grid.addWidget(QLabel("Copyright:"), row, 0)
+        grid.addWidget(QLabel(tr("export.metadata.copyright")), row, 0)
         self.meta_copyright = QLineEdit()
         self.meta_copyright.setText(self.export_settings.get('meta_copyright', ''))
-        self.meta_copyright.setPlaceholderText("© 2025 ...")
+        self.meta_copyright.setPlaceholderText(tr("export.metadata.copyright_placeholder"))
         grid.addWidget(self.meta_copyright, row, 1)
 
         section.add_layout(grid)
@@ -527,20 +528,20 @@ class ExportSettingsDialog(QDialog):
 
     def create_advanced_section(self):
         """Create advanced format-specific options section"""
-        section = CollapsibleSection("Erweiterte Optionen")
+        section = CollapsibleSection(tr("export.advanced.title"))
 
         layout = QVBoxLayout()
 
         # PDF options
-        self.pdf_group = QGroupBox("PDF-Optionen")
+        self.pdf_group = QGroupBox(tr("export.advanced.pdf_options"))
         pdf_layout = QVBoxLayout()
 
-        self.embed_fonts = QCheckBox("Schriftarten einbetten")
+        self.embed_fonts = QCheckBox(tr("export.advanced.embed_fonts"))
         self.embed_fonts.setChecked(self.export_settings.get('embed_fonts', True))
         pdf_layout.addWidget(self.embed_fonts)
 
         pdf_version_layout = QHBoxLayout()
-        pdf_version_layout.addWidget(QLabel("PDF-Version:"))
+        pdf_version_layout.addWidget(QLabel(tr("export.advanced.pdf_version")))
         self.pdf_version_combo = QComboBox()
         self.pdf_version_combo.addItems(['1.4', '1.5', '1.6', '1.7'])
         self.pdf_version_combo.setCurrentText(self.export_settings.get('pdf_version', '1.5'))
@@ -552,11 +553,11 @@ class ExportSettingsDialog(QDialog):
         layout.addWidget(self.pdf_group)
 
         # PNG options
-        self.png_group = QGroupBox("PNG-Optionen")
+        self.png_group = QGroupBox(tr("export.advanced.png_options"))
         png_layout = QVBoxLayout()
 
         compression_layout = QHBoxLayout()
-        compression_layout.addWidget(QLabel("Kompression (0-9):"))
+        compression_layout.addWidget(QLabel(tr("export.advanced.png_compression")))
         self.png_compression = QSpinBox()
         self.png_compression.setRange(0, 9)
         self.png_compression.setValue(self.export_settings.get('png_compression', 6))
@@ -568,10 +569,10 @@ class ExportSettingsDialog(QDialog):
         layout.addWidget(self.png_group)
 
         # SVG options
-        self.svg_group = QGroupBox("SVG-Optionen")
+        self.svg_group = QGroupBox(tr("export.advanced.svg_options"))
         svg_layout = QVBoxLayout()
 
-        self.svg_text_as_path = QCheckBox("Text als Pfade (nicht editierbar)")
+        self.svg_text_as_path = QCheckBox(tr("export.advanced.svg_text_as_path"))
         self.svg_text_as_path.setChecked(self.export_settings.get('svg_text_as_path', False))
         svg_layout.addWidget(self.svg_text_as_path)
 
@@ -627,17 +628,17 @@ class ExportSettingsDialog(QDialog):
         self.png_group.setVisible(format_type == 'PNG')
         self.svg_group.setVisible(format_type == 'SVG')
 
-        # Update size preset to "Benutzerdefiniert" if manual changes
+        # Update size preset to custom if manual changes
         if self.sender() in [self.width_spin, self.height_spin]:
             self.size_preset_combo.blockSignals(True)
-            self.size_preset_combo.setCurrentText('Benutzerdefiniert')
+            self.size_preset_combo.setCurrentIndex(0)  # First item is always custom
             self.size_preset_combo.blockSignals(False)
 
         self.update_preview()
 
     def apply_preset(self, preset_name):
         """Apply a preset configuration"""
-        if preset_name == "-- Benutzerdefiniert --":
+        if preset_name == tr("export.presets.custom"):
             return
 
         # Check if it's a user preset
@@ -645,7 +646,15 @@ class ExportSettingsDialog(QDialog):
             preset_name = preset_name[2:]  # Remove star
             preset = self.user_presets.get(preset_name)
         else:
-            preset = self.PRESETS.get(preset_name)
+            # Reverse lookup: find the original English key
+            preset_mapping = {
+                tr("export.presets.publikation"): "Publikation",
+                tr("export.presets.präsentation"): "Präsentation",
+                tr("export.presets.web"): "Web",
+                tr("export.presets.druck"): "Druck"
+            }
+            preset_key = preset_mapping.get(preset_name)
+            preset = self.PRESETS.get(preset_key) if preset_key else None
 
         if not preset:
             return
@@ -674,10 +683,23 @@ class ExportSettingsDialog(QDialog):
 
     def apply_size_preset(self, preset_name):
         """Apply a size preset"""
-        if preset_name == 'Benutzerdefiniert':
+        # First item is always custom/benutzerdefiniert
+        if self.size_preset_combo.currentIndex() == 0:
             return
 
-        size = self.SIZE_PRESETS.get(preset_name)
+        # Reverse lookup: map translated names back to original keys
+        size_mapping = {
+            tr("export.format_size.benutzerdefiniert"): "Benutzerdefiniert",
+            tr("export.format_size.a4_querformat"): "A4 Querformat",
+            tr("export.format_size.a4_hochformat"): "A4 Hochformat",
+            tr("export.format_size.a5_querformat"): "A5 Querformat",
+            tr("export.format_size.a5_hochformat"): "A5 Hochformat",
+            tr("export.format_size.slide_16_9"): "Slide 16:9",
+            tr("export.format_size.slide_16_10"): "Slide 16:10",
+            tr("export.format_size.slide_4_3"): "Slide 4:3",
+        }
+        preset_key = size_mapping.get(preset_name)
+        size = self.SIZE_PRESETS.get(preset_key)
         if size:
             width_cm, height_cm = size
             self.width_spin.blockSignals(True)
@@ -693,7 +715,7 @@ class ExportSettingsDialog(QDialog):
         """Open color picker for background color"""
         from PySide6.QtGui import QColor
         current_color = QColor(self.current_bg_color)
-        color = QColorDialog.getColor(current_color, self, "Hintergrundfarbe wählen")
+        color = QColorDialog.getColor(current_color, self, tr("export.layout.choose_bg_color"))
         if color.isValid():
             self.current_bg_color = color.name()
             self.bg_color_btn.setStyleSheet(f"background-color: {self.current_bg_color};")
@@ -717,9 +739,9 @@ class ExportSettingsDialog(QDialog):
             fig = Figure(figsize=(settings['width'], settings['height']))
             ax = fig.add_subplot(111)
             ax.plot([0, 1], [0, 1], 'b-')
-            ax.set_xlabel('X-Achse')
-            ax.set_ylabel('Y-Achse')
-            ax.set_title('Vorschau')
+            ax.set_xlabel(tr("export.preview_x_axis"))
+            ax.set_ylabel(tr("export.preview_y_axis"))
+            ax.set_title(tr("export.preview_title"))
             self.preview_widget.update_preview(fig, settings)
             plt.close(fig)
 
@@ -757,8 +779,8 @@ class ExportSettingsDialog(QDialog):
 
         name, ok = QInputDialog.getText(
             self,
-            "Preset speichern",
-            "Name für das Preset:"
+            tr("export.save_preset_dialog_title"),
+            tr("export.save_preset_dialog_prompt")
         )
 
         if ok and name:
@@ -772,8 +794,8 @@ class ExportSettingsDialog(QDialog):
                 self.preset_combo.addItem(f"★ {name}")
 
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.information(self, "Preset gespeichert",
-                                   f"Preset '{name}' wurde gespeichert.")
+            QMessageBox.information(self, tr("export.preset_saved_title"),
+                                   tr("export.preset_saved_message", name=name))
 
     def load_user_presets(self):
         """Load user-defined presets from file"""
