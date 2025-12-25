@@ -521,7 +521,7 @@ class ScatterPlotApp(QMainWindow):
         # Farbschema
         options_layout.addWidget(QLabel(tr("options.color_scheme")), 2, 0)
         self.color_scheme_combo = QComboBox()
-        self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
+        self.color_scheme_combo.addItems(self.config.get_sorted_scheme_names())
         self.color_scheme_combo.setCurrentText('TUBAF')
         self.color_scheme_combo.currentTextChanged.connect(self.change_color_scheme)
         options_layout.addWidget(self.color_scheme_combo, 2, 1)
@@ -733,14 +733,32 @@ class ScatterPlotApp(QMainWindow):
 
                 # Plotten
                 plot_style = dataset.get_plot_style()
+                errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
+                # Spezialfall: stem plot für XRD-Referenz
+                if errorbar_style == 'stem':
+                    # Stem plot: Vertikale Linien von x-Achse zu Datenpunkten
+                    markerline, stemlines, baseline = self.ax_main.stem(
+                        x, y,
+                        linefmt=color,
+                        markerfmt=dataset.marker_style if dataset.marker_style else 'o',
+                        basefmt=' '  # Keine Basislinie
+                    )
+                    # Stil anpassen
+                    markerline.set_markerfacecolor(color)
+                    markerline.set_markeredgecolor(color)
+                    markerline.set_markersize(dataset.marker_size)
+                    stemlines.set_linewidth(dataset.line_width)
+                    stemlines.set_alpha(dataset.errorbar_alpha)
+                    # Label für Legende (manuell, da stem keinen label Parameter hat)
+                    self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
+                                     markersize=dataset.marker_size, linestyle='',
+                                     label=dataset.display_label)
                 # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-                if y_err_data is not None and dataset.show_errorbars:
+                elif y_err_data is not None and dataset.show_errorbars:
                     # Fehler transformieren
                     y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
-
-                    errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
                     if errorbar_style == 'fill':
                         # Transparente Fehlerfläche (klassische Methode)
@@ -817,13 +835,31 @@ class ScatterPlotApp(QMainWindow):
 
             # Plotten
             plot_style = dataset.get_plot_style()
+            errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
+            # Spezialfall: stem plot für XRD-Referenz
+            if errorbar_style == 'stem':
+                # Stem plot: Vertikale Linien von x-Achse zu Datenpunkten
+                markerline, stemlines, baseline = self.ax_main.stem(
+                    x, y,
+                    linefmt=color,
+                    markerfmt=dataset.marker_style if dataset.marker_style else 'o',
+                    basefmt=' '  # Keine Basislinie
+                )
+                # Stil anpassen
+                markerline.set_markerfacecolor(color)
+                markerline.set_markeredgecolor(color)
+                markerline.set_markersize(dataset.marker_size)
+                stemlines.set_linewidth(dataset.line_width)
+                stemlines.set_alpha(dataset.errorbar_alpha)
+                # Label für Legende (manuell, da stem keinen label Parameter hat)
+                self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
+                                 markersize=dataset.marker_size, linestyle='',
+                                 label=dataset.display_label)
             # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-            if y_err_data is not None and dataset.show_errorbars:
+            elif y_err_data is not None and dataset.show_errorbars:
                 # Fehler transformieren
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-
-                errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
                 if errorbar_style == 'fill':
                     # Transparente Fehlerfläche (klassische Methode)
@@ -1272,6 +1308,60 @@ class ScatterPlotApp(QMainWindow):
                 return two_theta, y
         else:
             return x, y
+
+    def convert_reference_line_value(self, value, from_plot_type, to_plot_type):
+        """
+        Konvertiert einen X-Wert einer Referenzlinie von einem Plottyp zu einem anderen.
+
+        Args:
+            value: Der X-Wert im Quell-Plottyp
+            from_plot_type: Der ursprüngliche Plottyp
+            to_plot_type: Der Ziel-Plottyp
+
+        Returns:
+            Der konvertierte X-Wert im Ziel-Plottyp
+        """
+        # Plottypen, die q verwenden (keine Transformation der X-Achse)
+        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF'}
+
+        # Zuerst auf q zurückrechnen (Basiseinheit)
+        if from_plot_type in q_types:
+            q = value
+        elif from_plot_type == 'Guinier':
+            # Guinier: x-Achse ist q²
+            q = np.sqrt(value) if value >= 0 else value
+        elif from_plot_type == 'Bragg Spacing':
+            # Bragg: x-Achse ist d = 2π/q
+            q = 2 * np.pi / value if value != 0 else value
+        elif from_plot_type == '2-Theta':
+            # 2-Theta: x-Achse ist 2θ in Grad
+            # q = 4π·sin(θ)/λ
+            theta_rad = value * np.pi / 360  # 2θ/2 in Radiant
+            q = 4 * np.pi * np.sin(theta_rad) / self.wavelength
+        else:
+            q = value
+
+        # Dann in Ziel-Plottyp umrechnen
+        if to_plot_type in q_types:
+            return q
+        elif to_plot_type == 'Guinier':
+            # Guinier: x-Achse ist q²
+            return q ** 2
+        elif to_plot_type == 'Bragg Spacing':
+            # Bragg: x-Achse ist d = 2π/q
+            return 2 * np.pi / q if q != 0 else q
+        elif to_plot_type == '2-Theta':
+            # 2-Theta: x-Achse ist 2θ in Grad
+            # 2θ = 2·arcsin(λq/(4π))
+            arg = self.wavelength * q / (4 * np.pi)
+            if arg <= 1:
+                theta_rad = np.arcsin(arg)
+                return 2 * theta_rad * 180 / np.pi
+            else:
+                # Ungültiger Bereich, behalte Wert
+                return value
+        else:
+            return q
 
     def on_annotation_press(self, event):
         """Maus-Press für Annotation-Drag (Version 5.3)"""
@@ -2068,8 +2158,27 @@ class ScatterPlotApp(QMainWindow):
         self.update_annotations_tree()
 
     def change_plot_type(self):
-        """Ändert Plot-Typ"""
-        self.plot_type = self.plot_type_combo.currentText()
+        """Ändert Plot-Typ und passt Referenzlinien an"""
+        old_plot_type = self.plot_type
+        new_plot_type = self.plot_type_combo.currentText()
+
+        # Vertikale Referenzlinien-X-Werte umrechnen
+        if old_plot_type != new_plot_type and hasattr(self, 'reference_lines'):
+            for ref_line in self.reference_lines:
+                if ref_line['type'] == 'vertical':
+                    old_value = ref_line['value']
+                    new_value = self.convert_reference_line_value(old_value, old_plot_type, new_plot_type)
+                    ref_line['value'] = new_value
+
+                    # Label aktualisieren, falls es ein auto-generiertes Label ist
+                    if ref_line.get('label') and ref_line['label'].startswith('x = '):
+                        ref_line['label'] = f"x = {new_value:.2f}"
+
+            # Annotations-Tree aktualisieren, um neue Werte anzuzeigen
+            if hasattr(self, 'update_annotations_tree'):
+                self.update_annotations_tree()
+
+        self.plot_type = new_plot_type
         self.update_plot()
 
     def change_color_scheme(self):
@@ -2127,7 +2236,7 @@ class ScatterPlotApp(QMainWindow):
         dialog.exec()
         # Config neu laden
         self.color_scheme_combo.clear()
-        self.color_scheme_combo.addItems(list(self.config.color_schemes.keys()))
+        self.color_scheme_combo.addItems(self.config.get_sorted_scheme_names())
         self.update_plot()
 
     def show_legend_settings(self):

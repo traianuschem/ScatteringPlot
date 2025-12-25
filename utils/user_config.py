@@ -112,6 +112,15 @@ DEFAULT_STYLE_PRESETS = {
         'marker_size': 0,
         'errorbar_style': 'bars',
         'description': 'Für theoretische Kurven (Strich-Punkt)'
+    },
+    'XRD-Referenz': {
+        'line_style': '',
+        'marker_style': 'o',
+        'line_width': 1.0,
+        'marker_size': 6,
+        'errorbar_style': 'stem',  # Spezial: stem plot mit Ankerlinien
+        'errorbar_alpha': 0.8,
+        'description': 'Für XRD-Reflexmuster (Datenpunkte mit Ankerlinien)'
     }
 }
 
@@ -202,11 +211,54 @@ class UserConfig:
         """Gibt Default-Plot-Settings zurück, oder None falls nicht gesetzt (v5.4)"""
         return self.default_plot_settings if self.default_plot_settings else None
 
+    def get_sorted_scheme_names(self):
+        """
+        Gibt sortierte Liste der Farbschema-Namen zurück.
+        Reihenfolge: TUBAF, barrierefreie Paletten, matplotlib, benutzerdefiniert
+        """
+        all_schemes = list(self.color_schemes.keys())
+
+        # Definiere Prioritäts-Gruppen
+        priority_schemes = ['TUBAF']
+        accessible_schemes = ['Paul Tol Bright', 'Paul Tol Muted', 'Paul Tol Vibrant',
+                             'Wong', 'IBM Color Blind Safe']
+
+        # Matplotlib Colormaps (erkennbar an bekannten Namen)
+        matplotlib_prefixes = ['tab', 'Set', 'Paired', 'Accent', 'Pastel', 'Dark',
+                              'viridis', 'plasma', 'inferno', 'magma', 'cividis',
+                              'Blues', 'Greens', 'Reds', 'Oranges', 'Purples',
+                              'YlOr', 'RdPu', 'BuPu', 'GnBu', 'RdYl', 'Spectral',
+                              'coolwarm', 'bwr', 'seismic']
+
+        # Sortiere Schemata in Gruppen
+        result = []
+
+        # 1. TUBAF (immer #1)
+        for scheme in priority_schemes:
+            if scheme in all_schemes:
+                result.append(scheme)
+
+        # 2. Barrierefreie Paletten (in definierter Reihenfolge)
+        for scheme in accessible_schemes:
+            if scheme in all_schemes:
+                result.append(scheme)
+
+        # 3. Matplotlib Colormaps (alphabetisch)
+        matplotlib_schemes = sorted([s for s in all_schemes
+                                    if any(s.startswith(prefix) for prefix in matplotlib_prefixes)])
+        result.extend(matplotlib_schemes)
+
+        # 4. Benutzerdefinierte Schemata (alphabetisch)
+        remaining = sorted([s for s in all_schemes if s not in result])
+        result.extend(remaining)
+
+        return result
+
     def load_color_schemes(self):
         """Lädt gespeicherte Farbschemata"""
         schemes = {}
 
-        # TUBAF Standard
+        # TUBAF Standard (bleibt #1)
         try:
             from tu_freiberg_colors import PRIMARY, SECONDARY, TERTIARY
             schemes['TUBAF'] = [
@@ -224,6 +276,63 @@ class UserConfig:
         except:
             schemes['TUBAF'] = ['#0069b4', '#8b7530', '#007b99', '#b71e3f', '#15882e',
                                 '#e18409', '#95c11f', '#1e959a', '#cd1222', '#a1d9ef']
+
+        # Barrierefreie Farbpaletten (farbenblindfreundlich)
+        # Paul Tol's Farbpaletten - optimiert für wissenschaftliche Visualisierung
+        schemes['Paul Tol Bright'] = [
+            '#4477AA',  # Blau
+            '#EE6677',  # Rot
+            '#228833',  # Grün
+            '#CCBB44',  # Gelb
+            '#66CCEE',  # Cyan
+            '#AA3377',  # Magenta
+            '#BBBBBB'   # Grau
+        ]
+
+        schemes['Paul Tol Muted'] = [
+            '#332288',  # Indigo
+            '#88CCEE',  # Cyan
+            '#44AA99',  # Teal
+            '#117733',  # Grün
+            '#999933',  # Olive
+            '#DDCC77',  # Sand
+            '#CC6677',  # Rose
+            '#882255',  # Wein
+            '#AA4499',  # Violett
+            '#DDDDDD'   # Hellgrau
+        ]
+
+        schemes['Paul Tol Vibrant'] = [
+            '#EE7733',  # Orange
+            '#0077BB',  # Blau
+            '#33BBEE',  # Cyan
+            '#EE3377',  # Magenta
+            '#CC3311',  # Rot
+            '#009988',  # Teal
+            '#BBBBBB'   # Grau
+        ]
+
+        # Wong Palette - eine der bekanntesten barrierefreien Paletten
+        schemes['Wong'] = [
+            '#E69F00',  # Orange
+            '#56B4E9',  # Himmelblau
+            '#009E73',  # Blaugrün
+            '#F0E442',  # Gelb
+            '#0072B2',  # Blau
+            '#D55E00',  # Zinnoberrot
+            '#CC79A7',  # Rotviolett
+            '#000000'   # Schwarz
+        ]
+
+        # IBM Color Blind Safe Palette
+        schemes['IBM Color Blind Safe'] = [
+            '#648FFF',  # Blau
+            '#785EF0',  # Violett
+            '#DC267F',  # Magenta
+            '#FE6100',  # Orange
+            '#FFB000',  # Gelb
+            '#000000'   # Schwarz
+        ]
 
         # Matplotlib Colormaps
         schemes.update(get_matplotlib_colormaps())
