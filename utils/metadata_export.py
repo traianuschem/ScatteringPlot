@@ -375,11 +375,18 @@ def format_metadata_as_text(metadata: Dict[str, str], format: str = 'markdown') 
     return '\n'.join(lines)
 
 
-def create_metadata_sidecar(image_path: Path, metadata: Dict[str, str]) -> bool:
+def create_xmp_sidecar(image_path: Path, metadata: Dict[str, str]) -> bool:
     """
-    Erstellt eine Markdown-Sidecar-Datei mit vollständigen Metadaten.
+    Erstellt eine XMP-Sidecar-Datei mit vollständigen Metadaten.
 
-    Wird für Formate wie SVG verwendet, die keine XMP-Einbettung unterstützen.
+    Wird für Formate wie SVG, PDF, EPS verwendet, die keine XMP-Einbettung
+    unterstützen oder wo eine externe Metadaten-Datei zusätzlich sinnvoll ist.
+
+    Die .xmp-Datei ist kompatibel mit:
+    - exiftool
+    - Adobe Bridge
+    - DigiKam
+    - Anderen DAM-Systemen
 
     Args:
         image_path: Pfad zur Bilddatei
@@ -388,36 +395,16 @@ def create_metadata_sidecar(image_path: Path, metadata: Dict[str, str]) -> bool:
     Returns:
         bool: True bei Erfolg
     """
-    # .md-Datei mit gleichem Namen wie Bild erstellen
-    md_path = image_path.with_suffix(image_path.suffix + '.md')
+    # .xmp-Datei mit gleichem Namen wie Bild erstellen
+    xmp_path = image_path.with_suffix(image_path.suffix + '.xmp')
 
-    # Header
-    content = [
-        f"# Metadaten für {image_path.name}",
-        "",
-        f"Automatisch generiert von ScatterForge Plot",
-        f"Bilddatei: `{image_path.name}`",
-        "",
-        "---",
-        ""
-    ]
-
-    # Metadaten im Markdown-Format
-    content.append(format_metadata_as_text(metadata, format='markdown'))
-
-    # Footer
-    content.extend([
-        "",
-        "---",
-        "",
-        f"*Diese Datei enthält strukturierte Metadaten für die Bilddatei `{image_path.name}` "
-        "und sollte zusammen mit dem Bild archiviert werden.*"
-    ])
+    # XMP-Paket erstellen
+    xmp_content = create_xmp_packet(metadata)
 
     # Schreiben
     try:
-        with open(md_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(content))
+        with open(xmp_path, 'w', encoding='utf-8') as f:
+            f.write(xmp_content)
         return True
     except Exception:
         return False
