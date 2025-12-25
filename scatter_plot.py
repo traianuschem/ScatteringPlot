@@ -2593,18 +2593,8 @@ class ScatterPlotApp(QMainWindow):
                         save_kwargs['pil_kwargs'] = pil_kwargs
 
                 elif format_ext == 'pdf':
-                    # PDF-Metadaten
-                    metadata = {}
-                    if settings.get('meta_title'):
-                        metadata['Title'] = settings['meta_title']
-                    if settings.get('meta_author'):
-                        metadata['Author'] = settings['meta_author']
-                    if settings.get('meta_subject'):
-                        metadata['Subject'] = settings['meta_subject']
-                    if settings.get('meta_keywords'):
-                        metadata['Keywords'] = settings['meta_keywords']
-                    if settings.get('meta_copyright'):
-                        metadata['Copyright'] = settings['meta_copyright']
+                    # PDF-Metadaten (v7.0: erweitert mit allen Infos in Subject)
+                    metadata = self._build_export_metadata(settings, format_type='pdf')
 
                     if metadata:
                         save_kwargs['metadata'] = metadata
@@ -2623,17 +2613,36 @@ class ScatterPlotApp(QMainWindow):
                         import matplotlib
                         matplotlib.rcParams['svg.fonttype'] = 'none'
 
-                    # SVG-Metadaten
-                    metadata = {}
-                    if settings.get('meta_title'):
-                        metadata['Title'] = settings['meta_title']
-                    if settings.get('meta_author'):
-                        metadata['Author'] = settings['meta_author']
+                    # SVG-Metadaten (v7.0: basic only)
+                    metadata = self._build_export_metadata(settings)
                     if metadata:
                         save_kwargs['metadata'] = metadata
 
                 # Speichern
                 self.fig.savefig(filename, **save_kwargs)
+
+                # v7.0: Post-Export Metadaten-Handling
+                if format_ext in ['png', 'tiff', 'tif']:
+                    # XMP-Metadaten für PNG/TIFF einbetten
+                    try:
+                        from utils.metadata_export import add_metadata_to_export
+                        full_metadata = self._build_export_metadata(settings, include_all=True)
+                        add_metadata_to_export(Path(filename), full_metadata, format_ext.upper())
+                        self.logger.info(f"XMP-Metadaten in {format_ext.upper()} eingebettet")
+                    except Exception as e:
+                        self.logger.warning(f"XMP-Metadaten konnten nicht eingebettet werden: {e}")
+                        # Nicht kritisch - Datei ist trotzdem gespeichert
+
+                elif format_ext == 'svg':
+                    # Markdown-Sidecar-Datei für SVG erstellen
+                    try:
+                        from utils.metadata_export import create_metadata_sidecar
+                        full_metadata = self._build_export_metadata(settings, include_all=True)
+                        if create_metadata_sidecar(Path(filename), full_metadata):
+                            self.logger.info(f"Metadaten-Sidecar-Datei erstellt: {filename}.md")
+                    except Exception as e:
+                        self.logger.warning(f"Metadaten-Sidecar konnte nicht erstellt werden: {e}")
+                        # Nicht kritisch - SVG ist trotzdem gespeichert
 
                 # Größe zurücksetzen
                 self.fig.set_size_inches(original_size)
@@ -2647,6 +2656,164 @@ class ScatterPlotApp(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, tr("messages.export_error"),
                                    tr("messages.export_error_msg", error=str(e)))
+
+    def _build_export_metadata(self, settings: dict, include_all: bool = False, format_type: str = None) -> dict:
+        """
+        Erstellt vollständige Metadaten für Export (v7.0+)
+
+        Args:
+            settings: Export-Settings Dictionary
+            include_all: Wenn True, werden alle erweiterten Metadaten inkludiert
+                        (für XMP). Wenn False, nur matplotlib-kompatible Felder
+                        (für PDF/SVG savefig).
+            format_type: 'pdf', 'svg', oder None - für format-spezifische Anpassungen
+
+        Returns:
+            dict: Metadaten-Dictionary
+        """
+        from datetime import datetime, timezone
+        from core.version import get_metadata_provenance
+        import uuid
+
+        metadata = {}
+
+        # Basic metadata (immer dabei)
+        if settings.get('meta_title'):
+            metadata['Title'] = settings['meta_title']
+
+        if settings.get('meta_author'):
+            metadata['Author'] = settings['meta_author']
+
+        if settings.get('meta_subject'):
+            metadata['Subject'] = settings['meta_subject']
+
+        if settings.get('meta_keywords'):
+            metadata['Keywords'] = settings['meta_keywords']
+
+        # Für matplotlib savefig (PDF/SVG): erweiterte Metadaten sammeln
+        if not include_all:
+            # Erweiterte Metadaten temporär sammeln für PDF-Subject-Erweiterung
+            extended_meta = {}
+
+            # ORCID
+            if settings.get('meta_orcid'):
+                orcid = settings['meta_orcid'].strip()
+                if orcid:
+                    if not orcid.startswith('http'):
+                        extended_meta['Creator_ORCID'] = f"https://orcid.org/{orcid}"
+                    else:
+                        extended_meta['Creator_ORCID'] = orcid
+
+            # Affiliation
+            if settings.get('meta_affiliation'):
+                extended_meta['Affiliation'] = settings['meta_affiliation']
+
+            # License
+            if settings.get('meta_license'):
+                extended_meta['License'] = settings['meta_license']
+
+            # Timestamp
+            if settings.get('meta_auto_timestamp', True):
+                now = datetime.now(timezone.utc)
+                extended_meta['CreationDate'] = now.isoformat()
+                extended_meta['CreationDate_Unix'] = int(now.timestamp())
+
+            # Provenance
+            if settings.get('meta_auto_provenance', True):
+                prov = get_metadata_provenance()
+                extended_meta['Creator_Tool'] = f"{prov['software']} v{prov['version']}"
+                extended_meta['Creator_Tool_Version'] = prov['version']
+                extended_meta['Python_Version'] = prov['python_version']
+                extended_meta['Matplotlib_Version'] = prov['matplotlib_version']
+
+            # UUID
+            if settings.get('meta_generate_uuid', False):
+                extended_meta['Image_UUID'] = str(uuid.uuid4())
+
+            # Experiment metadata
+            if settings.get('meta_experiment_id'):
+                extended_meta['Experiment_ID'] = settings['meta_experiment_id']
+            if settings.get('meta_measurement_date'):
+                extended_meta['Measurement_Date'] = settings['meta_measurement_date']
+            if settings.get('meta_sample_id'):
+                extended_meta['Sample_ID'] = settings['meta_sample_id']
+
+            # Für PDF: Alle erweiterten Metadaten in Subject-Feld packen
+            if format_type == 'pdf':
+                from utils.metadata_export import format_metadata_as_text
+
+                # Kombiniere basis metadata mit erweiterten
+                full_meta = {**metadata, **extended_meta}
+
+                # Formatiere als kompakten Text
+                extended_text = format_metadata_as_text(full_meta, format='plain')
+
+                # Überschreibe Subject mit erweitertem Text
+                metadata['Subject'] = extended_text
+
+            return metadata
+
+        # Erweiterte Metadaten (nur für XMP/PNG/TIFF)
+
+        # ORCID
+        if settings.get('meta_orcid'):
+            orcid = settings['meta_orcid'].strip()
+            if orcid:
+                if not orcid.startswith('http'):
+                    metadata['Creator_ORCID'] = f"https://orcid.org/{orcid}"
+                else:
+                    metadata['Creator_ORCID'] = orcid
+
+        # Affiliation
+        if settings.get('meta_affiliation'):
+            metadata['Affiliation'] = settings['meta_affiliation']
+
+        # License
+        if settings.get('meta_license'):
+            metadata['License'] = settings['meta_license']
+
+            # License URL für bekannte CC-Lizenzen
+            license_urls = {
+                'CC-BY-4.0': 'https://creativecommons.org/licenses/by/4.0/',
+                'CC-BY-SA-4.0': 'https://creativecommons.org/licenses/by-sa/4.0/',
+                'CC-BY-NC-4.0': 'https://creativecommons.org/licenses/by-nc/4.0/',
+                'CC-BY-NC-SA-4.0': 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+                'CC0-1.0': 'https://creativecommons.org/publicdomain/zero/1.0/',
+            }
+            if settings['meta_license'] in license_urls:
+                metadata['License_URL'] = license_urls[settings['meta_license']]
+
+        # Automatische Metadaten
+
+        # Timestamp (wenn aktiviert)
+        if settings.get('meta_auto_timestamp', True):
+            now = datetime.now(timezone.utc)
+            metadata['CreationDate'] = now.isoformat()
+            metadata['CreationDate_Unix'] = int(now.timestamp())
+
+        # Software-Provenienz (wenn aktiviert)
+        if settings.get('meta_auto_provenance', True):
+            prov = get_metadata_provenance()
+            metadata['Creator_Tool'] = f"{prov['software']} v{prov['version']}"
+            metadata['Creator_Tool_Version'] = prov['version']
+            metadata['Python_Version'] = prov['python_version']
+            metadata['Matplotlib_Version'] = prov['matplotlib_version']
+
+        # UUID (wenn aktiviert)
+        if settings.get('meta_generate_uuid', False):
+            metadata['Image_UUID'] = str(uuid.uuid4())
+
+        # Experiment metadata (optional)
+        if settings.get('meta_experiment_id'):
+            metadata['Experiment_ID'] = settings['meta_experiment_id']
+
+        if settings.get('meta_measurement_date'):
+            metadata['Measurement_Date'] = settings['meta_measurement_date']
+
+        if settings.get('meta_sample_id'):
+            metadata['Sample_ID'] = settings['meta_sample_id']
+
+        return metadata
 
     def change_language(self, language_code):
         """

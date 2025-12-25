@@ -301,6 +301,10 @@ class ExportSettingsDialog(QDialog):
         self.main_figure = main_figure
         self.user_presets = self.load_user_presets()
 
+        # Access to UserMetadataManager (v7.0+)
+        self.parent_window = parent
+        self.user_metadata = getattr(parent, 'user_metadata', None)
+
         self.init_ui()
         self.connect_signals()
         self.update_preview()
@@ -339,6 +343,10 @@ class ExportSettingsDialog(QDialog):
 
         self.metadata_section = self.create_metadata_section()
         settings_layout.addWidget(self.metadata_section)
+
+        # v7.0: Experiment References (optional)
+        self.experiment_section = self.create_experiment_section()
+        settings_layout.addWidget(self.experiment_section)
 
         self.advanced_section = self.create_advanced_section()
         settings_layout.addWidget(self.advanced_section)
@@ -492,33 +500,76 @@ class ExportSettingsDialog(QDialog):
         return section
 
     def create_metadata_section(self):
-        """Create metadata editor section"""
+        """Create metadata editor section with auto-fill (v7.0+)"""
         section = CollapsibleSection("Metadaten")
 
+        layout = QVBoxLayout()
+
+        # Auto-Fill Button
+        if self.user_metadata:
+            autofill_btn = QPushButton("🔄 Auto-Fill aus Benutzer-Profil")
+            autofill_btn.setToolTip("Füllt Autor, ORCID, Affiliation und Lizenz automatisch aus dem Benutzer-Profil")
+            autofill_btn.clicked.connect(self.autofill_metadata)
+            layout.addWidget(autofill_btn)
+
+        # Basic Metadata
         grid = QGridLayout()
         row = 0
 
-        # Title
+        # Title (auto-filled from plot title if available)
         grid.addWidget(QLabel("Titel:"), row, 0)
         self.meta_title = QLineEdit()
-        self.meta_title.setText(self.export_settings.get('meta_title', ''))
-        self.meta_title.setPlaceholderText("Dokumenttitel")
+        # Try to get plot title from parent
+        plot_title = getattr(self.parent_window, 'title_settings', {}).get('text', '')
+        default_title = self.export_settings.get('meta_title', plot_title)
+        self.meta_title.setText(default_title)
+        self.meta_title.setPlaceholderText("Titel des Plots")
         grid.addWidget(self.meta_title, row, 1)
         row += 1
 
-        # Author
-        grid.addWidget(QLabel("Autor:"), row, 0)
+        # Author (auto-filled from user metadata)
+        grid.addWidget(QLabel("Autor:*"), row, 0)
         self.meta_author = QLineEdit()
-        self.meta_author.setText(self.export_settings.get('meta_author', ''))
+        default_author = self.export_settings.get('meta_author', '')
+        if not default_author and self.user_metadata:
+            default_author = self.user_metadata.metadata['user'].get('name', '')
+        self.meta_author.setText(default_author)
         self.meta_author.setPlaceholderText("Ihr Name")
         grid.addWidget(self.meta_author, row, 1)
+        row += 1
+
+        # ORCID (v7.0+)
+        grid.addWidget(QLabel("ORCID:"), row, 0)
+        self.meta_orcid = QLineEdit()
+        default_orcid = self.export_settings.get('meta_orcid', '')
+        if not default_orcid and self.user_metadata:
+            default_orcid = self.user_metadata.metadata['user'].get('orcid', '')
+        self.meta_orcid.setText(default_orcid)
+        self.meta_orcid.setPlaceholderText("0000-0002-1234-5678")
+        grid.addWidget(self.meta_orcid, row, 1)
+        row += 1
+
+        # Affiliation (v7.0+)
+        grid.addWidget(QLabel("Affiliation:"), row, 0)
+        self.meta_affiliation = QLineEdit()
+        default_affiliation = self.export_settings.get('meta_affiliation', '')
+        if not default_affiliation and self.user_metadata:
+            institution = self.user_metadata.metadata['affiliation'].get('institution', '')
+            department = self.user_metadata.metadata['affiliation'].get('department', '')
+            if institution and department:
+                default_affiliation = f"{institution}, {department}"
+            elif institution:
+                default_affiliation = institution
+        self.meta_affiliation.setText(default_affiliation)
+        self.meta_affiliation.setPlaceholderText("Institution, Abteilung")
+        grid.addWidget(self.meta_affiliation, row, 1)
         row += 1
 
         # Subject
         grid.addWidget(QLabel("Beschreibung:"), row, 0)
         self.meta_subject = QLineEdit()
         self.meta_subject.setText(self.export_settings.get('meta_subject', ''))
-        self.meta_subject.setPlaceholderText("Kurzbeschreibung")
+        self.meta_subject.setPlaceholderText("Kurzbeschreibung des Inhalts")
         grid.addWidget(self.meta_subject, row, 1)
         row += 1
 
@@ -526,18 +577,143 @@ class ExportSettingsDialog(QDialog):
         grid.addWidget(QLabel("Keywords:"), row, 0)
         self.meta_keywords = QLineEdit()
         self.meta_keywords.setText(self.export_settings.get('meta_keywords', ''))
-        self.meta_keywords.setPlaceholderText("Komma-getrennt")
+        self.meta_keywords.setPlaceholderText("SAXS, nanoparticles, ...")
         grid.addWidget(self.meta_keywords, row, 1)
         row += 1
 
-        # Copyright
-        grid.addWidget(QLabel("Copyright:"), row, 0)
-        self.meta_copyright = QLineEdit()
-        self.meta_copyright.setText(self.export_settings.get('meta_copyright', ''))
-        self.meta_copyright.setPlaceholderText("© 2025 ...")
-        grid.addWidget(self.meta_copyright, row, 1)
+        # License (v7.0+)
+        grid.addWidget(QLabel("Lizenz:"), row, 0)
+        self.meta_license = QComboBox()
+        self.meta_license.addItems([
+            "CC-BY-4.0",
+            "CC-BY-SA-4.0",
+            "CC-BY-NC-4.0",
+            "CC-BY-NC-SA-4.0",
+            "CC0-1.0",
+            "All Rights Reserved"
+        ])
+        default_license = self.export_settings.get('meta_license', '')
+        if not default_license and self.user_metadata:
+            default_license = self.user_metadata.metadata['export_defaults'].get('license', 'CC-BY-4.0')
+        if default_license:
+            self.meta_license.setCurrentText(default_license)
+        grid.addWidget(self.meta_license, row, 1)
+        row += 1
 
-        section.add_layout(grid)
+        layout.addLayout(grid)
+
+        # Automatic features (v7.0+)
+        auto_group = QGroupBox("Automatische Metadaten")
+        auto_layout = QVBoxLayout()
+
+        self.meta_auto_timestamp = QCheckBox("Zeitstempel hinzufügen (ISO 8601)")
+        default_timestamp = self.export_settings.get('meta_auto_timestamp', True)
+        if self.user_metadata:
+            default_timestamp = self.user_metadata.metadata['export_defaults'].get('auto_timestamp', True)
+        self.meta_auto_timestamp.setChecked(default_timestamp)
+        self.meta_auto_timestamp.setToolTip("Fügt Erstellungsdatum und -zeit automatisch hinzu")
+
+        self.meta_auto_provenance = QCheckBox("Software-Informationen einbetten")
+        default_provenance = self.export_settings.get('meta_auto_provenance', True)
+        if self.user_metadata:
+            default_provenance = self.user_metadata.metadata['export_defaults'].get('include_provenance', True)
+        self.meta_auto_provenance.setChecked(default_provenance)
+        self.meta_auto_provenance.setToolTip("Fügt ScatterForge-Version und Python/matplotlib-Versionen hinzu")
+
+        self.meta_generate_uuid = QCheckBox("Eindeutige ID (UUID) generieren")
+        default_uuid = self.export_settings.get('meta_generate_uuid', False)
+        if self.user_metadata:
+            default_uuid = self.user_metadata.metadata['export_defaults'].get('generate_uuid', False)
+        self.meta_generate_uuid.setChecked(default_uuid)
+        self.meta_generate_uuid.setToolTip("Generiert eine weltweit eindeutige ID für dieses Bild")
+
+        auto_layout.addWidget(self.meta_auto_timestamp)
+        auto_layout.addWidget(self.meta_auto_provenance)
+        auto_layout.addWidget(self.meta_generate_uuid)
+
+        auto_group.setLayout(auto_layout)
+        layout.addWidget(auto_group)
+
+        section.add_layout(layout)
+        return section
+
+    def autofill_metadata(self):
+        """Auto-fill metadata from user profile (v7.0+)"""
+        if not self.user_metadata:
+            return
+
+        meta = self.user_metadata.metadata
+
+        # Author
+        if meta['user'].get('name'):
+            self.meta_author.setText(meta['user']['name'])
+
+        # ORCID
+        if meta['user'].get('orcid'):
+            self.meta_orcid.setText(meta['user']['orcid'])
+
+        # Affiliation
+        institution = meta['affiliation'].get('institution', '')
+        department = meta['affiliation'].get('department', '')
+        if institution and department:
+            self.meta_affiliation.setText(f"{institution}, {department}")
+        elif institution:
+            self.meta_affiliation.setText(institution)
+
+        # License
+        if meta['export_defaults'].get('license'):
+            self.meta_license.setCurrentText(meta['export_defaults']['license'])
+
+        # Checkboxes
+        self.meta_auto_timestamp.setChecked(meta['export_defaults'].get('auto_timestamp', True))
+        self.meta_auto_provenance.setChecked(meta['export_defaults'].get('include_provenance', True))
+        self.meta_generate_uuid.setChecked(meta['export_defaults'].get('generate_uuid', False))
+
+    def create_experiment_section(self):
+        """Create experimental metadata section (v7.0+)"""
+        section = CollapsibleSection("Experiment-Referenzen (Optional)")
+        section.set_expanded(False)  # Collapsed by default
+
+        layout = QVBoxLayout()
+
+        info_label = QLabel(
+            "Für wissenschaftliche Publikationen: Verknüpfung mit Experiment-Dokumentation\n"
+            "(z.B. aus elektronischen Laborbüchern)"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; font-size: 10px; padding: 5px;")
+        layout.addWidget(info_label)
+
+        grid = QGridLayout()
+        row = 0
+
+        # Experiment ID
+        grid.addWidget(QLabel("Experiment-ID:"), row, 0)
+        self.meta_experiment_id = QLineEdit()
+        self.meta_experiment_id.setText(self.export_settings.get('meta_experiment_id', ''))
+        self.meta_experiment_id.setPlaceholderText("z.B. UUID oder ELN-Referenz")
+        grid.addWidget(self.meta_experiment_id, row, 1)
+        row += 1
+
+        # Measurement Date
+        grid.addWidget(QLabel("Messdatum:"), row, 0)
+        self.meta_measurement_date = QLineEdit()
+        self.meta_measurement_date.setText(self.export_settings.get('meta_measurement_date', ''))
+        self.meta_measurement_date.setPlaceholderText("YYYY-MM-DD")
+        grid.addWidget(self.meta_measurement_date, row, 1)
+        row += 1
+
+        # Sample ID
+        grid.addWidget(QLabel("Proben-ID:"), row, 0)
+        self.meta_sample_id = QLineEdit()
+        self.meta_sample_id.setText(self.export_settings.get('meta_sample_id', ''))
+        self.meta_sample_id.setPlaceholderText("Bezeichnung der Probe")
+        grid.addWidget(self.meta_sample_id, row, 1)
+        row += 1
+
+        layout.addLayout(grid)
+
+        section.add_layout(layout)
         return section
 
     def create_advanced_section(self):
@@ -810,12 +986,21 @@ class ExportSettingsDialog(QDialog):
             'transparent': self.transparent_bg.isChecked(),
             'tight_layout': self.tight_layout.isChecked(),
             'bg_color': self.current_bg_color,
-            # Metadata
+            # Metadata (v7.0: extended)
             'meta_title': self.meta_title.text(),
             'meta_author': self.meta_author.text(),
+            'meta_orcid': self.meta_orcid.text(),
+            'meta_affiliation': self.meta_affiliation.text(),
             'meta_subject': self.meta_subject.text(),
             'meta_keywords': self.meta_keywords.text(),
-            'meta_copyright': self.meta_copyright.text(),
+            'meta_license': self.meta_license.currentText(),
+            'meta_auto_timestamp': self.meta_auto_timestamp.isChecked(),
+            'meta_auto_provenance': self.meta_auto_provenance.isChecked(),
+            'meta_generate_uuid': self.meta_generate_uuid.isChecked(),
+            # Experiment metadata (v7.0)
+            'meta_experiment_id': self.meta_experiment_id.text(),
+            'meta_measurement_date': self.meta_measurement_date.text(),
+            'meta_sample_id': self.meta_sample_id.text(),
             # Advanced
             'embed_fonts': self.embed_fonts.isChecked(),
             'pdf_version': self.pdf_version_combo.currentText(),
