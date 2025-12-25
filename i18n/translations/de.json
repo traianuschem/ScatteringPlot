@@ -32,6 +32,7 @@
     },
     "settings": {
       "title": "Einstellungen",
+      "user_metadata": "Benutzer-Metadaten bearbeiten...",
       "language": "Sprache"
     },
     "help": {
@@ -623,6 +624,84 @@
         "tubaf": "TUBAF",
         "minimalist": "Minimalistisch"
       }
+    }
+  },
+
+  "user_metadata": {
+    "title": "Benutzer-Metadaten bearbeiten",
+    "info": "Diese Metadaten werden automatisch in exportierte Plots eingebettet.\nSie können jederzeit geändert werden.",
+
+    "personal": {
+      "title": "Persönliche Daten",
+      "name": "Name:*",
+      "name_placeholder": "z.B. Max Mustermann",
+      "email": "E-Mail:",
+      "email_placeholder": "z.B. max.mustermann@tu-freiberg.de",
+      "orcid": "ORCID:",
+      "orcid_placeholder": "z.B. 0000-0002-1234-5678",
+      "orcid_info": "ℹ️ Optional: Ihre eindeutige Forscher-ID (16 Ziffern, Format: 0000-0002-1234-5678)\nNoch keine ORCID? Registrieren Sie sich kostenlos auf https://orcid.org",
+      "orcid_valid": "✓ ORCID-Format korrekt",
+      "orcid_invalid": "✗ Ungültiges ORCID-Format (erwartet: 0000-0002-1234-5678)"
+    },
+
+    "affiliation": {
+      "title": "Affiliation",
+      "institution": "Institution:*",
+      "institution_placeholder": "z.B. TU Bergakademie Freiberg",
+      "department": "Abteilung:",
+      "department_placeholder": "z.B. Institut für Experimentelle Physik",
+      "ror": "ROR-ID:",
+      "ror_placeholder": "z.B. https://ror.org/03v4gjf40",
+      "ror_info": "ℹ️ Optional: Research Organization Registry ID\nSuche auf https://ror.org"
+    },
+
+    "export_defaults": {
+      "title": "Standard-Einstellungen für Export",
+      "license": "Standard-Lizenz:",
+      "timestamp": "Zeitstempel automatisch hinzufügen",
+      "timestamp_tooltip": "Fügt Erstellungsdatum und -zeit (ISO 8601 + Unix-Timestamp) automatisch hinzu",
+      "provenance": "Software-Informationen einbetten",
+      "provenance_tooltip": "Fügt Informationen über verwendete Software-Versionen hinzu (ScatterForge, Python, matplotlib)",
+      "uuid": "UUID für Bilder generieren",
+      "uuid_tooltip": "Generiert eine eindeutige ID (UUID v4) für jedes exportierte Bild"
+    },
+
+    "licenses": {
+      "cc_by": "🌐 Attribution 4.0 - Namensnennung erforderlich, kommerzielle Nutzung erlaubt",
+      "cc_by_sa": "🔄 Attribution-ShareAlike 4.0 - Namensnennung + gleiche Lizenz bei Weitergabe",
+      "cc_by_nc": "🚫💰 Attribution-NonCommercial 4.0 - Namensnennung, keine kommerzielle Nutzung",
+      "cc_by_nc_sa": "🚫💰🔄 Attribution-NonCommercial-ShareAlike 4.0",
+      "cc0": "🆓 Public Domain - Keine Rechte vorbehalten",
+      "all_rights": "©️ Alle Rechte vorbehalten - Copyright"
+    },
+
+    "path": {
+      "title": "Speicherort",
+      "change": "Ändern...",
+      "change_tooltip": "Speicherort für diese Config ändern (z.B. Cloud-Verzeichnis)",
+      "not_saved": "Noch nicht gespeichert (wird bei 'Speichern' erstellt)"
+    },
+
+    "required": "* Pflichtfelder für aussagekräftige Metadaten",
+
+    "buttons": {
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
+
+    "dialogs": {
+      "missing_name_title": "Fehlende Daten",
+      "missing_name_message": "Bitte geben Sie mindestens Ihren Namen ein.",
+      "missing_institution_title": "Fehlende Daten",
+      "missing_institution_message": "Bitte geben Sie Ihre Institution ein.",
+      "invalid_orcid_title": "Ungültiges ORCID-Format",
+      "invalid_orcid_message": "Das ORCID-Format ist ungültig. Trotzdem speichern?",
+      "saved_title": "Gespeichert",
+      "saved_message": "Benutzer-Metadaten wurden erfolgreich gespeichert:\n{path}",
+      "error_title": "Fehler beim Speichern",
+      "error_message": "Die Metadaten konnten nicht gespeichert werden:\n{error}",
+      "change_location_title": "Benutzer-Config speichern unter",
+      "json_filter": "JSON Files (*.json)"
     }
   },
 

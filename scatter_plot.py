@@ -379,7 +379,7 @@ class ScatterPlotApp(QMainWindow):
         settings_menu = menubar.addMenu(tr("menu.settings.title"))
 
         # v7.0: Benutzer-Metadaten Editor
-        user_metadata_action = QAction("Benutzer-Metadaten bearbeiten...", self)
+        user_metadata_action = QAction(tr("menu.settings.user_metadata"), self)
         user_metadata_action.triggered.connect(self.edit_user_metadata)
         settings_menu.addAction(user_metadata_action)
 

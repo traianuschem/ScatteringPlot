@@ -35,7 +35,7 @@ class UserMetadataDialog(QDialog):
         """
         super().__init__(parent)
         self.metadata_manager = metadata_manager
-        self.setWindowTitle("Benutzer-Metadaten bearbeiten")
+        self.setWindowTitle(tr("user_metadata.title"))
         self.setMinimumWidth(600)
         self.setup_ui()
         self.load_data()
@@ -45,81 +45,72 @@ class UserMetadataDialog(QDialog):
         layout = QVBoxLayout()
 
         # Info-Text oben
-        info_label = QLabel(
-            "Diese Metadaten werden automatisch in exportierte Plots eingebettet.\n"
-            "Sie können jederzeit geändert werden."
-        )
+        info_label = QLabel(tr("user_metadata.info"))
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
         layout.addWidget(info_label)
 
         # Persönliche Daten
-        personal_group = QGroupBox("Persönliche Daten")
+        personal_group = QGroupBox(tr("user_metadata.personal.title"))
         personal_layout = QFormLayout()
 
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("z.B. Max Mustermann")
+        self.name_input.setPlaceholderText(tr("user_metadata.personal.name_placeholder"))
 
         self.email_input = QLineEdit()
-        self.email_input.setPlaceholderText("z.B. max.mustermann@tu-freiberg.de")
+        self.email_input.setPlaceholderText(tr("user_metadata.personal.email_placeholder"))
 
         self.orcid_input = QLineEdit()
-        self.orcid_input.setPlaceholderText("z.B. 0000-0002-1234-5678")
+        self.orcid_input.setPlaceholderText(tr("user_metadata.personal.orcid_placeholder"))
         self.orcid_input.textChanged.connect(self.validate_orcid_input)
 
         # ORCID Info-Label
         self.orcid_info = QLabel()
         self.orcid_info.setWordWrap(True)
         self.orcid_info.setStyleSheet("color: #666; font-size: 10px;")
-        self.orcid_info.setText(
-            "ℹ️ Optional: Ihre eindeutige Forscher-ID (16 Ziffern, Format: 0000-0002-1234-5678)\n"
-            "Noch keine ORCID? Registrieren Sie sich kostenlos auf https://orcid.org"
-        )
+        self.orcid_info.setText(tr("user_metadata.personal.orcid_info"))
 
-        personal_layout.addRow("Name:*", self.name_input)
-        personal_layout.addRow("E-Mail:", self.email_input)
-        personal_layout.addRow("ORCID:", self.orcid_input)
+        personal_layout.addRow(tr("user_metadata.personal.name"), self.name_input)
+        personal_layout.addRow(tr("user_metadata.personal.email"), self.email_input)
+        personal_layout.addRow(tr("user_metadata.personal.orcid"), self.orcid_input)
         personal_layout.addRow("", self.orcid_info)
 
         personal_group.setLayout(personal_layout)
         layout.addWidget(personal_group)
 
         # Affiliation
-        affiliation_group = QGroupBox("Affiliation")
+        affiliation_group = QGroupBox(tr("user_metadata.affiliation.title"))
         affiliation_layout = QFormLayout()
 
         self.institution_input = QLineEdit()
-        self.institution_input.setPlaceholderText("z.B. TU Bergakademie Freiberg")
+        self.institution_input.setPlaceholderText(tr("user_metadata.affiliation.institution_placeholder"))
 
         self.department_input = QLineEdit()
-        self.department_input.setPlaceholderText("z.B. Institut für Experimentelle Physik")
+        self.department_input.setPlaceholderText(tr("user_metadata.affiliation.department_placeholder"))
 
         self.ror_input = QLineEdit()
-        self.ror_input.setPlaceholderText("z.B. https://ror.org/03v4gjf40")
+        self.ror_input.setPlaceholderText(tr("user_metadata.affiliation.ror_placeholder"))
 
         # ROR Info-Label
-        ror_info = QLabel(
-            "ℹ️ Optional: Research Organization Registry ID\n"
-            "Suche auf https://ror.org"
-        )
+        ror_info = QLabel(tr("user_metadata.affiliation.ror_info"))
         ror_info.setWordWrap(True)
         ror_info.setStyleSheet("color: #666; font-size: 10px;")
 
-        affiliation_layout.addRow("Institution:*", self.institution_input)
-        affiliation_layout.addRow("Abteilung:", self.department_input)
-        affiliation_layout.addRow("ROR-ID:", self.ror_input)
+        affiliation_layout.addRow(tr("user_metadata.affiliation.institution"), self.institution_input)
+        affiliation_layout.addRow(tr("user_metadata.affiliation.department"), self.department_input)
+        affiliation_layout.addRow(tr("user_metadata.affiliation.ror"), self.ror_input)
         affiliation_layout.addRow("", ror_info)
 
         affiliation_group.setLayout(affiliation_layout)
         layout.addWidget(affiliation_group)
 
         # Export-Defaults
-        defaults_group = QGroupBox("Standard-Einstellungen für Export")
+        defaults_group = QGroupBox(tr("user_metadata.export_defaults.title"))
         defaults_layout = QVBoxLayout()
 
         # Lizenz
         license_layout = QHBoxLayout()
-        license_layout.addWidget(QLabel("Standard-Lizenz:"))
+        license_layout.addWidget(QLabel(tr("user_metadata.export_defaults.license")))
 
         self.license_combo = QComboBox()
         self.license_combo.addItems([
@@ -143,20 +134,14 @@ class UserMetadataDialog(QDialog):
         defaults_layout.addWidget(self.license_info)
 
         # Checkboxen
-        self.timestamp_check = QCheckBox("Zeitstempel automatisch hinzufügen")
-        self.timestamp_check.setToolTip(
-            "Fügt Erstellungsdatum und -zeit (ISO 8601 + Unix-Timestamp) automatisch hinzu"
-        )
+        self.timestamp_check = QCheckBox(tr("user_metadata.export_defaults.timestamp"))
+        self.timestamp_check.setToolTip(tr("user_metadata.export_defaults.timestamp_tooltip"))
 
-        self.provenance_check = QCheckBox("Software-Informationen einbetten")
-        self.provenance_check.setToolTip(
-            "Fügt Informationen über verwendete Software-Versionen hinzu (ScatterForge, Python, matplotlib)"
-        )
+        self.provenance_check = QCheckBox(tr("user_metadata.export_defaults.provenance"))
+        self.provenance_check.setToolTip(tr("user_metadata.export_defaults.provenance_tooltip"))
 
-        self.uuid_check = QCheckBox("UUID für Bilder generieren")
-        self.uuid_check.setToolTip(
-            "Generiert eine eindeutige ID (UUID v4) für jedes exportierte Bild"
-        )
+        self.uuid_check = QCheckBox(tr("user_metadata.export_defaults.uuid"))
+        self.uuid_check.setToolTip(tr("user_metadata.export_defaults.uuid_tooltip"))
 
         defaults_layout.addWidget(self.timestamp_check)
         defaults_layout.addWidget(self.provenance_check)
@@ -166,14 +151,14 @@ class UserMetadataDialog(QDialog):
         layout.addWidget(defaults_group)
 
         # Speicherort
-        path_group = QGroupBox("Speicherort")
+        path_group = QGroupBox(tr("user_metadata.path.title"))
         path_layout = QHBoxLayout()
 
         self.path_label = QLabel()
         self.path_label.setStyleSheet("font-family: monospace; color: #333;")
 
-        change_path_btn = QPushButton("Ändern...")
-        change_path_btn.setToolTip("Speicherort für diese Config ändern (z.B. Cloud-Verzeichnis)")
+        change_path_btn = QPushButton(tr("user_metadata.path.change"))
+        change_path_btn.setToolTip(tr("user_metadata.path.change_tooltip"))
         change_path_btn.clicked.connect(self.change_save_location)
 
         path_layout.addWidget(self.path_label, 1)
@@ -182,7 +167,7 @@ class UserMetadataDialog(QDialog):
         layout.addWidget(path_group)
 
         # Hinweis zu Pflichtfeldern
-        required_label = QLabel("* Pflichtfelder für aussagekräftige Metadaten")
+        required_label = QLabel(tr("user_metadata.required"))
         required_label.setStyleSheet("color: #666; font-size: 10px; font-style: italic;")
         layout.addWidget(required_label)
 
@@ -190,8 +175,8 @@ class UserMetadataDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.Cancel | QDialogButtonBox.Save
         )
-        button_box.button(QDialogButtonBox.Save).setText("Speichern")
-        button_box.button(QDialogButtonBox.Cancel).setText("Abbrechen")
+        button_box.button(QDialogButtonBox.Save).setText(tr("user_metadata.buttons.save"))
+        button_box.button(QDialogButtonBox.Cancel).setText(tr("user_metadata.buttons.cancel"))
         button_box.accepted.connect(self.save_and_close)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -230,19 +215,19 @@ class UserMetadataDialog(QDialog):
             if len(path_text) > 60:
                 path_text = "..." + path_text[-57:]
         else:
-            path_text = "Noch nicht gespeichert (wird bei 'Speichern' erstellt)"
+            path_text = tr("user_metadata.path.not_saved")
 
         self.path_label.setText(path_text)
 
     def update_license_info(self):
         """Aktualisiert die Lizenz-Beschreibung."""
         license_texts = {
-            'CC-BY-4.0': '🌐 Attribution 4.0 - Namensnennung erforderlich, kommerzielle Nutzung erlaubt',
-            'CC-BY-SA-4.0': '🔄 Attribution-ShareAlike 4.0 - Namensnennung + gleiche Lizenz bei Weitergabe',
-            'CC-BY-NC-4.0': '🚫💰 Attribution-NonCommercial 4.0 - Namensnennung, keine kommerzielle Nutzung',
-            'CC-BY-NC-SA-4.0': '🚫💰🔄 Attribution-NonCommercial-ShareAlike 4.0',
-            'CC0-1.0': '🆓 Public Domain - Keine Rechte vorbehalten',
-            'All Rights Reserved': '©️ Alle Rechte vorbehalten - Copyright'
+            'CC-BY-4.0': tr('user_metadata.licenses.cc_by'),
+            'CC-BY-SA-4.0': tr('user_metadata.licenses.cc_by_sa'),
+            'CC-BY-NC-4.0': tr('user_metadata.licenses.cc_by_nc'),
+            'CC-BY-NC-SA-4.0': tr('user_metadata.licenses.cc_by_nc_sa'),
+            'CC0-1.0': tr('user_metadata.licenses.cc0'),
+            'All Rights Reserved': tr('user_metadata.licenses.all_rights')
         }
 
         license_name = self.license_combo.currentText()
@@ -254,20 +239,17 @@ class UserMetadataDialog(QDialog):
 
         if not orcid:
             self.orcid_info.setStyleSheet("color: #666; font-size: 10px;")
-            self.orcid_info.setText(
-                "ℹ️ Optional: Ihre eindeutige Forscher-ID (16 Ziffern, Format: 0000-0002-1234-5678)\n"
-                "Noch keine ORCID? Registrieren Sie sich kostenlos auf https://orcid.org"
-            )
+            self.orcid_info.setText(tr("user_metadata.personal.orcid_info"))
             return
 
         is_valid = self.metadata_manager.validate_orcid(orcid)
 
         if is_valid:
             self.orcid_info.setStyleSheet("color: green; font-size: 10px;")
-            self.orcid_info.setText("✓ ORCID-Format korrekt")
+            self.orcid_info.setText(tr("user_metadata.personal.orcid_valid"))
         else:
             self.orcid_info.setStyleSheet("color: red; font-size: 10px;")
-            self.orcid_info.setText("✗ Ungültiges ORCID-Format (erwartet: 0000-0002-1234-5678)")
+            self.orcid_info.setText(tr("user_metadata.personal.orcid_invalid"))
 
     def save_and_close(self):
         """Speichert Daten und schließt den Dialog."""
@@ -275,8 +257,8 @@ class UserMetadataDialog(QDialog):
         if not self.name_input.text().strip():
             QMessageBox.warning(
                 self,
-                "Fehlende Daten",
-                "Bitte geben Sie mindestens Ihren Namen ein."
+                tr("user_metadata.dialogs.missing_name_title"),
+                tr("user_metadata.dialogs.missing_name_message")
             )
             self.name_input.setFocus()
             return
@@ -284,8 +266,8 @@ class UserMetadataDialog(QDialog):
         if not self.institution_input.text().strip():
             QMessageBox.warning(
                 self,
-                "Fehlende Daten",
-                "Bitte geben Sie Ihre Institution ein."
+                tr("user_metadata.dialogs.missing_institution_title"),
+                tr("user_metadata.dialogs.missing_institution_message")
             )
             self.institution_input.setFocus()
             return
@@ -295,8 +277,8 @@ class UserMetadataDialog(QDialog):
         if orcid and not self.metadata_manager.validate_orcid(orcid):
             result = QMessageBox.question(
                 self,
-                "Ungültiges ORCID-Format",
-                "Das ORCID-Format ist ungültig. Trotzdem speichern?",
+                tr("user_metadata.dialogs.invalid_orcid_title"),
+                tr("user_metadata.dialogs.invalid_orcid_message"),
                 QMessageBox.Yes | QMessageBox.No
             )
             if result == QMessageBox.No:
@@ -324,15 +306,15 @@ class UserMetadataDialog(QDialog):
             self.metadata_manager.save()
             QMessageBox.information(
                 self,
-                "Gespeichert",
-                f"Benutzer-Metadaten wurden erfolgreich gespeichert:\n{self.metadata_manager.current_file}"
+                tr("user_metadata.dialogs.saved_title"),
+                tr("user_metadata.dialogs.saved_message", path=str(self.metadata_manager.current_file))
             )
             self.accept()
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Fehler beim Speichern",
-                f"Die Metadaten konnten nicht gespeichert werden:\n{str(e)}"
+                tr("user_metadata.dialogs.error_title"),
+                tr("user_metadata.dialogs.error_message", error=str(e))
             )
 
     def change_save_location(self):
@@ -347,9 +329,9 @@ class UserMetadataDialog(QDialog):
 
         filepath, _ = QFileDialog.getSaveFileName(
             self,
-            "Benutzer-Config speichern unter",
+            tr("user_metadata.dialogs.change_location_title"),
             default_path,
-            "JSON Files (*.json)"
+            tr("user_metadata.dialogs.json_filter")
         )
 
         if filepath:
