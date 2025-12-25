@@ -2593,8 +2593,8 @@ class ScatterPlotApp(QMainWindow):
                         save_kwargs['pil_kwargs'] = pil_kwargs
 
                 elif format_ext == 'pdf':
-                    # PDF-Metadaten (v7.0: erweitert)
-                    metadata = self._build_export_metadata(settings)
+                    # PDF-Metadaten (v7.0: erweitert mit allen Infos in Subject)
+                    metadata = self._build_export_metadata(settings, format_type='pdf')
 
                     if metadata:
                         save_kwargs['metadata'] = metadata
@@ -2613,7 +2613,7 @@ class ScatterPlotApp(QMainWindow):
                         import matplotlib
                         matplotlib.rcParams['svg.fonttype'] = 'none'
 
-                    # SVG-Metadaten (v7.0: erweitert)
+                    # SVG-Metadaten (v7.0: basic only)
                     metadata = self._build_export_metadata(settings)
                     if metadata:
                         save_kwargs['metadata'] = metadata
@@ -2621,8 +2621,9 @@ class ScatterPlotApp(QMainWindow):
                 # Speichern
                 self.fig.savefig(filename, **save_kwargs)
 
-                # v7.0: XMP-Metadaten für PNG/TIFF einbetten
+                # v7.0: Post-Export Metadaten-Handling
                 if format_ext in ['png', 'tiff', 'tif']:
+                    # XMP-Metadaten für PNG/TIFF einbetten
                     try:
                         from utils.metadata_export import add_metadata_to_export
                         full_metadata = self._build_export_metadata(settings, include_all=True)
@@ -2631,6 +2632,17 @@ class ScatterPlotApp(QMainWindow):
                     except Exception as e:
                         self.logger.warning(f"XMP-Metadaten konnten nicht eingebettet werden: {e}")
                         # Nicht kritisch - Datei ist trotzdem gespeichert
+
+                elif format_ext == 'svg':
+                    # Markdown-Sidecar-Datei für SVG erstellen
+                    try:
+                        from utils.metadata_export import create_metadata_sidecar
+                        full_metadata = self._build_export_metadata(settings, include_all=True)
+                        if create_metadata_sidecar(Path(filename), full_metadata):
+                            self.logger.info(f"Metadaten-Sidecar-Datei erstellt: {filename}.md")
+                    except Exception as e:
+                        self.logger.warning(f"Metadaten-Sidecar konnte nicht erstellt werden: {e}")
+                        # Nicht kritisch - SVG ist trotzdem gespeichert
 
                 # Größe zurücksetzen
                 self.fig.set_size_inches(original_size)
@@ -2645,7 +2657,7 @@ class ScatterPlotApp(QMainWindow):
                 QMessageBox.critical(self, tr("messages.export_error"),
                                    tr("messages.export_error_msg", error=str(e)))
 
-    def _build_export_metadata(self, settings: dict, include_all: bool = False) -> dict:
+    def _build_export_metadata(self, settings: dict, include_all: bool = False, format_type: str = None) -> dict:
         """
         Erstellt vollständige Metadaten für Export (v7.0+)
 
@@ -2654,6 +2666,7 @@ class ScatterPlotApp(QMainWindow):
             include_all: Wenn True, werden alle erweiterten Metadaten inkludiert
                         (für XMP). Wenn False, nur matplotlib-kompatible Felder
                         (für PDF/SVG savefig).
+            format_type: 'pdf', 'svg', oder None - für format-spezifische Anpassungen
 
         Returns:
             dict: Metadaten-Dictionary
@@ -2677,8 +2690,67 @@ class ScatterPlotApp(QMainWindow):
         if settings.get('meta_keywords'):
             metadata['Keywords'] = settings['meta_keywords']
 
-        # Für matplotlib savefig (PDF/SVG): nur basic fields
+        # Für matplotlib savefig (PDF/SVG): erweiterte Metadaten sammeln
         if not include_all:
+            # Erweiterte Metadaten temporär sammeln für PDF-Subject-Erweiterung
+            extended_meta = {}
+
+            # ORCID
+            if settings.get('meta_orcid'):
+                orcid = settings['meta_orcid'].strip()
+                if orcid:
+                    if not orcid.startswith('http'):
+                        extended_meta['Creator_ORCID'] = f"https://orcid.org/{orcid}"
+                    else:
+                        extended_meta['Creator_ORCID'] = orcid
+
+            # Affiliation
+            if settings.get('meta_affiliation'):
+                extended_meta['Affiliation'] = settings['meta_affiliation']
+
+            # License
+            if settings.get('meta_license'):
+                extended_meta['License'] = settings['meta_license']
+
+            # Timestamp
+            if settings.get('meta_auto_timestamp', True):
+                now = datetime.now(timezone.utc)
+                extended_meta['CreationDate'] = now.isoformat()
+                extended_meta['CreationDate_Unix'] = int(now.timestamp())
+
+            # Provenance
+            if settings.get('meta_auto_provenance', True):
+                prov = get_metadata_provenance()
+                extended_meta['Creator_Tool'] = f"{prov['software']} v{prov['version']}"
+                extended_meta['Creator_Tool_Version'] = prov['version']
+                extended_meta['Python_Version'] = prov['python_version']
+                extended_meta['Matplotlib_Version'] = prov['matplotlib_version']
+
+            # UUID
+            if settings.get('meta_generate_uuid', False):
+                extended_meta['Image_UUID'] = str(uuid.uuid4())
+
+            # Experiment metadata
+            if settings.get('meta_experiment_id'):
+                extended_meta['Experiment_ID'] = settings['meta_experiment_id']
+            if settings.get('meta_measurement_date'):
+                extended_meta['Measurement_Date'] = settings['meta_measurement_date']
+            if settings.get('meta_sample_id'):
+                extended_meta['Sample_ID'] = settings['meta_sample_id']
+
+            # Für PDF: Alle erweiterten Metadaten in Subject-Feld packen
+            if format_type == 'pdf':
+                from utils.metadata_export import format_metadata_as_text
+
+                # Kombiniere basis metadata mit erweiterten
+                full_meta = {**metadata, **extended_meta}
+
+                # Formatiere als kompakten Text
+                extended_text = format_metadata_as_text(full_meta, format='plain')
+
+                # Überschreibe Subject mit erweitertem Text
+                metadata['Subject'] = extended_text
+
             return metadata
 
         # Erweiterte Metadaten (nur für XMP/PNG/TIFF)

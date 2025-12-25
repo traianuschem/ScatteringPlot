@@ -250,6 +250,179 @@ def embed_xmp_metadata_tiff(image_path: Path, metadata: Dict[str, str]) -> bool:
     return True
 
 
+def format_metadata_as_text(metadata: Dict[str, str], format: str = 'markdown') -> str:
+    """
+    Formatiert Metadaten als lesbaren Text.
+
+    Args:
+        metadata: Dictionary mit Metadaten
+        format: 'markdown' oder 'plain'
+
+    Returns:
+        str: Formatierter Metadaten-Text
+    """
+    lines = []
+
+    if format == 'markdown':
+        lines.append("# Metadaten")
+        lines.append("")
+
+        if metadata.get('Title'):
+            lines.append(f"**Titel:** {metadata['Title']}")
+
+        if metadata.get('Author'):
+            lines.append(f"**Autor:** {metadata['Author']}")
+
+        if metadata.get('Creator_ORCID'):
+            lines.append(f"**ORCID:** {metadata['Creator_ORCID']}")
+
+        if metadata.get('Affiliation'):
+            lines.append(f"**Affiliation:** {metadata['Affiliation']}")
+
+        if metadata.get('Affiliation_ROR'):
+            lines.append(f"**ROR-ID:** {metadata['Affiliation_ROR']}")
+
+        if metadata.get('Subject'):
+            lines.append(f"**Beschreibung:** {metadata['Subject']}")
+
+        if metadata.get('Keywords'):
+            lines.append(f"**Keywords:** {metadata['Keywords']}")
+
+        lines.append("")
+        lines.append("## Rechte & Lizenz")
+
+        if metadata.get('License'):
+            lines.append(f"**Lizenz:** {metadata['License']}")
+
+        if metadata.get('License_URL'):
+            lines.append(f"**Lizenz-URL:** {metadata['License_URL']}")
+
+        lines.append("")
+        lines.append("## Zeitstempel")
+
+        if metadata.get('CreationDate'):
+            lines.append(f"**Erstellungsdatum:** {metadata['CreationDate']}")
+
+        if metadata.get('CreationDate_Unix'):
+            lines.append(f"**Unix-Timestamp:** {metadata['CreationDate_Unix']}")
+
+        lines.append("")
+        lines.append("## Software-Provenienz")
+
+        if metadata.get('Creator_Tool'):
+            lines.append(f"**Software:** {metadata['Creator_Tool']}")
+
+        if metadata.get('Creator_Tool_Version'):
+            lines.append(f"**Version:** {metadata['Creator_Tool_Version']}")
+
+        if metadata.get('Python_Version'):
+            lines.append(f"**Python:** {metadata['Python_Version']}")
+
+        if metadata.get('Matplotlib_Version'):
+            lines.append(f"**Matplotlib:** {metadata['Matplotlib_Version']}")
+
+        if metadata.get('Image_UUID'):
+            lines.append("")
+            lines.append("## Eindeutige Identifikation")
+            lines.append(f"**UUID:** {metadata['Image_UUID']}")
+
+        # Experiment metadata
+        if metadata.get('Experiment_ID') or metadata.get('Measurement_Date') or metadata.get('Sample_ID'):
+            lines.append("")
+            lines.append("## Experiment-Referenzen")
+
+            if metadata.get('Experiment_ID'):
+                lines.append(f"**Experiment-ID:** {metadata['Experiment_ID']}")
+
+            if metadata.get('Measurement_Date'):
+                lines.append(f"**Messdatum:** {metadata['Measurement_Date']}")
+
+            if metadata.get('Sample_ID'):
+                lines.append(f"**Proben-ID:** {metadata['Sample_ID']}")
+
+    else:  # plain text für PDF Subject
+        parts = []
+
+        if metadata.get('Title'):
+            parts.append(f"Titel: {metadata['Title']}")
+
+        if metadata.get('Author'):
+            parts.append(f"Autor: {metadata['Author']}")
+
+        if metadata.get('Creator_ORCID'):
+            parts.append(f"ORCID: {metadata['Creator_ORCID']}")
+
+        if metadata.get('Affiliation'):
+            parts.append(f"Affiliation: {metadata['Affiliation']}")
+
+        if metadata.get('License'):
+            parts.append(f"Lizenz: {metadata['License']}")
+
+        if metadata.get('CreationDate'):
+            parts.append(f"Erstellt: {metadata['CreationDate']}")
+
+        if metadata.get('Creator_Tool'):
+            parts.append(f"Software: {metadata['Creator_Tool']}")
+
+        if metadata.get('Image_UUID'):
+            parts.append(f"UUID: {metadata['Image_UUID']}")
+
+        if metadata.get('Experiment_ID'):
+            parts.append(f"Experiment: {metadata['Experiment_ID']}")
+
+        lines = [" | ".join(parts)]
+
+    return '\n'.join(lines)
+
+
+def create_metadata_sidecar(image_path: Path, metadata: Dict[str, str]) -> bool:
+    """
+    Erstellt eine Markdown-Sidecar-Datei mit vollständigen Metadaten.
+
+    Wird für Formate wie SVG verwendet, die keine XMP-Einbettung unterstützen.
+
+    Args:
+        image_path: Pfad zur Bilddatei
+        metadata: Dictionary mit Metadaten
+
+    Returns:
+        bool: True bei Erfolg
+    """
+    # .md-Datei mit gleichem Namen wie Bild erstellen
+    md_path = image_path.with_suffix(image_path.suffix + '.md')
+
+    # Header
+    content = [
+        f"# Metadaten für {image_path.name}",
+        "",
+        f"Automatisch generiert von ScatterForge Plot",
+        f"Bilddatei: `{image_path.name}`",
+        "",
+        "---",
+        ""
+    ]
+
+    # Metadaten im Markdown-Format
+    content.append(format_metadata_as_text(metadata, format='markdown'))
+
+    # Footer
+    content.extend([
+        "",
+        "---",
+        "",
+        f"*Diese Datei enthält strukturierte Metadaten für die Bilddatei `{image_path.name}` "
+        "und sollte zusammen mit dem Bild archiviert werden.*"
+    ])
+
+    # Schreiben
+    try:
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(content))
+        return True
+    except Exception:
+        return False
+
+
 def add_metadata_to_export(file_path: Path, metadata: Dict[str, str], format: str) -> bool:
     """
     Fügt Metadaten zu einer exportierten Datei hinzu.
