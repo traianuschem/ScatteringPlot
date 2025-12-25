@@ -63,7 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Gruppen-Management** | Datasets organisieren mit Stack-Faktoren, Drag & Drop, Auto-Gruppierung | ✅ **USP** |
 | **Metadaten-Export** | XMP-Sidecar + eingebettete Metadaten, Benutzer-Profil-System | ✅ **USP** |
 | **LaTeX/MathText** | Wissenschaftliche Notation mit Live-Vorschau | ✅ v7.0 |
-| **Mehrsprachigkeit** | Deutsch/Englisch, ohne Neustart umschaltbar | ✅ v7.0 |
+| **Mehrsprachigkeit** | Deutsch/Englisch | ✅ v7.0 |
 | **Export-Formate** | PNG, SVG, PDF, EPS, TIFF mit Live-Vorschau | ✅ |
 | **Fehlerbalken** | 2 Darstellungen: Transparente Fläche oder Balken mit Caps | ✅ |
 | **Farbpaletten** | 30+ Paletten (TUBAF, Matplotlib), gruppenspezifisch | ✅ |
