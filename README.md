@@ -1,47 +1,97 @@
-# ScatterForge Plot v6.2
+# ScatterForge Plot v7.0.0dev
 
-**Professionelles Tool für Streudaten-Analyse mit Qt6-basierter GUI**
+**Professionelles Tool für wissenschaftliche Streudaten-Analyse und Publikationsreife Visualisierung**
 
-ScatterForge Plot ist ein leistungsstarkes, benutzerfreundliches Tool zur Visualisierung und Analyse von Streudaten. Entwickelt für Naturwissenschaftler und Ingenieure, bietet es umfangreiche Funktionen für die Darstellung von SAXS/SANS-Daten und anderen Streumessungen mit präziser Kontrolle über alle Aspekte der Plot-Formatierung.
-
-![Version](https://img.shields.io/badge/version-6.2-blue)
+![Version](https://img.shields.io/badge/version-7.0.0dev-orange)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
----
+## 📄 Abstract
 
-## 🎉 Neue Features in v6.2
+ScatterForge Plot ist eine umfassende, Qt6-basierte Desktop-Anwendung für die professionelle Visualisierung und Analyse von Streudaten (SAXS/SANS/XRD). Das Tool wurde speziell für Naturwissenschaftler und Ingenieure entwickelt und bietet vollständige Kontrolle über alle Aspekte der wissenschaftlichen Datenvisualisierung.
 
-Version 6.2 erweitert die Flexibilität mit **neuen Plot-Typen**, **Achsenlimits-Kontrolle** und **Gruppen-Bearbeitung**:
+**Kernfunktionalität:**
+- **7 Plot-Typen** für verschiedene Analysen (Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF)
+- **LaTeX/MathText-Unterstützung** für wissenschaftliche Notation in Legenden, Achsenbeschriftungen und Annotations
+- **Mehrsprachige Benutzeroberfläche** (Deutsch/Englisch) mit vollständiger i18n-Unterstützung
+- **Advanced Export-System** mit Live-Vorschau, XMP-Metadaten und 5 Formaten (PNG, SVG, PDF, EPS, TIFF)
+- **Umfassender Kurven-Editor** mit 13 Marker-Stilen, flexiblen Fehlerbalken (transparente Fläche oder Balken mit Caps)
+- **Gruppen-Management** mit individuellen Stack-Faktoren, Drag & Drop und automatischer Farbpaletten-Verwaltung
+- **Session-Verwaltung** für vollständige Projektzustände mit allen Formatierungen und Einstellungen
+- **Keyboard Shortcuts** für effizienten Workflow
+- **30+ Farbpaletten** (TUBAF Corporate Design, Matplotlib Colormaps) mit gruppenspezifischen Zuweisungen
 
-### 📐 Achsenlimits-Dialog
-- **Feste Achsenlimits** für konsistente Plots
-- **Manuelle Kontrolle** über X- und Y-Achsen (Min/Max)
-- **Persistenz**: Limits bleiben beim Plot-Update erhalten
-- **Auto-Modus**: Schnelles Umschalten zu automatischer Skalierung
-- **Session-Speicherung**: Achsenlimits werden in Sessions gespeichert
-
-### 📊 Neue Plot-Typen
-- **Bragg Spacing**: Realraum-Darstellung (d = 2π/q in nm)
-  - Ideal für Kristallstruktur-Analysen
-  - Logarithmische Skalierung auf beiden Achsen
-- **2-Theta**: Winkelbasierte Darstellung
-  - Konfigurierbare Wellenlänge (Standard: Cu K-alpha = 0.1524 nm)
-  - Berechnung: 2θ = 2·arcsin(λ·q / 4π) in Grad
-  - Automatische Filterung ungültiger Werte
-
-### 🎨 Gruppen-Bearbeitung
-- **"Gruppe bearbeiten" Dialog**: Alle Kurven in einer Gruppe gleichzeitig formatieren
-  - Farbe, Marker, Linie, Fehlerbalken
-  - Einstellungen werden auf alle Datasets in der Gruppe angewendet
-  - Spart Zeit bei der Formatierung vieler ähnlicher Kurven
-- **Schnellfarben für Gruppen**: Direkte Farbauswahl aus Palette für alle Kurven der Gruppe
-  - Konsistente Farbgebung mit einem Klick
-  - Berücksichtigt gruppenspezifische Farbpaletten
+Das Tool eignet sich besonders für die Erstellung publikationsreifer Grafiken mit präziser Kontrolle über Layout, Formatierung und wissenschaftliche Metadaten.
 
 ---
 
-## 🌟 Highlights v6.1
+## 🎉 Neue Features in v7.0.0dev
+
+Version 7.0 ist ein **Major Release** mit **LaTeX-Unterstützung**, **Internationalisierung** und **wissenschaftlichem Metadaten-Management**:
+
+### 📝 LaTeX/MathText-Unterstützung
+- **Wissenschaftliche Notation** mit voller LaTeX/MathText-Syntax:
+  - **Legenden**: Mathematische Ausdrücke wie `I·q^{2}`, `R_g`, `σ_{exp}`
+  - **Achsenbeschriftungen**: Einheiten und Variablen (z.B. `q / nm^{-1}`, `I(q) / a.u.`)
+  - **Annotations**: Formeln und wissenschaftliche Bezeichnungen
+- **Live-Vorschau** im Editor für sofortiges Feedback
+- **Bold-Support** in Legenden mit korrekter MathText-Formatierung
+- **Intelligente Verkettung** von Text und Math-Bereichen
+- **Automatische Konvertierung** von Unicode-Exponenten zu MathText
+
+### 🌍 Mehrsprachigkeit (i18n)
+- **Vollständige Lokalisierung** der Benutzeroberfläche:
+  - 🇩🇪 **Deutsch** (Standard)
+  - 🇬🇧 **Englisch** (vollständig übersetzt)
+- **Alle Dialoge übersetzt**: Export, Kurven-Editor, Legenden, Achsen, Grid, Gruppen, etc.
+- **Sprachumschaltung** ohne Neustart im Einstellungen-Dialog
+- **Persistent**: Sprachwahl wird gespeichert
+- **JSON-basiertes i18n-System** für einfache Erweiterbarkeit
+
+### 📊 Advanced Export Dialog mit Live-Vorschau
+- **Echtzeit-Vorschau** des Exports während der Konfiguration
+- **Wissenschaftliche Metadaten-Integration**:
+  - Autor, Institution, Projekt, Beschreibung
+  - Copyright, Lizenz, Keywords
+  - **XMP-Sidecar-Dateien** (.xmp) für alle Formate
+  - **Eingebettete Metadaten** in PDF/PNG/TIFF
+- **Umfangreiche Export-Optionen**:
+  - 5 Formate: **PNG, SVG, PDF, EPS, TIFF** (TIFF neu!)
+  - DPI-Auswahl bis 1200
+  - Flexible Größenanpassung (16:10, 4:3, Custom)
+  - Transparenz-Option für PNG
+- **Dark Mode Support** für alle UI-Elemente
+- **Accordion-Layout** für übersichtliche Organisation
+
+### ⌨️ Umfassende Keyboard Shortcuts
+- **Schneller Workflow** ohne Maus:
+  - `Strg+O`: Daten laden
+  - `Strg+S`: Session speichern
+  - `Strg+E`: Export-Dialog
+  - `Strg+G`: Neue Gruppe erstellen
+  - `Entf`: Ausgewählte Elemente löschen
+  - `F5`: Plot aktualisieren
+- **Kontextmenü-Integration**: Shortcuts werden angezeigt
+- **Konsistente Bedienung** über alle Dialoge
+
+### 🔧 Konsolidierte Menüstruktur (v7.0)
+- **Reorganisierte Menüs** für bessere Übersichtlichkeit
+- **Erweiterte Editoren**:
+  - Achsen-Dialog jetzt mit integrierten Achsenlimits
+  - Titel-Editor für Plot-Titel-Anpassung
+  - Plot-Limits-Editor für Datensatz-spezifische Grenzen
+- **Tree-Reihenfolge bestimmt Legende**: Drag & Drop im Tree ändert direkt die Legendenreihenfolge
+- **Multiplikationsfaktoren** direkt im Gruppennamen sichtbar
+
+### 🧪 Verbesserungen für XRD/SAXS-Analyse
+- **XRD-Referenz Design** im Kurven-Editor
+- **Bragg Spacing Plot-Typ**: d = 2π/q für Realraum-Darstellung
+- **2-Theta Plot-Typ**: Winkel-basierte Darstellung (konfigurierbare Wellenlänge)
+- **Verbesserte Referenzlinien** für Peak-Markierung
+
+---
+
+## 🌟 Highlights aus v6.x
 
 ### 🎨 Kurven-Editor
 - **Umfassender Dialog** für alle visuellen Eigenschaften jeder Kurve
@@ -78,15 +128,17 @@ Version 6.2 erweitert die Flexibilität mit **neuen Plot-Typen**, **Achsenlimits
 - **7 Plot-Typen**: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF
 - **Stack-Modus**: Kurven mit individuellen Stack-Faktoren trennen (nicht-kumulativ!)
 - **Fehlerbalken**: 2 Darstellungsarten (transparente Fläche oder Balken)
-- **Annotations & Referenzlinien**: Drag & Drop im Plot
-- **Math Text**: LaTeX-Style für wissenschaftliche Notation (z.B. `I·q^2`, `10^{-3}`)
+- **Annotations & Referenzlinien**: Interaktiv verschiebbar (Drag & Drop)
+- **LaTeX/MathText**: Vollständige Unterstützung für wissenschaftliche Notation in Legenden, Achsen, Annotations
+- **Live-Vorschau**: Für MathText-Formatierung und Export
 
 ### Kurven-Gestaltung
 - **Umfassender Kurven-Editor**: Alle visuellen Eigenschaften in einem Dialog
 - **Schnellfarben**: Direkter Zugriff auf Palette-Farben
 - **Stil-Vorlagen**: Messung, Fit, Simulation, Theorie mit Auto-Erkennung
-- **Marker & Linien**: Vollständige Kontrolle über Darstellung
-- **Farben**: 30+ Farbpaletten + eigene Schemata
+- **Marker & Linien**: 13 Marker-Stile, 5 Linien-Stile
+- **Farben**: 30+ Farbpaletten (TUBAF, Matplotlib) + eigene Schemata
+- **Gruppen-Bearbeitung**: Alle Kurven einer Gruppe gleichzeitig formatieren
 
 ### Daten-Management
 - **Drag & Drop**: Datasets zwischen Gruppen verschieben
@@ -102,7 +154,9 @@ Version 6.2 erweitert die Flexibilität mit **neuen Plot-Typen**, **Achsenlimits
   - Eigene Paletten erstellen
   - Gruppenspezifische Paletten
 - **Plot-Designs**: 5 vordefinierte + eigene erstellen und als Standard speichern
-- **Export-Formate**: PNG, SVG, PDF, EPS
+- **Export-Formate**: PNG, SVG, PDF, EPS, TIFF (neu in v7.0!)
+- **Live-Vorschau**: Echtzeit-Ansicht während Export-Konfiguration
+- **Wissenschaftliche Metadaten**: XMP-Sidecar-Dateien + eingebettete Metadaten
 - **16:10 Standard-Format**: 25.4 cm × 15.875 cm (optimal für Publikationen)
 - **Hohe Auflösung**: Bis 1200 DPI
 
@@ -115,6 +169,12 @@ Version 6.2 erweitert die Flexibilität mit **neuen Plot-Typen**, **Achsenlimits
   - Major/Minor Grid separat steuerbar
   - Linienstile und Farben
   - Unit-Format-Konvertierung (nm ↔ Å)
+
+### Internationalisierung & Bedienbarkeit
+- **Mehrsprachigkeit**: Vollständige Übersetzung (Deutsch/Englisch)
+- **Keyboard Shortcuts**: Umfassende Tastaturkürzel für schnellen Workflow
+- **Sprachumschaltung**: Live-Wechsel ohne Neustart
+- **i18n-System**: JSON-basiert, einfach erweiterbar
 
 ### Einstellungen & Debug
 - **Standard-Einstellungen**: Programmweite Defaults speichern
@@ -260,6 +320,178 @@ Achsen → Achsen-Einstellungen...
 
 ---
 
+## 📝 LaTeX/MathText-Unterstützung (v7.0)
+
+ScatterForge Plot unterstützt vollständig LaTeX/MathText-Syntax für wissenschaftliche Notation:
+
+### Anwendungsbereiche
+
+**Legenden:**
+```
+μ_exp → μ_{exp}
+I·q^2 → I·q^{2}
+R_g → R_{g}
+Sample α → Sample α
+```
+
+**Achsenbeschriftungen:**
+```
+q / nm^-1 → q / nm^{-1}
+I(q) / a.u. → I(q) / a.u.
+d / Å → d / Å
+```
+
+**Annotations:**
+```
+Peak bei q* = 0.5 nm^-1 → Peak bei q^{*} = 0.5 nm^{-1}
+Form-Faktor P(q) → Form-Faktor P(q)
+```
+
+### Features
+
+- **Live-Vorschau**: Sofortige Anzeige der formatierten Ausgabe im Editor
+- **Intelligente Verkettung**: Automatische Kombination von Text und Math-Bereichen
+- **Bold-Support**: Fettdruck funktioniert auch mit MathText
+- **Automatische Konvertierung**: Unicode-Exponenten (², ³) werden zu MathText konvertiert
+- **Fehlerbehandlung**: Ungültige Syntax wird angezeigt
+
+### Beispiele
+
+| Eingabe | Ausgabe (gerendert) |
+|---------|---------------------|
+| `Sample_1` | Sample₁ |
+| `I·q^{2}` | I·q² |
+| `R_g = 5.3 nm` | Rg = 5.3 nm |
+| `\alpha = 45°` | α = 45° |
+| `10^{-3}` | 10⁻³ |
+
+**Verwendung:**
+```
+1. Legenden → Legende bearbeiten... → LaTeX/MathText aktivieren
+2. Achsen → Achsen-Einstellungen... → LaTeX in Labels verwenden
+3. Annotations → Text mit MathText-Syntax eingeben
+```
+
+---
+
+## 🌍 Mehrsprachigkeit (v7.0)
+
+ScatterForge Plot ist vollständig mehrsprachig mit Unterstützung für:
+
+### Unterstützte Sprachen
+
+- 🇩🇪 **Deutsch** (Standard)
+- 🇬🇧 **Englisch**
+
+### Sprachumschaltung
+
+**Im Programm:**
+```
+1. Einstellungen → Einstellungen...
+2. Sprache auswählen (Deutsch/English)
+3. Änderung wird sofort angewendet (kein Neustart nötig!)
+```
+
+**Persistenz:**
+- Sprachwahl wird in `~/.tubaf_scatter_plots/config.json` gespeichert
+- Beim nächsten Start wird die gewählte Sprache geladen
+
+### Übersetzte Bereiche
+
+- **Hauptfenster**: Alle Menüs, Buttons, Kontextmenüs
+- **Dialoge**: Export, Kurven-Editor, Legenden, Achsen, Grid, Gruppen, etc.
+- **Meldungen**: Fehlermeldungen, Bestätigungen, Informationen
+- **Tooltips**: Hilfetexte für alle UI-Elemente
+
+### i18n-System
+
+- **JSON-basiert**: Einfache Erweiterung für neue Sprachen
+- **Strukturiert**: Getrennte Dateien für verschiedene Module
+- **Fallback**: Deutsche Texte wenn Übersetzung fehlt
+
+**Dateien:**
+```
+i18n/
+├── de.json  (Deutsch)
+├── en.json  (Englisch)
+└── __init__.py  (i18n Manager)
+```
+
+---
+
+## 📊 Advanced Export Dialog (v7.0)
+
+Der neue Export-Dialog bietet professionelle Export-Optionen mit Live-Vorschau und wissenschaftlichen Metadaten:
+
+### Live-Vorschau
+
+- **Echtzeit-Ansicht** während der Konfiguration
+- **Interaktive Anpassung**: Änderungen werden sofort sichtbar
+- **Zoom & Pan**: Vorschau-Navigation
+- **Exakte Darstellung**: Was Sie sehen, wird exportiert
+
+### Export-Formate
+
+| Format | Verwendung | Metadaten-Support |
+|--------|------------|-------------------|
+| **PNG** | Präsentationen, Web | Eingebettet (tEXt chunks) |
+| **TIFF** | Publikationen, Druck | Eingebettet (TIFF tags) |
+| **PDF** | Dokumente, Publikationen | Eingebettet (PDF Info) + XMP |
+| **SVG** | Vektorgrafik, Bearbeitung | XML-Attribute + XMP |
+| **EPS** | LaTeX-Dokumente | Kommentare + XMP |
+
+**Alle Formate** erhalten zusätzlich eine `.xmp` Sidecar-Datei mit vollständigen Metadaten.
+
+### Wissenschaftliche Metadaten
+
+**Benutzer-Metadaten:**
+```
+Datei → Benutzer-Metadaten...
+→ Autor, Institution, E-Mail
+→ Projekt, Beschreibung
+→ Copyright, Lizenz
+→ Keywords
+```
+
+**Automatische Metadaten:**
+- Datum & Zeit der Erstellung
+- Software-Version (ScatterForge Plot v7.0.0dev)
+- Plot-Typ, verwendete Datasets
+- Achsenbeschriftungen, Legendeneinträge
+
+**XMP-Sidecar-Dateien (.xmp):**
+- Standardisiertes XML-Format (Adobe XMP)
+- Vollständige Metadaten-Sicherung
+- Unabhängig vom Bildformat
+- Kompatibel mit Metadaten-Browsern
+
+### Export-Optionen
+
+**Größe & Auflösung:**
+```
+- Vordefinierte Formate: 16:10 (25.4×15.875 cm), 4:3, Custom
+- DPI: 300, 600, 900, 1200
+- Individuelle Breite/Höhe
+```
+
+**Erweiterte Optionen:**
+```
+- PNG Transparenz (für Overlay-Grafiken)
+- Tight Layout (automatische Rand-Optimierung)
+- DPI-Einstellung für alle Formate
+```
+
+**Verwendung:**
+```
+1. Strg+E oder Datei → Exportieren...
+2. Format und Optionen wählen
+3. Metadaten prüfen/anpassen (optional)
+4. Live-Vorschau prüfen
+5. Exportieren
+```
+
+---
+
 ## 🎨 Plot-Typen
 
 | Typ | X-Achse | Y-Achse | Beschreibung |
@@ -271,6 +503,65 @@ Achsen → Achsen-Einstellungen...
 | **Bragg Spacing** | d [nm] | I [a.u.] | Realraum-Darstellung (d = 2π/q) |
 | **2-Theta** | 2θ [°] | I [a.u.] | Winkel-Darstellung (konfigurierbare Wellenlänge) |
 | **PDDF** | q [nm⁻¹] | I [a.u.] + p(r) | Paardistanzverteilungsfunktion |
+
+---
+
+## ⌨️ Keyboard Shortcuts (v7.0)
+
+ScatterForge Plot bietet umfassende Tastaturkürzel für einen effizienten Workflow:
+
+### Haupt-Aktionen
+
+| Shortcut | Aktion | Beschreibung |
+|----------|--------|--------------|
+| `Strg+O` | Daten laden | Öffnet Dateiauswahl-Dialog |
+| `Strg+S` | Session speichern | Speichert aktuellen Projektzustand |
+| `Strg+Shift+S` | Session speichern als... | Speichert unter neuem Namen |
+| `Strg+L` | Session laden | Lädt gespeicherte Session |
+| `Strg+E` | Exportieren | Öffnet Export-Dialog mit Live-Vorschau |
+| `Strg+Q` | Beenden | Schließt Anwendung |
+
+### Gruppen & Daten
+
+| Shortcut | Aktion | Beschreibung |
+|----------|--------|--------------|
+| `Strg+G` | Neue Gruppe | Erstellt neue Datengruppe |
+| `Strg+A` | Auto-Gruppieren | Automatische Gruppierung mit Stack-Faktoren |
+| `Entf` | Löschen | Löscht ausgewählte Datasets/Gruppen |
+| `F2` | Umbenennen | Benennt ausgewähltes Element um |
+
+### Plot & Ansicht
+
+| Shortcut | Aktion | Beschreibung |
+|----------|--------|--------------|
+| `F5` | Plot aktualisieren | Rendert Plot neu |
+| `Strg+1` bis `Strg+7` | Plot-Typ wechseln | 1=Log-Log, 2=Porod, 3=Kratky, etc. |
+| `Strg+Plus` | Zoom In | Vergrößert Plot-Ansicht |
+| `Strg+Minus` | Zoom Out | Verkleinert Plot-Ansicht |
+| `Strg+0` | Zoom Reset | Setzt Zoom zurück |
+
+### Editoren & Dialoge
+
+| Shortcut | Aktion | Beschreibung |
+|----------|--------|--------------|
+| `Strg+K` | Kurven-Editor | Öffnet Kurven-Einstellungen |
+| `Strg+T` | Titel bearbeiten | Öffnet Titel-Editor |
+| `Strg+U` | Achsen-Einstellungen | Öffnet Achsen-Dialog |
+| `Strg+I` | Grid-Einstellungen | Öffnet Grid-Dialog |
+| `Strg+M` | Legende bearbeiten | Öffnet Legenden-Editor |
+| `Esc` | Dialog schließen | Schließt aktiven Dialog |
+
+### Kontextmenü-Aktionen
+
+**Mit ausgewähltem Dataset:**
+- `Strg+C`: Farbe kopieren
+- `Strg+V`: Farbe einfügen
+- `Strg+R`: Stil zurücksetzen
+
+**Hinweise:**
+- Alle Shortcuts werden in den Menüs und Tooltips angezeigt
+- Shortcuts funktionieren kontextabhängig
+- Dialoge können mit `Enter` (OK) oder `Esc` (Abbrechen) geschlossen werden
 
 ---
 
@@ -591,25 +882,26 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2025},
-  version = {6.2},
+  version = {7.0.0dev},
   url = {https://github.com/traianuschem/ScatteringPlot}
 }
 ```
 
 ---
 
-## 🏆 Highlights v6.2
+## 🏆 Highlights v7.0.0dev
 
-- 📐 **Achsenlimits-Kontrolle** - Feste Limits mit Persistenz beim Plot-Update
-- 📊 **Bragg Spacing & 2-Theta** - Neue Plot-Typen für Kristallstruktur-Analysen
-- 🎨 **Gruppen-Bearbeitung** - Alle Kurven einer Gruppe gleichzeitig formatieren
-- ⚡ **Schnellfarben für Gruppen** - Konsistente Farbgebung mit einem Klick
-- 🎯 **Umfassender Kurven-Editor** - Alle visuellen Eigenschaften in einem Dialog
-- 📏 **Flexible Fehlerbalken** - Transparente Fläche ODER Balken mit Caps
-- 💾 **Standard-Einstellungen** - Einmal einstellen, immer verwenden
+- 📝 **LaTeX/MathText-Unterstützung** - Wissenschaftliche Notation in Legenden, Achsen und Annotations
+- 🌍 **Mehrsprachigkeit** - Vollständige Deutsch/Englisch-Übersetzung mit i18n-System
+- 📊 **Advanced Export mit Live-Vorschau** - Echtzeit-Vorschau + XMP-Metadaten
+- ⌨️ **Keyboard Shortcuts** - Effizienter Workflow mit Tastaturkürzeln
+- 🎨 **Konsolidierte UI** - Tree-Reihenfolge bestimmt Legende, erweiterte Editoren
+- 🧪 **XRD/SAXS-Optimierungen** - Bragg Spacing, 2-Theta, verbesserte Referenzlinien
+- 📐 **Wissenschaftliche Metadaten** - XMP-Sidecar + eingebettete Metadaten für Publikationen
+- 🖼️ **TIFF-Export** - Zusätzliches Format für hochwertige wissenschaftliche Grafiken
 
 ---
 
 **Made with ❤️ for the scientific community**
 
-*Version 6.2 - Januar 2025*
+*Version 7.0.0dev - Dezember 2025*
