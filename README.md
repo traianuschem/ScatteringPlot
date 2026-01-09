@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.0.0dev
+# ScatterForge Plot v7.0.2
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.0.0dev-orange)
+![Version](https://img.shields.io/badge/version-7.0.2-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
