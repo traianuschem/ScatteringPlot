@@ -567,16 +567,21 @@
     "apply": "Design anwenden",
     "save_current": "Aktuelles speichern...",
     "save_as_default": "⭐ Als Programmstandard speichern",
+    "success": "Erfolg",
 
     "tabs": {
       "styles": "Stil-Vorlagen",
       "colors": "Farbschemata",
       "auto_detection": "Auto-Erkennung",
+      "autodetect": "Auto-Erkennung",
       "plot_designs": "Plot-Designs"
     },
 
     "styles": {
       "available": "Verfügbare Stil-Vorlagen:",
+      "new": "Neu...",
+      "edit": "Bearbeiten...",
+      "delete": "Löschen",
       "new_style": "Neuer Stil",
       "style_name": "Stil-Name:",
       "edit_style": "Stil bearbeiten: {name}",
@@ -591,6 +596,9 @@
 
     "colors": {
       "available": "Verfügbare Farbschemata:",
+      "new": "Neu...",
+      "edit": "Bearbeiten...",
+      "delete": "Löschen",
       "new_scheme": "Neues Schema",
       "scheme_name": "Schema-Name:",
       "color_n": "Farbe {n}",
@@ -620,9 +628,24 @@
       "select_style_msg": "Bitte wählen Sie einen Stil aus"
     },
 
+    "autodetect": {
+      "mapping": "Keyword → Stil Zuordnung:",
+      "enabled": "Auto-Erkennung aktiviert",
+      "new_rule": "Neue Regel...",
+      "delete": "Löschen"
+    },
+
     "plot_designs": {
       "description": "Plot-Designs kombinieren Grid-, Font- und Legenden-Einstellungen:",
       "active_design": "Aktives Design: {name}",
+      "active": "Aktiv",
+      "active_default": "Aktives Design (Standard)",
+      "apply": "Design anwenden",
+      "edit": "Bearbeiten...",
+      "save_current": "Aktuelles speichern...",
+      "delete": "Löschen",
+      "save_as_default": "⭐ Als Programmstandard speichern",
+      "save_as_default_tooltip": "Die aktuellen Plot-Einstellungen als Programmstandard speichern",
       "save_design": "Design speichern",
       "design_name": "Name des neuen Designs:",
       "success": "Erfolg",
