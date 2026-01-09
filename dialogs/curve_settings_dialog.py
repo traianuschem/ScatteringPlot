@@ -188,13 +188,13 @@ class CurveSettingsDialog(QDialog):
         has_errors = dataset.y_err is not None
         self.error_info = QLabel()
         if has_errors:
-            error_info.setText(tr("curve_settings.error_bars.available"))
-            error_info.setStyleSheet("color: green;")
+            self.error_info.setText(tr("curve_settings.error_bars.available"))
+            self.error_info.setStyleSheet("color: green;")
         else:
-            error_info.setText(tr("curve_settings.error_bars.not_available"))
-            error_info.setStyleSheet("color: #888;")
+            self.error_info.setText(tr("curve_settings.error_bars.not_available"))
+            self.error_info.setStyleSheet("color: #888;")
             self.show_errorbars_check.setEnabled(False)
-        error_layout.addWidget(error_info, 1, 0, 1, 2)
+        error_layout.addWidget(self.error_info, 1, 0, 1, 2)
 
         # Fehlerbalken-Stil (v6.0)
         error_layout.addWidget(QLabel(tr("curve_settings.error_bars.representation")), 2, 0)
