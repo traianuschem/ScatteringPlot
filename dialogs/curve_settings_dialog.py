@@ -144,6 +144,13 @@ class CurveSettingsDialog(QDialog):
         self.marker_size_spin.setValue(dataset.marker_size)
         marker_layout.addWidget(self.marker_size_spin, 2, 1)
 
+        # Info-Label für Marker-Hinweise (z.B. bei stem-Plots)
+        self.marker_info_label = QLabel()
+        self.marker_info_label.setWordWrap(True)
+        self.marker_info_label.setStyleSheet("color: #0066cc; font-style: italic;")
+        self.marker_info_label.setVisible(False)  # Initially hidden
+        marker_layout.addWidget(self.marker_info_label, 3, 0, 1, 2)
+
         marker_group.setLayout(marker_layout)
         layout.addWidget(marker_group)
 
