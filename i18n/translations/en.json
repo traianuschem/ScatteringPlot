@@ -567,16 +567,21 @@
     "apply": "Apply Design",
     "save_current": "Save Current...",
     "save_as_default": "⭐ Save as Program Default",
+    "success": "Success",
 
     "tabs": {
       "styles": "Style Presets",
       "colors": "Color Schemes",
       "auto_detection": "Auto-Detection",
+      "autodetect": "Auto-Detection",
       "plot_designs": "Plot Designs"
     },
 
     "styles": {
       "available": "Available Style Presets:",
+      "new": "New...",
+      "edit": "Edit...",
+      "delete": "Delete",
       "new_style": "New Style",
       "style_name": "Style Name:",
       "edit_style": "Edit Style: {name}",
@@ -591,6 +596,9 @@
 
     "colors": {
       "available": "Available Color Schemes:",
+      "new": "New...",
+      "edit": "Edit...",
+      "delete": "Delete",
       "new_scheme": "New Scheme",
       "scheme_name": "Scheme Name:",
       "color_n": "Color {n}",
@@ -620,9 +628,24 @@
       "select_style_msg": "Please select a style"
     },
 
+    "autodetect": {
+      "mapping": "Keyword → Style Assignment:",
+      "enabled": "Auto-Detection Enabled",
+      "new_rule": "New Rule...",
+      "delete": "Delete"
+    },
+
     "plot_designs": {
       "description": "Plot designs combine grid, font, and legend settings:",
       "active_design": "Active Design: {name}",
+      "active": "Active",
+      "active_default": "Active Design (Default)",
+      "apply": "Apply Design",
+      "edit": "Edit...",
+      "save_current": "Save Current...",
+      "delete": "Delete",
+      "save_as_default": "⭐ Save as Program Default",
+      "save_as_default_tooltip": "Save current plot settings as program default",
       "save_design": "Save Design",
       "design_name": "Name of new design:",
       "success": "Success",
