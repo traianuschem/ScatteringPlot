@@ -1,9 +1,42 @@
 # Changelog - Version 7.0
 
-## Version 7.0-dev - ScatterForge Plot
+## Version 7.0.2 - ScatterForge Plot (RELEASE)
 
-**Release Date:** TBD
+**Release Date:** January 2026
+**Status:** Stable Release
+
+### 🐛 Bug Fixes (7.0.2)
+
+This release fixes critical bugs discovered during final testing:
+
+**Fixed Issues:**
+1. **AttributeError in CurveSettingsDialog** (Commit: 30486b1)
+   - Fixed missing `self.marker_info_label` attribute
+   - Dialog can now open properly for group and curve editing
+   - Added info label for marker hints in stem plots
+
+2. **NameError in CurveSettingsDialog** (Commit: 95dcadb)
+   - Fixed `error_info` → `self.error_info` reference error
+   - Error bar information now displays correctly
+
+3. **Missing Translations** (Commits: 95dcadb, f57ad8c)
+   - Added missing German translations for design_manager features
+   - Added missing English translations for design_manager features
+   - Complete translation coverage for:
+     * `design_manager.styles`: new, edit, delete
+     * `design_manager.colors`: new, edit, delete
+     * `design_manager.autodetect`: mapping, enabled, new_rule, delete
+     * `design_manager.plot_designs`: active, active_default, apply, edit, save_current, delete, save_as_default_tooltip
+     * `design_manager.tabs.autodetect`
+     * `design_manager.success`
+
+---
+
+## Version 7.0.0-dev - ScatterForge Plot
+
+**Release Date:** December 2025
 **Branch:** `claude/add-latex-support-018vqfpKqgyWMDMfEjQp8v29`
+**Status:** Development Version
 
 ---
 
@@ -207,10 +240,14 @@ Keine bekannten Probleme.
 
 ---
 
-## 👥 Contributors
+## 👥 Contributors & AI Transparency
 
-- Claude (Anthropic) - Implementierung
-- traianuschem - Projekt-Owner, Feature-Design, Testing
+**Development:**
+- **Claude (Anthropic AI)** - Code implementation and development
+- **Richard Neubert (traianuschem)** - Project owner, orchestration, feature design, testing, and quality assurance
+
+**AI Transparency Notice:**
+The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's AI assistant) under the orchestration and direction of Richard Neubert. This follows best practices for AI transparency in software development. All code has been reviewed, tested, and approved by the project owner.
 
 ---
 
@@ -220,4 +257,4 @@ Wie Projekt-Lizenz (siehe Haupt-Repository)
 
 ---
 
-*Letzte Aktualisierung: 2025-11-21*
+*Letzte Aktualisierung: 2026-01-16*

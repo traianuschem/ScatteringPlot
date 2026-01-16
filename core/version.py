@@ -6,7 +6,7 @@ Zentrale Definition von Version und Metadaten für die Software-Provenienz.
 
 __version__ = "7.0.2"
 __app_name__ = "ScatterForge Plot"
-__year__ = "2025"
+__year__ = "2026"
 __author__ = "TU Bergakademie Freiberg"
 
 
@@ -15,7 +15,7 @@ def get_version_string():
     Gibt formatierte Versions-String zurück.
 
     Returns:
-        str: "ScatterForge Plot v7.0.0-dev"
+        str: "ScatterForge Plot v7.0.2"
     """
     return f"{__app_name__} v{__version__}"
 

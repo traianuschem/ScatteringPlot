@@ -77,9 +77,9 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 ## 🎉 Was ist neu in v7.0?
 
-**Major Release** mit wissenschaftlicher Text-Unterstützung und internationalem Support:
+**Major Release v7.0.2** mit wissenschaftlicher Text-Unterstützung und internationalem Support:
 
-### Hauptfeatures v7.0.0dev
+### Hauptfeatures v7.0
 
 - 📝 **LaTeX/MathText**: Wissenschaftliche Notation überall (Legenden, Achsen, Annotations)
 - 🌍 **Mehrsprachigkeit**: Vollständige Deutsch/Englisch-Lokalisierung
@@ -87,8 +87,9 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 - ⌨️ **Keyboard Shortcuts**: Effizienter Workflow
 - 🔧 **UI-Verbesserungen**: Tree-Reihenfolge bestimmt Legende
 - 🖼️ **TIFF-Export**: Zusätzliches hochwertiges Format
+- 🐛 **Stabilitätsverbesserungen**: Kritische Bugfixes in v7.0.2
 
-**Vollständige Änderungen:** Siehe [CHANGELOG.md](CHANGELOG.md)
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 
 ---
 
@@ -974,11 +975,16 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
 @software{scatterforge_plot,
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
-  year = {2025},
-  version = {7.0.0dev},
-  url = {https://github.com/traianuschem/ScatteringPlot}
+  year = {2026},
+  version = {7.0.2},
+  url = {https://github.com/traianuschem/ScatteringPlot},
+  note = {Software developed with Claude AI assistance}
 }
 ```
+
+### AI Transparency
+
+The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's AI assistant) under the orchestration and direction of Richard Neubert. This follows best practices for AI transparency in software development. All features were designed by the project owner, and all code has been thoroughly reviewed, tested, and approved.
 
 ## Kontakt & Support
 
@@ -990,13 +996,14 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
 
 ### Autoren
 
-- **Richard Neubert** - *Initial work & Hauptentwicklung*
+- **Richard Neubert** - *Project owner, orchestration, feature design, testing*
+- **Claude (Anthropic AI)** - *Code implementation and development (v7.0+)*
 
 ---
 
 ## 📚 Weitere Ressourcen
 
-- **CHANGELOG:** Detaillierte Versionshistorie → [CHANGELOG.md](CHANGELOG.md)
+- **CHANGELOG:** Detaillierte Versionshistorie → [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 - **GitHub:** Repository → [traianuschem/ScatteringPlot](https://github.com/traianuschem/ScatteringPlot)
 - **Releases:** Stabile Versionen → [GitHub Releases](https://github.com/traianuschem/ScatteringPlot/releases)
 
@@ -1004,6 +1011,6 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.0.0dev - Dezember 2025*
+*ScatterForge Plot v7.0.2 - Januar 2026*
 
 ---
