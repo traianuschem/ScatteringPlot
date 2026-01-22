@@ -19,6 +19,45 @@ from utils.logger import get_logger
 from i18n import tr
 
 
+# Vordefinierte Design-Keys (intern, nicht übersetzt)
+PREDEFINED_DESIGN_KEYS = ['standard', 'publication', 'presentation', 'tubaf', 'minimalist']
+
+
+def get_predefined_design_name(key):
+    """Gibt den übersetzten Namen für ein vordefiniertes Design zurück (v7.0.3)"""
+    return tr(f"design_manager.plot_designs.predefined.{key}")
+
+
+def get_all_predefined_design_names():
+    """Gibt alle übersetzten vordefinierten Design-Namen zurück (v7.0.3)"""
+    return [get_predefined_design_name(key) for key in PREDEFINED_DESIGN_KEYS]
+
+
+def normalize_design_name(name):
+    """
+    Konvertiert einen Design-Namen (übersetzt oder alt) zu einem internen Key (v7.0.3).
+    Unterstützt Rückwärtskompatibilität mit alten deutschen Design-Namen.
+    """
+    # Mapping von alten deutschen Namen zu internen Keys
+    legacy_mapping = {
+        'Standard': 'standard',
+        'Publikation': 'publication',
+        'Publication': 'publication',
+        'Präsentation': 'presentation',
+        'Presentation': 'presentation',
+        'TUBAF': 'tubaf',
+        'Minimalistisch': 'minimalist',
+        'Minimalist': 'minimalist'
+    }
+
+    # Wenn es ein alter Name ist, konvertiere zu internem Key
+    if name in legacy_mapping:
+        return legacy_mapping[name]
+
+    # Ansonsten gebe den Namen zurück (könnte schon ein interner Key oder ein benutzerdefinierter Name sein)
+    return name
+
+
 class DesignManagerDialog(QDialog):
     """Design-Manager Dialog mit Tabs"""
 
@@ -344,22 +383,22 @@ class DesignManagerDialog(QDialog):
         self.config.save_config()
 
     def refresh_plot_designs_list(self):
-        """Aktualisiert Plot-Designs-Liste (Version 5.2)"""
+        """Aktualisiert Plot-Designs-Liste (Version 5.2, erweitert v7.0.3)"""
         self.plot_designs_list.clear()
 
-        # Standard-Designs
-        default_designs = ['Standard', 'Publikation', 'Präsentation', 'TUBAF', 'Minimalistisch']
-        for name in default_designs:
+        # Standard-Designs (v7.0.3: jetzt übersetzt)
+        predefined_names = get_all_predefined_design_names()
+        for name in predefined_names:
             self.plot_designs_list.addItem(f"⭐ {name}")
 
         # Benutzerdefinierte Designs
         if hasattr(self.config, 'plot_designs'):
             for name in self.config.plot_designs.keys():
-                if name not in default_designs:
+                if name not in predefined_names and name not in PREDEFINED_DESIGN_KEYS:
                     self.plot_designs_list.addItem(f"👤 {name}")
 
     def apply_plot_design(self):
-        """Wendet ausgewähltes Plot-Design an (Version 5.2)"""
+        """Wendet ausgewähltes Plot-Design an (Version 5.2, erweitert v7.0.3)"""
         current_item = self.plot_designs_list.currentItem()
         if not current_item:
             QMessageBox.information(self, tr("design_manager.info"), tr("design_manager.plot_designs.select_design"))
@@ -374,11 +413,18 @@ class DesignManagerDialog(QDialog):
             QMessageBox.warning(self, tr("design_manager.error"), tr("design_manager.plot_designs.not_found", name=name))
             return
 
-        # Design anwenden
+        # Design anwenden (v7.0.3: inkl. xlabel, ylabel, axis_limits)
         self.parent_app.grid_settings = design['grid_settings'].copy()
         self.parent_app.font_settings = design['font_settings'].copy()
         self.parent_app.legend_settings = design['legend_settings'].copy()
-        self.parent_app.current_plot_design = name
+        self.parent_app.custom_xlabel = design.get('custom_xlabel', None)
+        self.parent_app.custom_ylabel = design.get('custom_ylabel', None)
+        if design.get('axis_limits'):
+            self.parent_app.axis_limits = design['axis_limits'].copy()
+        else:
+            self.parent_app.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True}
+        # Normalisiere den Namen vor dem Speichern (v7.0.3)
+        self.parent_app.current_plot_design = normalize_design_name(name)
 
         # Info aktualisieren
         self.plot_design_info_label.setText(tr("design_manager.plot_designs.active", name=name))
@@ -389,16 +435,19 @@ class DesignManagerDialog(QDialog):
         QMessageBox.information(self, tr("design_manager.success"), tr("design_manager.plot_designs.applied", name=name))
 
     def save_current_as_design(self):
-        """Speichert aktuelle Einstellungen als neues Design (Version 5.2)"""
+        """Speichert aktuelle Einstellungen als neues Design (Version 5.2, erweitert v7.0.3)"""
         name, ok = QInputDialog.getText(self, tr("design_manager.plot_designs.save_title"), tr("design_manager.plot_designs.name_prompt"))
         if not ok or not name:
             return
 
-        # Design erstellen
+        # Design erstellen (v7.0.3: inkl. xlabel, ylabel, axis_limits)
         design = {
             'grid_settings': self.parent_app.grid_settings.copy(),
             'font_settings': self.parent_app.font_settings.copy(),
-            'legend_settings': self.parent_app.legend_settings.copy()
+            'legend_settings': self.parent_app.legend_settings.copy(),
+            'custom_xlabel': self.parent_app.custom_xlabel,
+            'custom_ylabel': self.parent_app.custom_ylabel,
+            'axis_limits': self.parent_app.axis_limits.copy() if self.parent_app.axis_limits else None
         }
 
         # In Config speichern
@@ -428,12 +477,17 @@ class DesignManagerDialog(QDialog):
             logger.debug(f"  Grid Settings: {list(self.parent_app.grid_settings.keys())}")
             logger.debug(f"  Font Settings: {list(self.parent_app.font_settings.keys())}")
             logger.debug(f"  Plot Design: {self.parent_app.current_plot_design}")
+            logger.debug(f"  Custom X-Label: {self.parent_app.custom_xlabel}")
+            logger.debug(f"  Custom Y-Label: {self.parent_app.custom_ylabel}")
 
             self.config.save_default_plot_settings(
                 self.parent_app.legend_settings,
                 self.parent_app.grid_settings,
                 self.parent_app.font_settings,
-                self.parent_app.current_plot_design
+                self.parent_app.current_plot_design,
+                self.parent_app.custom_xlabel,
+                self.parent_app.custom_ylabel,
+                self.parent_app.axis_limits
             )
             logger.info("Standard-Einstellungen erfolgreich gespeichert")
             QMessageBox.information(
@@ -484,10 +538,13 @@ class DesignManagerDialog(QDialog):
         dialog.exec()
 
     def get_design_by_name(self, name):
-        """Gibt Design-Dict für Namen zurück (Version 5.2)"""
-        # Vordefinierte Designs
+        """Gibt Design-Dict für Namen zurück (Version 5.2, erweitert v7.0.3)"""
+        # Name normalisieren (v7.0.3: Unterstützt alte deutsche Namen)
+        name = normalize_design_name(name)
+
+        # Vordefinierte Designs (v7.0.3: jetzt mit internen Keys)
         predefined = {
-            'Standard': {
+            'standard': {
                 'grid_settings': {
                     'major_enable': True,
                     'major_axis': 'both',
@@ -524,7 +581,7 @@ class DesignManagerDialog(QDialog):
                     'fancybox': True
                 }
             },
-            'Publikation': {
+            'publication': {
                 'grid_settings': {
                     'major_enable': False,
                     'major_axis': 'both',
@@ -561,7 +618,7 @@ class DesignManagerDialog(QDialog):
                     'fancybox': False
                 }
             },
-            'Präsentation': {
+            'presentation': {
                 'grid_settings': {
                     'major_enable': True,
                     'major_axis': 'both',
@@ -598,7 +655,7 @@ class DesignManagerDialog(QDialog):
                     'fancybox': True
                 }
             },
-            'TUBAF': {
+            'tubaf': {
                 'grid_settings': {
                     'major_enable': True,
                     'major_axis': 'both',
@@ -635,7 +692,7 @@ class DesignManagerDialog(QDialog):
                     'fancybox': True
                 }
             },
-            'Minimalistisch': {
+            'minimalist': {
                 'grid_settings': {
                     'major_enable': False,
                     'major_axis': 'both',
@@ -938,7 +995,9 @@ class PlotDesignEditDialog(QDialog):
         self.config = config
         self.refresh_callback = refresh_callback
         self.plot_callback = plot_callback
-        self.is_predefined = design_name in ['Standard', 'Publikation', 'Präsentation', 'TUBAF', 'Minimalistisch']
+        # v7.0.3: Verwende interne Keys und normalisiere den Namen
+        normalized_name = normalize_design_name(design_name)
+        self.is_predefined = normalized_name in PREDEFINED_DESIGN_KEYS
 
         # Deep copy der Settings
         import copy

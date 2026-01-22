@@ -192,8 +192,9 @@ class UserConfig:
         except Exception as e:
             print(f"Fehler beim Speichern der Config: {e}")
 
-    def save_default_plot_settings(self, legend_settings, grid_settings, font_settings, current_design='Standard'):
-        """Speichert aktuelle Plot-Einstellungen als Standard (v5.4)"""
+    def save_default_plot_settings(self, legend_settings, grid_settings, font_settings, current_design='Standard',
+                                   custom_xlabel=None, custom_ylabel=None, axis_limits=None):
+        """Speichert aktuelle Plot-Einstellungen als Standard (v5.4, erweitert v7.0.3)"""
         from utils.logger import get_logger
         logger = get_logger()
 
@@ -201,7 +202,10 @@ class UserConfig:
             'legend_settings': legend_settings.copy(),
             'grid_settings': grid_settings.copy(),
             'font_settings': font_settings.copy(),
-            'current_plot_design': current_design
+            'current_plot_design': current_design,
+            'custom_xlabel': custom_xlabel,
+            'custom_ylabel': custom_ylabel,
+            'axis_limits': axis_limits.copy() if axis_limits else None
         }
         logger.debug(f"UserConfig: Speichere default_plot_settings (Design: {current_design})")
         self.save_config()

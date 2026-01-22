@@ -255,6 +255,7 @@
 
     "font_labels": {
       "title": "Axis Labels Font",
+      "family": "Font Family:",
       "size": "Font Size:",
       "bold": "Bold",
       "italic": "Italic"
@@ -673,6 +674,7 @@
       "standard_overwritten": "Standard design '{name}' has been overwritten.\n\nDelete the design from the list to restore default values.",
 
       "predefined": {
+        "standard": "Standard",
         "publication": "Publication",
         "presentation": "Presentation",
         "tubaf": "TUBAF",

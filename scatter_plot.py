@@ -242,7 +242,7 @@ class ScatterPlotApp(QMainWindow):
         self.custom_ylabel = None  # Custom Y-Achsenbeschriftung
         self.unit_format = 'in'  # Format für Einheiten: 'slash', 'brackets', 'in'
 
-        # Default Plot-Settings aus Config laden (v5.4)
+        # Default Plot-Settings aus Config laden (v5.4, erweitert v7.0.3)
         self.logger.debug("Prüfe auf gespeicherte Standard-Plot-Einstellungen...")
         default_settings = self.config.get_default_plot_settings()
         if default_settings:
@@ -251,11 +251,17 @@ class ScatterPlotApp(QMainWindow):
             self.logger.debug(f"  - Grid Settings: {list(default_settings.get('grid_settings', {}).keys())}")
             self.logger.debug(f"  - Font Settings: {list(default_settings.get('font_settings', {}).keys())}")
             self.logger.debug(f"  - Plot Design: {default_settings.get('current_plot_design', 'Standard')}")
+            self.logger.debug(f"  - Custom X-Label: {default_settings.get('custom_xlabel', None)}")
+            self.logger.debug(f"  - Custom Y-Label: {default_settings.get('custom_ylabel', None)}")
 
             self.legend_settings = default_settings.get('legend_settings', self.legend_settings)
             self.grid_settings = default_settings.get('grid_settings', self.grid_settings)
             self.font_settings = default_settings.get('font_settings', self.font_settings)
             self.current_plot_design = default_settings.get('current_plot_design', 'Standard')
+            self.custom_xlabel = default_settings.get('custom_xlabel', None)
+            self.custom_ylabel = default_settings.get('custom_ylabel', None)
+            if default_settings.get('axis_limits'):
+                self.axis_limits = default_settings.get('axis_limits')
             self.logger.info("Standard-Einstellungen erfolgreich angewendet")
         else:
             self.logger.info("Keine gespeicherten Standard-Einstellungen gefunden, verwende Defaults")
@@ -943,10 +949,12 @@ class ScatterPlotApp(QMainWindow):
 
         self.ax_main.set_xlabel(xlabel, fontsize=self.font_settings.get('labels_size', 12),
                                weight=label_weight, style=label_style,
-                               fontfamily=self.font_settings.get('font_family', 'sans-serif'))
+                               fontfamily=self.font_settings.get('labels_font_family',
+                                                                 self.font_settings.get('font_family', 'sans-serif')))
         self.ax_main.set_ylabel(ylabel, fontsize=self.font_settings.get('labels_size', 12),
                                weight=label_weight, style=label_style,
-                               fontfamily=self.font_settings.get('font_family', 'sans-serif'))
+                               fontfamily=self.font_settings.get('labels_font_family',
+                                                                 self.font_settings.get('font_family', 'sans-serif')))
         self.ax_main.set_xscale(plot_info['xscale'])
         self.ax_main.set_yscale(plot_info['yscale'])
 
@@ -981,7 +989,8 @@ class ScatterPlotApp(QMainWindow):
         for label in self.ax_main.get_xticklabels() + self.ax_main.get_yticklabels():
             label.set_fontweight(tick_weight)
             label.set_fontstyle(tick_style)
-            label.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
+            label.set_fontfamily(self.font_settings.get('ticks_font_family',
+                                                        self.font_settings.get('font_family', 'sans-serif')))
 
         # Tick-Label-Rotation (v5.7)
         x_rotation = self.grid_settings.get('x_tick_rotation', 0)

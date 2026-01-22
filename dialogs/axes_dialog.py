@@ -7,7 +7,7 @@ This dialog allows users to configure axis labels and titles.
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
     QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton, QMessageBox, QHBoxLayout,
-    QSpinBox
+    QSpinBox, QFontComboBox
 )
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 from i18n import tr
@@ -43,7 +43,6 @@ class AxesSettingsDialog(QDialog):
         titles_layout.addWidget(QLabel(tr("axes.axis_titles.x_title")), 0, 0)
         self.xlabel_edit = QLineEdit()
         self.xlabel_edit.setPlaceholderText(tr("axes.axis_titles.auto_based_on", plot_type=plot_type))
-        self.xlabel_edit.textChanged.connect(self.update_preview)
         if current_xlabel:
             self.xlabel_edit.setText(current_xlabel)
         titles_layout.addWidget(self.xlabel_edit, 0, 1)
@@ -52,7 +51,6 @@ class AxesSettingsDialog(QDialog):
         titles_layout.addWidget(QLabel(tr("axes.axis_titles.y_title")), 1, 0)
         self.ylabel_edit = QLineEdit()
         self.ylabel_edit.setPlaceholderText(tr("axes.axis_titles.auto_based_on", plot_type=plot_type))
-        self.ylabel_edit.textChanged.connect(self.update_preview)
         if current_ylabel:
             self.ylabel_edit.setText(current_ylabel)
         titles_layout.addWidget(self.ylabel_edit, 1, 1)
@@ -74,6 +72,10 @@ class AxesSettingsDialog(QDialog):
             "min-height: 40px;"
         )
         titles_layout.addWidget(self.preview_label, 3, 1)
+
+        # Connect signals AFTER all UI elements are created
+        self.xlabel_edit.textChanged.connect(self.update_preview)
+        self.ylabel_edit.textChanged.connect(self.update_preview)
 
         titles_group.setLayout(titles_layout)
         layout.addWidget(titles_group)
@@ -138,20 +140,31 @@ class AxesSettingsDialog(QDialog):
         labels_font_group = QGroupBox(tr("axes.font_labels.title"))
         labels_font_layout = QGridLayout()
 
-        labels_font_layout.addWidget(QLabel(tr("axes.font_labels.size")), 0, 0)
+        # Font Family
+        labels_font_layout.addWidget(QLabel(tr("axes.font_labels.family")), 0, 0)
+        self.labels_font_combo = QFontComboBox()
+        current_labels_font = self.font_settings.get('labels_font_family', 'Arial')
+        index = self.labels_font_combo.findText(current_labels_font)
+        if index >= 0:
+            self.labels_font_combo.setCurrentIndex(index)
+        labels_font_layout.addWidget(self.labels_font_combo, 0, 1)
+
+        # Font Size
+        labels_font_layout.addWidget(QLabel(tr("axes.font_labels.size")), 1, 0)
         self.labels_size_spin = QSpinBox()
         self.labels_size_spin.setRange(6, 32)
         self.labels_size_spin.setValue(self.font_settings.get('labels_size', 12))
         self.labels_size_spin.setSuffix(" pt")
-        labels_font_layout.addWidget(self.labels_size_spin, 0, 1)
+        labels_font_layout.addWidget(self.labels_size_spin, 1, 1)
 
+        # Bold & Italic
         self.labels_bold = QCheckBox(tr("axes.font_labels.bold"))
         self.labels_bold.setChecked(self.font_settings.get('labels_bold', False))
-        labels_font_layout.addWidget(self.labels_bold, 1, 0)
+        labels_font_layout.addWidget(self.labels_bold, 2, 0)
 
         self.labels_italic = QCheckBox(tr("axes.font_labels.italic"))
         self.labels_italic.setChecked(self.font_settings.get('labels_italic', False))
-        labels_font_layout.addWidget(self.labels_italic, 1, 1)
+        labels_font_layout.addWidget(self.labels_italic, 2, 1)
 
         labels_font_group.setLayout(labels_font_layout)
         layout.addWidget(labels_font_group)
@@ -160,20 +173,31 @@ class AxesSettingsDialog(QDialog):
         ticks_font_group = QGroupBox(tr("axes.font_ticks.title"))
         ticks_font_layout = QGridLayout()
 
-        ticks_font_layout.addWidget(QLabel(tr("axes.font_labels.size")), 0, 0)
+        # Font Family
+        ticks_font_layout.addWidget(QLabel(tr("axes.font_labels.family")), 0, 0)
+        self.ticks_font_combo = QFontComboBox()
+        current_ticks_font = self.font_settings.get('ticks_font_family', 'Arial')
+        index = self.ticks_font_combo.findText(current_ticks_font)
+        if index >= 0:
+            self.ticks_font_combo.setCurrentIndex(index)
+        ticks_font_layout.addWidget(self.ticks_font_combo, 0, 1)
+
+        # Font Size
+        ticks_font_layout.addWidget(QLabel(tr("axes.font_labels.size")), 1, 0)
         self.ticks_size_spin = QSpinBox()
         self.ticks_size_spin.setRange(6, 24)
         self.ticks_size_spin.setValue(self.font_settings.get('ticks_size', 10))
         self.ticks_size_spin.setSuffix(" pt")
-        ticks_font_layout.addWidget(self.ticks_size_spin, 0, 1)
+        ticks_font_layout.addWidget(self.ticks_size_spin, 1, 1)
 
+        # Bold & Italic
         self.ticks_bold = QCheckBox(tr("axes.font_labels.bold"))
         self.ticks_bold.setChecked(self.font_settings.get('ticks_bold', False))
-        ticks_font_layout.addWidget(self.ticks_bold, 1, 0)
+        ticks_font_layout.addWidget(self.ticks_bold, 2, 0)
 
         self.ticks_italic = QCheckBox(tr("axes.font_labels.italic"))
         self.ticks_italic.setChecked(self.font_settings.get('ticks_italic', False))
-        ticks_font_layout.addWidget(self.ticks_italic, 1, 1)
+        ticks_font_layout.addWidget(self.ticks_italic, 2, 1)
 
         ticks_font_group.setLayout(ticks_font_layout)
         layout.addWidget(ticks_font_group)
@@ -249,9 +273,11 @@ class AxesSettingsDialog(QDialog):
     def get_font_settings(self):
         """Gibt die Schriftart-Einstellungen zurück"""
         return {
+            'labels_font_family': self.labels_font_combo.currentText(),
             'labels_size': self.labels_size_spin.value(),
             'labels_bold': self.labels_bold.isChecked(),
             'labels_italic': self.labels_italic.isChecked(),
+            'ticks_font_family': self.ticks_font_combo.currentText(),
             'ticks_size': self.ticks_size_spin.value(),
             'ticks_bold': self.ticks_bold.isChecked(),
             'ticks_italic': self.ticks_italic.isChecked()
