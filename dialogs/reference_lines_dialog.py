@@ -107,7 +107,7 @@ class ReferenceLinesDialog(QDialog):
     def get_reference_line(self):
         """Gibt Referenzlinie-Dict zurück"""
         return {
-            'type': 'vertical' if self.type_combo.currentText() == 'Vertikal' else 'horizontal',
+            'type': 'vertical' if self.type_combo.currentIndex() == 0 else 'horizontal',
             'value': self.value_spin.value(),
             'label': self.label_edit.text(),
             'linestyle': self.linestyle_combo.currentText(),

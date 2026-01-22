@@ -2490,7 +2490,7 @@ class ScatterPlotApp(QMainWindow):
             # Referenzlinien-Dialog mit vorausgefüllten Werten
             from dialogs.reference_lines_dialog import ReferenceLinesDialog
             dialog = ReferenceLinesDialog(self)
-            dialog.type_combo.setCurrentText('Vertikal' if obj['type'] == 'vertical' else 'Horizontal')
+            dialog.type_combo.setCurrentIndex(0 if obj['type'] == 'vertical' else 1)
             dialog.value_spin.setValue(obj['value'])
             dialog.label_edit.setText(obj.get('label', ''))
             dialog.linestyle_combo.setCurrentText(obj['linestyle'])
