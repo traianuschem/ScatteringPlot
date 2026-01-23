@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.0.3
+# ScatterForge Plot v7.0.4
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.0.3-blue)
+![Version](https://img.shields.io/badge/version-7.0.4-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -77,7 +77,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 ## 🎉 Was ist neu in v7.0?
 
-**Major Release v7.0.2** mit wissenschaftlicher Text-Unterstützung und internationalem Support:
+**Major Release v7.0.4** mit wissenschaftlicher Text-Unterstützung und internationalem Support:
 
 ### Hauptfeatures v7.0
 
@@ -87,7 +87,26 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 - ⌨️ **Keyboard Shortcuts**: Effizienter Workflow
 - 🔧 **UI-Verbesserungen**: Tree-Reihenfolge bestimmt Legende
 - 🖼️ **TIFF-Export**: Zusätzliches hochwertiges Format
-- 🐛 **Stabilitätsverbesserungen**: Kritische Bugfixes in v7.0.2
+- 🐛 **Stabilitätsverbesserungen**: Kritische Bugfixes in v7.0.2-7.0.4
+
+### Aktuelles Update v7.0.4 (23. Januar 2026)
+
+**Kritische Session-Loading-Fixes:**
+- ✅ Behebt QTreeWidgetItem-Deletion-Fehler beim Laden von Sessions
+- ✅ Graceful Fallback für fehlende Datendateien auf verschiedenen PCs
+- ✅ Sessions laden jetzt mit leeren Gruppen statt komplett zu scheitern
+- ✅ Benutzer erhalten informative Warnung über fehlende Dateien
+
+### Update v7.0.3 (23. Januar 2026)
+
+**Neue Features:**
+- ✅ Font-Auswahl für Achsenbeschriftungen und Tick-Labels
+- ✅ Achsen-Tab im Plot-Design-Editor
+- ✅ Vollständige Plot-Design-Übersetzungen
+
+**Bug Fixes:**
+- ✅ AttributeError in axes_dialog.py behoben
+- ✅ Design-Namen-Übersetzungsprobleme gelöst
 
 **Vollständige Änderungen:** Siehe [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 
@@ -1011,6 +1030,6 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.0.3 - Januar 2026*
+*ScatterForge Plot v7.0.4 - Januar 2026*
 
 ---

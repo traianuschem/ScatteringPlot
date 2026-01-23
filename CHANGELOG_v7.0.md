@@ -1,5 +1,94 @@
 # Changelog - Version 7.0
 
+## Version 7.0.4 - ScatterForge Plot (RELEASE)
+
+**Release Date:** 23. Januar 2026
+**Status:** Stable Release - Critical Bug Fixes
+
+### 🐛 Bug Fixes (7.0.4)
+
+This release fixes two critical session loading issues:
+
+**Fixed Issues:**
+
+1. **QTreeWidgetItem Deletion Error** (Commit: b5d098c)
+   - Fixed crash when loading sessions: `Internal C++ object (PySide6.QtWidgets.QTreeWidgetItem) already deleted`
+   - Problem: `annotations_item` was not recreated after `tree.clear()`, causing crashes when `update_annotations_tree()` was called
+   - Solution: Recreate `annotations_item` immediately after clearing tree in `load_session()`
+   - Files: `scatter_plot.py:3034-3036`
+
+2. **Missing File Paths on Different PCs** (Commit: b5d098c)
+   - Fixed complete session loading failure when data files don't exist
+   - Problem: Sessions loaded on different PCs failed completely if file paths were invalid
+   - Solution: Graceful fallback for missing files - sessions load with empty groups
+   - Added `data_loaded` flag to `DataSet` to track successful data loading
+   - Modified `DataSet.load_data()` to accept `raise_on_error` parameter
+   - Updated `DataSet.from_dict()` to skip data loading errors gracefully
+   - Skip datasets without loaded data in plotting and legend generation
+   - Show warning message to user with count of missing datasets
+   - Files: `core/models.py`, `scatter_plot.py`
+
+**Technical Details:**
+- Added `data_loaded` boolean flag to `DataSet` class
+- `DataSet.__init__()` now accepts `skip_load` parameter for delayed loading
+- `DataSet.load_data()` accepts `raise_on_error` parameter (default: True)
+- `DataSet.from_dict()` loads data with `raise_on_error=False` for graceful handling
+- `update_plot()` skips datasets where `data_loaded=False`
+- User receives informative warning message with count of missing files
+
+---
+
+## Version 7.0.3 - ScatterForge Plot (RELEASE)
+
+**Release Date:** 23. Januar 2026
+**Status:** Stable Release
+
+### 🐛 Bug Fixes (7.0.3)
+
+This release adds missing functionality and fixes critical bugs:
+
+**Fixed Issues:**
+
+1. **AttributeError in axes_dialog.py** (Commit: 2840078)
+   - Fixed race condition where `textChanged` signals were connected before `preview_label` was created
+   - Moved signal connections to after all UI elements are initialized
+   - Files: `dialogs/axes_dialog.py`
+
+2. **Missing Plot Design Translations** (Commit: b6e2bc8)
+   - Added complete `plot_design` section to `en.json` and `de.json`
+   - Includes translations for all grid, font, legend, and axes settings
+   - Added translations for tabs: grid, fonts, legend, axes
+   - Files: `i18n/translations/en.json`, `i18n/translations/de.json`
+
+3. **Design Name Translation Issues** (Commit: 2840078)
+   - Fixed internal design keys from German to English (standard, publication, etc.)
+   - Added `normalize_design_name()` function for backward compatibility
+   - Supports both old German names and new internal keys
+   - Files: `scatter_plot.py`
+
+### ✨ New Features (7.0.3)
+
+1. **Font Family Selection for Axes** (Commit: 2840078)
+   - Added `QFontComboBox` for axis labels and tick labels in axes settings dialog
+   - Users can now select different fonts for axis labels and tick values
+   - Applied font family settings to axes rendering
+   - Files: `dialogs/axes_dialog.py`, `scatter_plot.py`
+
+2. **Axes Tab in Plot Design Editor** (Commit: b6e2bc8)
+   - Added new Axes tab in Plot Design Edit Dialog
+   - Users can now set custom xlabel and ylabel in plot designs
+   - Axis labels are saved/loaded with designs
+   - Includes `axis_limits` support
+   - Files: `dialogs/plot_design_edit_dialog.py`
+
+3. **Enhanced Plot Design Persistence** (Commit: 2840078)
+   - Extended `save_current_as_design()` to include `custom_xlabel`, `custom_ylabel`, `axis_limits`
+   - Extended `apply_plot_design()` to restore these settings
+   - Extended `save_default_plot_settings()` to include these parameters
+   - Files: `scatter_plot.py`
+
+---
+
 ## Version 7.0.2 - ScatterForge Plot (RELEASE)
 
 **Release Date:** January 2026
@@ -257,4 +346,4 @@ Wie Projekt-Lizenz (siehe Haupt-Repository)
 
 ---
 
-*Letzte Aktualisierung: 2026-01-16*
+*Letzte Aktualisierung: 2026-01-23*
