@@ -7,13 +7,14 @@ This module contains the core data models:
 """
 
 from pathlib import Path
+import logging
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 
 
 class DataSet:
     """Datensatz mit Stil-Informationen"""
-    def __init__(self, filepath, name=None, apply_auto_style=True):
+    def __init__(self, filepath, name=None, apply_auto_style=True, skip_load=False):
         self.filepath = Path(filepath)
         self.name = name or self.filepath.stem
         self.display_label = self.name
@@ -21,6 +22,7 @@ class DataSet:
         self.x = None
         self.y = None
         self.y_err = None
+        self.data_loaded = False  # Flag für erfolgreiches Laden
 
         # Stil
         self.line_style = None
@@ -45,22 +47,34 @@ class DataSet:
         self.y_min = None
         self.y_max = None
 
-        self.load_data()
+        if not skip_load:
+            self.load_data()
 
         # Auto-Stil anwenden
         if apply_auto_style:
             self.apply_auto_style()
 
-    def load_data(self):
-        """Lädt Daten"""
+    def load_data(self, raise_on_error=True):
+        """Lädt Daten
+
+        Args:
+            raise_on_error: Wenn False, werden Fehler nur geloggt statt Exception zu werfen
+        """
+        logger = logging.getLogger(__name__)
         try:
             self.data = load_scattering_data(self.filepath)
             self.x = self.data[:, 0]
             self.y = self.data[:, 1]
             if self.data.shape[1] > 2:
                 self.y_err = self.data[:, 2]
+            self.data_loaded = True
         except Exception as e:
-            raise ValueError(f"Fehler beim Laden von {self.filepath}: {e}")
+            error_msg = f"Fehler beim Laden von {self.filepath}: {e}"
+            if raise_on_error:
+                raise ValueError(error_msg)
+            else:
+                logger.warning(error_msg)
+                self.data_loaded = False
 
     def apply_auto_style(self):
         """Wendet automatisch erkannten Stil an"""
@@ -130,8 +144,9 @@ class DataSet:
 
     @classmethod
     def from_dict(cls, data):
-        """Deserialisierung"""
-        ds = cls(data['filepath'], data.get('name'), apply_auto_style=False)
+        """Deserialisierung mit Fehlertoleranz für fehlende Dateien"""
+        # Dataset ohne Daten laden erstellen (skip_load=True)
+        ds = cls(data['filepath'], data.get('name'), apply_auto_style=False, skip_load=True)
         ds.display_label = data.get('display_label', ds.name)
         ds.line_style = data.get('line_style')
         ds.marker_style = data.get('marker_style')
@@ -150,6 +165,10 @@ class DataSet:
         ds.x_max = data.get('x_max')
         ds.y_min = data.get('y_min')
         ds.y_max = data.get('y_max')
+
+        # Versuche Daten zu laden, aber ignoriere Fehler (z.B. fehlende Dateien)
+        ds.load_data(raise_on_error=False)
+
         return ds
 
 
