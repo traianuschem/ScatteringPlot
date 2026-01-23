@@ -727,6 +727,11 @@ class ScatterPlotApp(QMainWindow):
                 if not dataset.show_in_legend:
                     continue
 
+                # Überspringe Datasets ohne geladene Daten (z.B. fehlende Dateien)
+                if not dataset.data_loaded:
+                    self.logger.warning(f"  Dataset '{dataset.name}' übersprungen (Daten nicht geladen)")
+                    continue
+
                 # Farbe
                 if dataset.color:
                     color = dataset.color
@@ -830,6 +835,11 @@ class ScatterPlotApp(QMainWindow):
         for dataset in ordered_unassigned:
             # Checkbox steuert Sichtbarkeit komplett
             if not dataset.show_in_legend:
+                continue
+
+            # Überspringe Datasets ohne geladene Daten (z.B. fehlende Dateien)
+            if not dataset.data_loaded:
+                self.logger.warning(f"  Dataset '{dataset.name}' übersprungen (Daten nicht geladen)")
                 continue
 
             # Farbe
@@ -1059,7 +1069,7 @@ class ScatterPlotApp(QMainWindow):
 
                     # v7.0: Datasets der Gruppe in Tree-Reihenfolge
                     for dataset in datasets_in_order:
-                        if dataset.show_in_legend:
+                        if dataset.show_in_legend and dataset.data_loaded:
                             # Handle explizit mit korrekter Farbe und Stil erstellen
                             plot_style = dataset.get_plot_style()
                             marker = dataset.marker_style if dataset.marker_style else 'o'
@@ -1091,7 +1101,7 @@ class ScatterPlotApp(QMainWindow):
 
             # v7.0: Unassigned Datasets in Tree-Order
             for dataset in ordered_unassigned:
-                if dataset.show_in_legend:
+                if dataset.show_in_legend and dataset.data_loaded:
                     # Handle explizit mit korrekter Farbe und Stil erstellen
                     plot_style = dataset.get_plot_style()
                     marker = dataset.marker_style if dataset.marker_style else 'o'
@@ -3021,6 +3031,10 @@ class ScatterPlotApp(QMainWindow):
                 self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
                 self.unassigned_item.setExpanded(True)
 
+                # Annotations & Referenzlinien Section neu erstellen (v5.3)
+                self.annotations_item = QTreeWidgetItem(self.tree, [tr("tree.annotations"), ""])
+                self.annotations_item.setExpanded(True)
+
                 # Daten laden
                 self.groups = [DataGroup.from_dict(g) for g in session.get('groups', [])]
                 self.unassigned_datasets = [DataSet.from_dict(ds) for ds in session.get('unassigned', [])]
@@ -3106,9 +3120,25 @@ class ScatterPlotApp(QMainWindow):
                 # Annotations-Tree aktualisieren (v5.3)
                 self.update_annotations_tree()
 
+                # Zähle fehlende Datensätze
+                missing_count = 0
+                for group in self.groups:
+                    missing_count += sum(1 for ds in group.datasets if not ds.data_loaded)
+                missing_count += sum(1 for ds in self.unassigned_datasets if not ds.data_loaded)
+
                 self.logger.info("Session erfolgreich geladen")
                 self.update_plot()
-                QMessageBox.information(self, tr("messages.success"), tr("messages.session_loaded"))
+
+                # Zeige Erfolgsmeldung mit optionaler Warnung für fehlende Dateien
+                if missing_count > 0:
+                    self.logger.warning(f"{missing_count} Datensätze konnten nicht geladen werden (Dateien nicht gefunden)")
+                    QMessageBox.warning(
+                        self,
+                        tr("messages.success"),
+                        tr("messages.session_loaded") + f"\n\n⚠️ Hinweis: {missing_count} Datensätze konnten nicht geladen werden, da die Dateien nicht gefunden wurden."
+                    )
+                else:
+                    QMessageBox.information(self, tr("messages.success"), tr("messages.session_loaded"))
             except Exception as e:
                 self.logger.error(f"Fehler beim Laden der Session: {e}")
                 QMessageBox.critical(self, tr("messages.error"), tr("messages.session_load_error", error=str(e)))
