@@ -3,7 +3,7 @@
   "_language_code": "de",
 
   "app": {
-    "title": "ScatterForge Plot v7.0.2"
+    "title": "ScatterForge Plot v7.0.3"
   },
 
   "menu": {
@@ -680,6 +680,65 @@
         "tubaf": "TUBAF",
         "minimalist": "Minimalistisch"
       }
+    }
+  },
+
+  "plot_design": {
+    "edit_title": "Plot-Design bearbeiten: {name}",
+    "name": "Design-Name:",
+    "name_placeholder": "Leer lassen, um '{name}' zu überschreiben",
+    "default_info": "ℹ️  Standard-Designs werden beim Speichern überschrieben und können durch Löschen aus der Liste wiederhergestellt werden.",
+    "name_required": "Bitte geben Sie einen Design-Namen ein.",
+    "saved": "Design '{name}' wurde gespeichert.",
+    "default_overwritten": "Standard-Design '{name}' wurde überschrieben.\n\nLöschen Sie das Design aus der Liste, um die Standardwerte wiederherzustellen.",
+
+    "tabs": {
+      "grid": "Grid",
+      "fonts": "Schriften",
+      "legend": "Legende",
+      "axes": "Achsen"
+    },
+
+    "grid": {
+      "major": "Haupt-Grid",
+      "minor": "Neben-Grid",
+      "enabled": "Aktiviert",
+      "axis": "Achse:",
+      "linestyle": "Linienstil:",
+      "linewidth": "Linienbreite:",
+      "alpha": "Transparenz (Alpha):",
+      "color": "Farbe:",
+      "choose_major_color": "Haupt-Grid-Farbe wählen",
+      "choose_minor_color": "Neben-Grid-Farbe wählen"
+    },
+
+    "font": {
+      "family": "Schriftart:",
+      "use_math_text": "Math Text verwenden (für Exponenten)",
+      "title": "Titel",
+      "labels": "Achsenbeschriftungen",
+      "ticks": "Achsen-Werte (Ticks)",
+      "legend": "Legende",
+      "size": "Größe:",
+      "bold": "Fett",
+      "italic": "Kursiv"
+    },
+
+    "legend": {
+      "position": "Position:",
+      "columns": "Anzahl Spalten:",
+      "alpha": "Transparenz (Alpha):",
+      "show_frame": "Rahmen anzeigen",
+      "shadow": "Schatten",
+      "rounded_corners": "Abgerundete Ecken"
+    },
+
+    "axes": {
+      "title": "Achseneinstellungen",
+      "x_label": "X-Achsen-Beschriftung:",
+      "y_label": "Y-Achsen-Beschriftung:",
+      "x_label_placeholder": "Leer lassen für automatische Beschriftung",
+      "y_label_placeholder": "Leer lassen für automatische Beschriftung"
     }
   },
 

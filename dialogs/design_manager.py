@@ -1004,6 +1004,10 @@ class PlotDesignEditDialog(QDialog):
         self.grid_settings = copy.deepcopy(design['grid_settings'])
         self.font_settings = copy.deepcopy(design['font_settings'])
         self.legend_settings = copy.deepcopy(design['legend_settings'])
+        # v7.0.3: Achseneinstellungen
+        self.custom_xlabel = design.get('custom_xlabel', None)
+        self.custom_ylabel = design.get('custom_ylabel', None)
+        self.axis_limits = design.get('axis_limits', None)
 
         self.setWindowTitle(tr("plot_design.edit_title", name=design_name))
         self.resize(600, 700)
@@ -1025,11 +1029,12 @@ class PlotDesignEditDialog(QDialog):
             info_label.setStyleSheet("font-style: italic; color: #888; padding: 5px;")
             layout.addWidget(info_label)
 
-        # Tabs für verschiedene Einstellungs-Kategorien
+        # Tabs für verschiedene Einstellungs-Kategorien (v7.0.3: + Achsen-Tab)
         tabs = QTabWidget()
         tabs.addTab(self.create_grid_tab(), tr("plot_design.tabs.grid"))
         tabs.addTab(self.create_font_tab(), tr("plot_design.tabs.fonts"))
         tabs.addTab(self.create_legend_tab(), tr("plot_design.tabs.legend"))
+        tabs.addTab(self.create_axes_tab(), tr("plot_design.tabs.axes"))
         layout.addWidget(tabs)
 
         # Buttons
@@ -1285,6 +1290,37 @@ class PlotDesignEditDialog(QDialog):
         layout.setRowStretch(6, 1)
         return tab
 
+    def create_axes_tab(self):
+        """Erstellt Achsen-Einstellungen Tab (v7.0.3)"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Achsenbeschriftungen
+        axes_group = QGroupBox(tr("plot_design.axes.title"))
+        axes_layout = QGridLayout()
+
+        # X-Achsen-Label
+        axes_layout.addWidget(QLabel(tr("plot_design.axes.x_label")), 0, 0)
+        self.axes_xlabel_edit = QLineEdit()
+        self.axes_xlabel_edit.setPlaceholderText(tr("plot_design.axes.x_label_placeholder"))
+        if self.custom_xlabel:
+            self.axes_xlabel_edit.setText(self.custom_xlabel)
+        axes_layout.addWidget(self.axes_xlabel_edit, 0, 1)
+
+        # Y-Achsen-Label
+        axes_layout.addWidget(QLabel(tr("plot_design.axes.y_label")), 1, 0)
+        self.axes_ylabel_edit = QLineEdit()
+        self.axes_ylabel_edit.setPlaceholderText(tr("plot_design.axes.y_label_placeholder"))
+        if self.custom_ylabel:
+            self.axes_ylabel_edit.setText(self.custom_ylabel)
+        axes_layout.addWidget(self.axes_ylabel_edit, 1, 1)
+
+        axes_group.setLayout(axes_layout)
+        layout.addWidget(axes_group)
+
+        layout.addStretch()
+        return tab
+
     def choose_major_color(self):
         """Wählt Farbe für Haupt-Grid"""
         color = QColorDialog.getColor(QColor(self.major_color), self, tr("plot_design.grid.choose_major_color"))
@@ -1357,7 +1393,11 @@ class PlotDesignEditDialog(QDialog):
                 'frameon': self.legend_frameon.isChecked(),
                 'shadow': self.legend_shadow.isChecked(),
                 'fancybox': self.legend_fancybox.isChecked()
-            }
+            },
+            # v7.0.3: Achseneinstellungen
+            'custom_xlabel': self.axes_xlabel_edit.text().strip() if self.axes_xlabel_edit.text().strip() else None,
+            'custom_ylabel': self.axes_ylabel_edit.text().strip() if self.axes_ylabel_edit.text().strip() else None,
+            'axis_limits': self.axis_limits
         }
 
         # In Config speichern

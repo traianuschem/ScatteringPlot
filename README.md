@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.0.2
+# ScatterForge Plot v7.0.3
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.0.2-blue)
+![Version](https://img.shields.io/badge/version-7.0.3-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -1011,6 +1011,6 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.0.2 - Januar 2026*
+*ScatterForge Plot v7.0.3 - Januar 2026*
 
 ---
