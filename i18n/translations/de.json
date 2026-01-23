@@ -255,6 +255,7 @@
 
     "font_labels": {
       "title": "Schriftart Achsenbeschriftungen",
+      "family": "Schriftart:",
       "size": "Schriftgröße:",
       "bold": "Fett",
       "italic": "Kursiv"
@@ -673,6 +674,7 @@
       "standard_overwritten": "Standard-Design '{name}' wurde überschrieben.\n\nLöschen Sie das Design in der Liste, um die Standardwerte wiederherzustellen.",
 
       "predefined": {
+        "standard": "Standard",
         "publication": "Publikation",
         "presentation": "Präsentation",
         "tubaf": "TUBAF",
