@@ -3,7 +3,7 @@
   "_language_code": "en",
 
   "app": {
-    "title": "ScatterForge Plot v7.0.2"
+    "title": "ScatterForge Plot v7.0.3"
   },
 
   "menu": {
@@ -680,6 +680,65 @@
         "tubaf": "TUBAF",
         "minimalist": "Minimalist"
       }
+    }
+  },
+
+  "plot_design": {
+    "edit_title": "Edit Plot Design: {name}",
+    "name": "Design Name:",
+    "name_placeholder": "Keep empty to overwrite '{name}'",
+    "default_info": "ℹ️  Standard designs will be overwritten when saved and can be restored by deleting them from the list.",
+    "name_required": "Please enter a design name.",
+    "saved": "Design '{name}' has been saved.",
+    "default_overwritten": "Standard design '{name}' has been overwritten.\n\nDelete the design from the list to restore default values.",
+
+    "tabs": {
+      "grid": "Grid",
+      "fonts": "Fonts",
+      "legend": "Legend",
+      "axes": "Axes"
+    },
+
+    "grid": {
+      "major": "Main Grid",
+      "minor": "Secondary Grid",
+      "enabled": "Enabled",
+      "axis": "Axis:",
+      "linestyle": "Line Style:",
+      "linewidth": "Line Width:",
+      "alpha": "Transparency (Alpha):",
+      "color": "Color:",
+      "choose_major_color": "Choose Main Grid Color",
+      "choose_minor_color": "Choose Secondary Grid Color"
+    },
+
+    "font": {
+      "family": "Font Family:",
+      "use_math_text": "Use Math Text (for exponents)",
+      "title": "Title",
+      "labels": "Axis Labels",
+      "ticks": "Axis Values (Ticks)",
+      "legend": "Legend",
+      "size": "Size:",
+      "bold": "Bold",
+      "italic": "Italic"
+    },
+
+    "legend": {
+      "position": "Position:",
+      "columns": "Number of Columns:",
+      "alpha": "Transparency (Alpha):",
+      "show_frame": "Show Frame",
+      "shadow": "Shadow",
+      "rounded_corners": "Rounded Corners"
+    },
+
+    "axes": {
+      "title": "Axis Settings",
+      "x_label": "X-Axis Label:",
+      "y_label": "Y-Axis Label:",
+      "x_label_placeholder": "Leave empty for automatic label",
+      "y_label_placeholder": "Leave empty for automatic label"
     }
   },
 
