@@ -1818,6 +1818,11 @@ class ScatterPlotApp(QMainWindow):
         if data and data[0] == 'dataset':
             set_limits_action = menu.addAction(tr("context_menu.set_plot_limits"))
 
+        # Dateipfad aktualisieren für Datensätze (v7.0.4)
+        update_filepath_action = None
+        if data and data[0] == 'dataset':
+            update_filepath_action = menu.addAction(tr("context_menu.update_filepath"))
+
         menu.addSeparator()
         delete_action = menu.addAction(tr("context_menu.delete"))
 
@@ -1871,6 +1876,9 @@ class ScatterPlotApp(QMainWindow):
         elif action == set_limits_action and set_limits_action:
             # Plotgrenzen für Dataset setzen (v5.7)
             self.set_dataset_plot_limits(item)
+        elif action == update_filepath_action and update_filepath_action:
+            # Dateipfad aktualisieren (v7.0.4)
+            self.update_dataset_filepath(item)
         elif action == delete_action:
             self.tree.setCurrentItem(item)
             self.delete_selected()
@@ -1917,6 +1925,74 @@ class ScatterPlotApp(QMainWindow):
 
             self.update_plot()
             print(f"✓ Plotgrenzen für '{dataset.name}' aktualisiert: X=[{x_min}, {x_max}], Y=[{y_min}, {y_max}]")
+
+    def update_dataset_filepath(self, item):
+        """Aktualisiert den Dateipfad eines Datensatzes (v7.0.4)"""
+        data = item.data(0, Qt.UserRole)
+        if not data or data[0] != 'dataset':
+            return
+
+        dataset = data[1]
+
+        # Zeige aktuellen Pfad
+        current_path = str(dataset.filepath)
+        file_exists = dataset.filepath.exists() if hasattr(dataset.filepath, 'exists') else False
+
+        # Info-Text erstellen
+        if file_exists:
+            info_text = tr("messages.current_filepath_exists", filepath=current_path)
+        else:
+            info_text = tr("messages.current_filepath_missing", filepath=current_path)
+
+        # File-Dialog öffnen
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("context_menu.update_filepath"),
+            str(dataset.filepath.parent) if hasattr(dataset.filepath, 'parent') else self.config.get_last_directory(),
+            "Data Files (*.dat *.txt *.csv *.xy);;All Files (*.*)"
+        )
+
+        if filename:
+            old_filepath = dataset.filepath
+            old_name = dataset.name
+
+            # Neuen Pfad setzen
+            dataset.filepath = Path(filename)
+
+            # Optional: Namen aktualisieren wenn er vom alten Dateinamen abgeleitet war
+            if dataset.name == old_filepath.stem:
+                dataset.name = dataset.filepath.stem
+                dataset.display_label = dataset.name
+
+            # Versuche Daten neu zu laden
+            try:
+                dataset.load_data(raise_on_error=True)
+                dataset.data_loaded = True
+
+                # Tree-Item aktualisieren
+                item.setText(0, dataset.display_label)
+
+                # Plot aktualisieren
+                self.update_plot()
+
+                self.logger.info(f"Dateipfad für '{dataset.name}' aktualisiert: {filename}")
+                QMessageBox.information(
+                    self,
+                    tr("messages.success"),
+                    tr("messages.filepath_updated", name=dataset.display_label, filepath=filename)
+                )
+            except Exception as e:
+                # Bei Fehler: Rollback
+                dataset.filepath = old_filepath
+                dataset.name = old_name
+                dataset.data_loaded = False
+
+                self.logger.error(f"Fehler beim Laden der neuen Datei: {e}")
+                QMessageBox.critical(
+                    self,
+                    tr("messages.error"),
+                    tr("messages.filepath_update_error", error=str(e))
+                )
 
     def edit_curve_settings(self, item):
         """Öffnet den umfassenden Kurven-Editor-Dialog (v6.0)"""

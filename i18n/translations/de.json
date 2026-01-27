@@ -77,6 +77,7 @@
     "apply_style": "Stil anwenden",
     "reset_color": "Farbe zurücksetzen",
     "set_plot_limits": "Plotgrenzen setzen...",
+    "update_filepath": "Dateipfad aktualisieren...",
     "delete": "Löschen"
   },
 
@@ -119,7 +120,11 @@
     "session_loaded": "Session geladen",
     "session_save_error": "Fehler beim Speichern:\n{error}",
     "session_load_error": "Fehler beim Laden:\n{error}",
-    "language_changed_restart": "Die Sprachänderung wird beim nächsten Programmstart wirksam."
+    "language_changed_restart": "Die Sprachänderung wird beim nächsten Programmstart wirksam.",
+    "current_filepath_exists": "Aktueller Pfad: {filepath}",
+    "current_filepath_missing": "Aktueller Pfad (nicht gefunden): {filepath}",
+    "filepath_updated": "Dateipfad für '{name}' erfolgreich aktualisiert:\n{filepath}",
+    "filepath_update_error": "Fehler beim Laden der neuen Datei:\n{error}"
   },
 
   "export": {

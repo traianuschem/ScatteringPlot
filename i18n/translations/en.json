@@ -77,6 +77,7 @@
     "apply_style": "Apply Style",
     "reset_color": "Reset Color",
     "set_plot_limits": "Set Plot Limits...",
+    "update_filepath": "Update File Path...",
     "delete": "Delete"
   },
 
@@ -119,7 +120,11 @@
     "session_loaded": "Session loaded",
     "session_save_error": "Error saving:\n{error}",
     "session_load_error": "Error loading:\n{error}",
-    "language_changed_restart": "The language change will take effect on next program start."
+    "language_changed_restart": "The language change will take effect on next program start.",
+    "current_filepath_exists": "Current path: {filepath}",
+    "current_filepath_missing": "Current path (not found): {filepath}",
+    "filepath_updated": "File path for '{name}' successfully updated:\n{filepath}",
+    "filepath_update_error": "Error loading new file:\n{error}"
   },
 
   "export": {
