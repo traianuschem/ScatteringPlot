@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QSplitter, QTreeWidget, QTreeWidgetItem, QPushButton, QLabel,
     QCheckBox, QComboBox, QLineEdit, QFileDialog, QMessageBox,
     QInputDialog, QDialog, QDialogButtonBox, QGroupBox, QGridLayout,
-    QMenu, QDoubleSpinBox
+    QMenu, QDoubleSpinBox, QFrame, QToolButton
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QColor, QPalette, QShortcut, QKeySequence
@@ -593,6 +593,28 @@ class ScatterPlotApp(QMainWindow):
 
         layout.addWidget(self.canvas)
         layout.addWidget(self.toolbar)
+
+        # Annotation-Toolbar (v7.1)
+        annotation_toolbar_widget = QFrame()
+        annotation_toolbar_widget.setFrameShape(QFrame.StyledPanel)
+        annotation_toolbar_layout = QHBoxLayout(annotation_toolbar_widget)
+        annotation_toolbar_layout.setContentsMargins(4, 2, 4, 2)
+        annotation_toolbar_layout.setSpacing(4)
+
+        add_annotation_btn = QToolButton()
+        add_annotation_btn.setText(tr("annotation_toolbar.add_annotation"))
+        add_annotation_btn.setToolTip(tr("annotation_toolbar.tooltip_add_annotation"))
+        add_annotation_btn.clicked.connect(self.add_annotation)
+        annotation_toolbar_layout.addWidget(add_annotation_btn)
+
+        add_refline_btn = QToolButton()
+        add_refline_btn.setText(tr("annotation_toolbar.add_reference_line"))
+        add_refline_btn.setToolTip(tr("annotation_toolbar.tooltip_add_reference_line"))
+        add_refline_btn.clicked.connect(self.add_reference_line)
+        annotation_toolbar_layout.addWidget(add_refline_btn)
+
+        annotation_toolbar_layout.addStretch()
+        layout.addWidget(annotation_toolbar_widget)
 
         return widget
 
@@ -1159,8 +1181,9 @@ class ScatterPlotApp(QMainWindow):
                     # Font-Familie für alle Einträge setzen
                     text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
 
-        # Referenzlinien (Version 5.2)
-        for ref_line in self.reference_lines:
+        # Referenzlinien (Version 5.2, Label-Drag v7.1)
+        self.reference_line_label_texts = []
+        for idx, ref_line in enumerate(self.reference_lines):
             if ref_line['type'] == 'vertical':
                 self.ax_main.axvline(
                     x=ref_line['value'],
@@ -1170,11 +1193,23 @@ class ScatterPlotApp(QMainWindow):
                     alpha=ref_line['alpha']
                 )
                 if ref_line['label']:
-                    # Label oben rechts an der Linie
-                    ylim = self.ax_main.get_ylim()
-                    self.ax_main.text(ref_line['value'], ylim[1] * 0.95, ref_line['label'],
-                                     rotation=90, va='top', ha='right',
-                                     fontsize=10, color=ref_line['color'])
+                    # Standardposition: oben rechts neben der Linie
+                    if ref_line.get('label_x') is not None:
+                        lx = ref_line['label_x']
+                        ly = ref_line['label_y']
+                    else:
+                        ylim = self.ax_main.get_ylim()
+                        lx = ref_line['value']
+                        ly = ylim[1]
+                    text_obj = self.ax_main.text(
+                        lx, ly, ref_line['label'],
+                        rotation=90, va='top', ha='left',
+                        fontsize=10, color=ref_line['color'],
+                        picker=True
+                    )
+                    text_obj.set_picker(5)
+                    text_obj._ref_line_label_idx = idx
+                    self.reference_line_label_texts.append(text_obj)
             else:  # horizontal
                 self.ax_main.axhline(
                     y=ref_line['value'],
@@ -1184,11 +1219,23 @@ class ScatterPlotApp(QMainWindow):
                     alpha=ref_line['alpha']
                 )
                 if ref_line['label']:
-                    # Label rechts an der Linie
-                    xlim = self.ax_main.get_xlim()
-                    self.ax_main.text(xlim[1] * 0.95, ref_line['value'], ref_line['label'],
-                                     ha='right', va='bottom',
-                                     fontsize=10, color=ref_line['color'])
+                    # Standardposition: rechts oben an der Linie
+                    if ref_line.get('label_x') is not None:
+                        lx = ref_line['label_x']
+                        ly = ref_line['label_y']
+                    else:
+                        xlim = self.ax_main.get_xlim()
+                        lx = xlim[1]
+                        ly = ref_line['value']
+                    text_obj = self.ax_main.text(
+                        lx, ly, ref_line['label'],
+                        ha='right', va='bottom',
+                        fontsize=10, color=ref_line['color'],
+                        picker=True
+                    )
+                    text_obj.set_picker(5)
+                    text_obj._ref_line_label_idx = idx
+                    self.reference_line_label_texts.append(text_obj)
 
         # Annotations (Version 5.2, erweitert 5.3: draggable, v7.0: MathText)
         self.annotation_texts = []  # Text-Objekte speichern für draggable
@@ -1413,44 +1460,66 @@ class ScatterPlotApp(QMainWindow):
             return q
 
     def on_annotation_press(self, event):
-        """Maus-Press für Annotation-Drag (Version 5.3)"""
+        """Maus-Press für Annotation-Drag und Referenzlinien-Label-Drag (Version 5.3, v7.1)"""
         if event.inaxes != self.ax_main:
             return
 
-        # Prüfen, ob ein Text-Objekt angeklickt wurde
+        # Prüfen, ob eine reguläre Annotation angeklickt wurde
         for text_obj in getattr(self, 'annotation_texts', []):
             contains, _ = text_obj.contains(event)
             if contains:
                 self._dragged_annotation = text_obj
                 self._drag_start_pos = (event.xdata, event.ydata)
-                break
+                return
+
+        # Prüfen, ob ein Referenzlinien-Label angeklickt wurde (v7.1)
+        for text_obj in getattr(self, 'reference_line_label_texts', []):
+            contains, _ = text_obj.contains(event)
+            if contains:
+                self._dragged_ref_label = text_obj
+                self._drag_start_pos = (event.xdata, event.ydata)
+                return
 
     def on_annotation_motion(self, event):
-        """Maus-Motion für Annotation-Drag (Version 5.3)"""
-        if not hasattr(self, '_dragged_annotation') or self._dragged_annotation is None:
-            return
+        """Maus-Motion für Annotation-Drag und Referenzlinien-Label-Drag (Version 5.3, v7.1)"""
         if event.inaxes != self.ax_main:
             return
 
-        # Position aktualisieren
-        self._dragged_annotation.set_position((event.xdata, event.ydata))
-        self.canvas.draw_idle()
-
-    def on_annotation_release(self, event):
-        """Maus-Release für Annotation-Drag (Version 5.3)"""
-        if not hasattr(self, '_dragged_annotation') or self._dragged_annotation is None:
+        # Reguläre Annotation verschieben
+        if getattr(self, '_dragged_annotation', None) is not None:
+            self._dragged_annotation.set_position((event.xdata, event.ydata))
+            self.canvas.draw_idle()
             return
 
-        # Finale Position in Datenstruktur speichern
-        idx = self._dragged_annotation._annotation_idx
-        if 0 <= idx < len(self.annotations):
-            pos = self._dragged_annotation.get_position()
-            self.annotations[idx]['x'] = pos[0]
-            self.annotations[idx]['y'] = pos[1]
-            self.update_annotations_tree()
+        # Referenzlinien-Label verschieben (v7.1)
+        if getattr(self, '_dragged_ref_label', None) is not None:
+            self._dragged_ref_label.set_position((event.xdata, event.ydata))
+            self.canvas.draw_idle()
 
-        self._dragged_annotation = None
-        self._drag_start_pos = None
+    def on_annotation_release(self, event):
+        """Maus-Release für Annotation-Drag und Referenzlinien-Label-Drag (Version 5.3, v7.1)"""
+        # Reguläre Annotation: finale Position speichern
+        if getattr(self, '_dragged_annotation', None) is not None:
+            idx = self._dragged_annotation._annotation_idx
+            if 0 <= idx < len(self.annotations):
+                pos = self._dragged_annotation.get_position()
+                self.annotations[idx]['x'] = pos[0]
+                self.annotations[idx]['y'] = pos[1]
+                self.update_annotations_tree()
+            self._dragged_annotation = None
+            self._drag_start_pos = None
+            return
+
+        # Referenzlinien-Label: finale Position speichern (v7.1)
+        if getattr(self, '_dragged_ref_label', None) is not None:
+            idx = self._dragged_ref_label._ref_line_label_idx
+            if 0 <= idx < len(self.reference_lines):
+                pos = self._dragged_ref_label.get_position()
+                self.reference_lines[idx]['label_x'] = pos[0]
+                self.reference_lines[idx]['label_y'] = pos[1]
+                self.update_annotations_tree()
+            self._dragged_ref_label = None
+            self._drag_start_pos = None
 
     def create_group(self):
         """Erstellt eine neue Gruppe"""
@@ -2549,6 +2618,10 @@ class ScatterPlotApp(QMainWindow):
                     ref_line['label'] = f"x = {ref_line['value']:.2f}"
                 else:
                     ref_line['label'] = f"y = {ref_line['value']:.2f}"
+
+            # Label-Position: None = Standardposition berechnen (v7.1)
+            ref_line['label_x'] = None
+            ref_line['label_y'] = None
 
             self.reference_lines.append(ref_line)
             self.update_annotations_tree()

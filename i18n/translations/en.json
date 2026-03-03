@@ -3,7 +3,7 @@
   "_language_code": "en",
 
   "app": {
-    "title": "ScatterForge Plot v7.0.4"
+    "title": "ScatterForge Plot v7.1.0 dev"
   },
 
   "menu": {
@@ -48,6 +48,13 @@
     "auto_group": "🔢 Auto-Group",
     "load": "📁 Load",
     "delete": "🗑 Delete"
+  },
+
+  "annotation_toolbar": {
+    "add_annotation": "📝 Annotation",
+    "add_reference_line": "📏 Reference Line",
+    "tooltip_add_annotation": "Add text annotation",
+    "tooltip_add_reference_line": "Add reference line"
   },
 
   "tree": {
