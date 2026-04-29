@@ -52,7 +52,49 @@
 
   "tree": {
     "unassigned": "▼ Nicht zugeordnet",
-    "annotations": "▼ Annotations & Referenzlinien"
+    "annotations": "▼ Annotations & Referenzlinien",
+    "section_2d": "▼ 2D-Datensätze"
+  },
+
+  "2d": {
+    "load_button": "🔬 2D laden (HDF5)",
+    "dialog_title": "2D-Analyse",
+    "view_label": "Ansicht",
+    "view_qmap": "q-Karte (kartesisch)",
+    "view_polar": "Polarkarte",
+    "view_azimuthal": "Azimutales Profil",
+    "view_sector": "Sektor-Integral",
+    "colormap_label": "Farbskala",
+    "bins_label": "Bins",
+    "log_scale": "Log-Skala",
+    "log_q_axis": "Logarithmische q-Achse",
+    "update_plot": "🔄 Aktualisieren",
+    "q_lo": "q min (nm⁻¹):",
+    "q_hi": "q max (nm⁻¹):",
+    "phi_lo": "φ min (°):",
+    "phi_hi": "φ max (°):",
+    "phi_bins": "φ-Bins:",
+    "export_png": "PNG exportieren",
+    "export_ascii": "ASCII exportieren (.dat)",
+    "export_ascii_1d_only": "ASCII-Export ist nur für Azimutales Profil und Sektor-Integral verfügbar.",
+    "add_to_1d": "Zu 1D-Plot hinzufügen",
+    "added_to_1d": "Projektion '{name}' zu 1D-Datensätzen hinzugefügt.",
+    "open_dialog": "2D-Analyse öffnen...",
+    "error_loading": "Fehler beim Laden der HDF5-Datei:\n{error}",
+    "polar_qring_group": "q-Ring-Selektor",
+    "polar_qring_hint": "Linien im Plot verschieben:",
+    "go_to_azimuthal": "→ Azimutales Profil",
+    "polar_export_overlay": "Overlay beim Export einblenden",
+    "cmap_range_group": "Farbskala",
+    "cmap_auto_reset": "⟳ Auto (1 % – 99 %)",
+    "sin_corr_group": "sin(φ)-Korrektur",
+    "sin_corr_divide": "I / sin(φ)",
+    "sin_corr_multiply": "I · sin(φ)",
+    "sin_corr_pole_handling": "Polbehandlung",
+    "sin_corr_pole_mask": "Maskierung (NaN)",
+    "sin_corr_pole_clamp": "Epsilon-Clamp",
+    "sin_corr_pole_voigt": "Voigt-Extrapolation",
+    "sin_corr_pole_threshold": "Pol-Schwelle:"
   },
 
   "options": {

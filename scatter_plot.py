@@ -51,7 +51,7 @@ from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
 
 # Eigene Module
-from core.models import DataSet, DataGroup
+from core.models import DataSet, DataGroup, Dataset2D
 from core.constants import PLOT_TYPES
 from core.version import __version__, get_version_string
 from dialogs.settings_dialog import PlotSettingsDialog
@@ -67,6 +67,7 @@ from dialogs.annotations_dialog import AnnotationsDialog
 from dialogs.reference_lines_dialog import ReferenceLinesDialog
 from dialogs.plot_limits_dialog import PlotLimitsDialog
 from dialogs.axes_dialog import AxesSettingsDialog
+from dialogs.plot2d_dialog import Plot2DDialog
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
@@ -157,6 +158,7 @@ class ScatterPlotApp(QMainWindow):
         # Datenverwaltung
         self.groups = []
         self.unassigned_datasets = []
+        self.datasets_2d = []  # 2D SAXS datasets (NeXus/HDF5)
 
         # Plot-Einstellungen
         self.plot_type = 'Log-Log'
@@ -507,6 +509,13 @@ class ScatterPlotApp(QMainWindow):
 
         layout.addLayout(button_layout)
 
+        # 2D Load button on its own row
+        load2d_layout = QHBoxLayout()
+        load2d_btn = QPushButton(tr("2d.load_button"))
+        load2d_btn.clicked.connect(self.load_2d_data)
+        load2d_layout.addWidget(load2d_btn)
+        layout.addLayout(load2d_layout)
+
         # Tree Widget mit Drag & Drop Support
         self.tree = DataTreeWidget()
         self.tree.main_app = self  # Referenz für Drag & Drop
@@ -522,6 +531,10 @@ class ScatterPlotApp(QMainWindow):
         # Unassigned Section
         self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
         self.unassigned_item.setExpanded(True)
+
+        # 2D Datasets Section
+        self.datasets_2d_item = QTreeWidgetItem(self.tree, [tr("tree.section_2d"), ""])
+        self.datasets_2d_item.setExpanded(True)
 
         # Annotations & Referenzlinien Section (Version 5.3)
         self.annotations_item = QTreeWidgetItem(self.tree, [tr("tree.annotations"), ""])
@@ -1590,6 +1603,54 @@ class ScatterPlotApp(QMainWindow):
         else:
             self.logger.debug("Datei-Dialog abgebrochen")
 
+    def load_2d_data(self):
+        """Lädt ein 2D SAXS Dataset (NeXus/HDF5)"""
+        self.logger.debug("Öffne 2D-Datei-Dialog...")
+        files, _ = QFileDialog.getOpenFileNames(
+            self, tr("2d.load_button"),
+            self.config.get_last_directory(),
+            "HDF5 / NeXus (*.h5 *.h5z);;Alle Dateien (*)"
+        )
+        if not files:
+            self.logger.debug("2D-Datei-Dialog abgebrochen")
+            return
+
+        self.config.set_last_directory(str(Path(files[0]).parent))
+        for filepath in files:
+            try:
+                ds2d = Dataset2D(filepath)
+                ds2d.load_data(raise_on_error=True)
+                self.datasets_2d.append(ds2d)
+                self.logger.info(f"2D Dataset geladen: {ds2d.name} ({ds2d.metadata.get('n_pixels_valid', '?')} Pixel)")
+
+                if not hasattr(self, 'datasets_2d_item') or self.datasets_2d_item is None:
+                    self.rebuild_tree()
+                    return
+
+                item = QTreeWidgetItem(self.datasets_2d_item, [ds2d.display_label, "2D"])
+                item.setData(0, Qt.UserRole, ('dataset_2d', ds2d))
+                self.datasets_2d_item.setExpanded(True)
+            except Exception as e:
+                self.logger.error(f"Fehler beim Laden von {Path(filepath).name}: {e}")
+                QMessageBox.warning(self, tr("messages.error"),
+                                    tr("2d.error_loading", error=str(e)))
+
+    def open_2d_dialog(self, dataset_2d):
+        """Öffnet den 2D-Analyse-Dialog für ein Dataset2D (nicht-modal)"""
+        dlg = Plot2DDialog(dataset_2d, parent=self)
+        dlg.projection_ready.connect(self.add_projection_to_tree)
+        dlg.show()
+
+    def add_projection_to_tree(self, dataset):
+        """Übernimmt eine 1D-Projektion aus dem 2D-Dialog in den 1D-Tree"""
+        self.unassigned_datasets.append(dataset)
+        item = QTreeWidgetItem(self.unassigned_item, [dataset.display_label, ""])
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+        item.setCheckState(0, Qt.Checked)
+        item.setData(0, Qt.UserRole, ('dataset', dataset))
+        self.update_plot()
+        self.logger.info(f"1D-Projektion hinzugefügt: {dataset.name}")
+
     def delete_selected(self):
         """Löscht ausgewählte Items (erweitert v5.3 für Annotations/Referenzlinien)"""
         items = self.tree.selectedItems()
@@ -1612,6 +1673,10 @@ class ScatterPlotApp(QMainWindow):
                         parent_data[1].remove_dataset(obj)
                     elif obj in self.unassigned_datasets:
                         self.unassigned_datasets.remove(obj)
+                elif item_type == 'dataset_2d':
+                    obj = data[1]
+                    if obj in self.datasets_2d:
+                        self.datasets_2d.remove(obj)
                 elif item_type == 'annotation':
                     idx = data[1]
                     if 0 <= idx < len(self.annotations):
@@ -1690,6 +1755,8 @@ class ScatterPlotApp(QMainWindow):
             elif item_type == 'dataset':
                 # Optional: Dataset-Eigenschaften bearbeiten
                 pass
+            elif item_type == 'dataset_2d':
+                self.open_2d_dialog(obj)
             elif item_type == 'annotation' or item_type == 'reference_line':
                 # Annotations/Referenzlinien werden per Kontextmenü bearbeitet
                 # Doppelklick hier bewusst nichts tun
@@ -1716,6 +1783,12 @@ class ScatterPlotApp(QMainWindow):
         menu = QMenu()
 
         data = item.data(0, Qt.UserRole)
+
+        # 2D Dataset: open analysis dialog
+        open_2d_action = None
+        if data and data[0] == 'dataset_2d':
+            open_2d_action = menu.addAction(tr("2d.open_dialog"))
+            menu.addSeparator()
 
         # Bearbeiten für Annotations/Referenzlinien (v5.3)
         edit_action = None
@@ -1828,7 +1901,9 @@ class ScatterPlotApp(QMainWindow):
 
         action = menu.exec(self.tree.viewport().mapToGlobal(position))
 
-        if action == edit_action and edit_action:
+        if action == open_2d_action and open_2d_action:
+            self.open_2d_dialog(data[1])
+        elif action == edit_action and edit_action:
             self.edit_annotation_or_refline(item)
         elif action == edit_curve_action and edit_curve_action:
             # Kurve bearbeiten (v6.0)
@@ -1888,11 +1963,12 @@ class ScatterPlotApp(QMainWindow):
         data = item.data(0, Qt.UserRole)
         if data:
             item_type, obj = data
-            old_name = obj.name if item_type in ['group', 'dataset'] else item.text(0)
+            old_name = obj.name if item_type in ['group', 'dataset', 'dataset_2d'] else item.text(0)
             new_name, ok = QInputDialog.getText(self, "Umbenennen", "Neuer Name:", text=old_name)
             if ok and new_name:
-                if item_type in ['group', 'dataset']:
+                if item_type in ['group', 'dataset', 'dataset_2d']:
                     obj.name = new_name
+                    obj.display_label = new_name
                 item.setText(0, new_name)
                 self.update_plot()
 
@@ -2288,6 +2364,13 @@ class ScatterPlotApp(QMainWindow):
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                 item.setData(0, Qt.UserRole, ('dataset', dataset))
+
+        # 2D Datasets section
+        self.datasets_2d_item = QTreeWidgetItem(self.tree, [tr("tree.section_2d"), ""])
+        self.datasets_2d_item.setExpanded(True)
+        for ds2d in self.datasets_2d:
+            item = QTreeWidgetItem(self.datasets_2d_item, [ds2d.display_label, "2D"])
+            item.setData(0, Qt.UserRole, ('dataset_2d', ds2d))
 
         # Annotations & Referenzlinien (v5.3)
         self.annotations_item = QTreeWidgetItem(self.tree, [tr("tree.annotations"), ""])
@@ -3062,6 +3145,7 @@ class ScatterPlotApp(QMainWindow):
                 session = {
                     'groups': [g.to_dict() for g in self.groups],
                     'unassigned': [ds.to_dict() for ds in self.unassigned_datasets],
+                    'datasets_2d': [ds.to_dict() for ds in self.datasets_2d],
                     'plot_type': self.plot_type,
                     'stack_mode': self.stack_mode,
                     'color_scheme': self.color_scheme_combo.currentText(),
@@ -3114,6 +3198,7 @@ class ScatterPlotApp(QMainWindow):
                 # Daten laden
                 self.groups = [DataGroup.from_dict(g) for g in session.get('groups', [])]
                 self.unassigned_datasets = [DataSet.from_dict(ds) for ds in session.get('unassigned', [])]
+                self.datasets_2d = [Dataset2D.from_dict(d) for d in session.get('datasets_2d', [])]
                 self.logger.debug(f"  Gruppen: {len(self.groups)}, Unassigned: {len(self.unassigned_datasets)}")
 
                 # Display-Labels für Gruppen setzen, falls nicht vorhanden (v7.0)
@@ -3143,6 +3228,13 @@ class ScatterPlotApp(QMainWindow):
                     item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                     item.setCheckState(0, Qt.Checked if dataset.show_in_legend else Qt.Unchecked)
                     item.setData(0, Qt.UserRole, ('dataset', dataset))
+
+                # 2D Datasets in Tree einfügen
+                self.datasets_2d_item = QTreeWidgetItem(self.tree, [tr("tree.section_2d"), ""])
+                self.datasets_2d_item.setExpanded(True)
+                for ds2d in self.datasets_2d:
+                    item = QTreeWidgetItem(self.datasets_2d_item, [ds2d.display_label, "2D"])
+                    item.setData(0, Qt.UserRole, ('dataset_2d', ds2d))
 
                 # Einstellungen wiederherstellen
                 self.plot_type = session.get('plot_type', 'Log-Log')

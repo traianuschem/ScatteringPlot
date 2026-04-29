@@ -4,10 +4,12 @@ Data models for TUBAF Scattering Plot Tool
 This module contains the core data models:
 - DataSet: Represents a single dataset with style information
 - DataGroup: Represents a group of datasets with stack factor
+- Dataset2D: Represents a 2D SAXS dataset (NeXus/HDF5)
 """
 
 from pathlib import Path
 import logging
+import numpy as np
 from utils.data_loader import load_scattering_data
 from utils.user_config import get_user_config
 
@@ -222,3 +224,166 @@ class DataGroup:
         group.display_label = data.get('display_label', group.name)
         group.datasets = [DataSet.from_dict(ds_data) for ds_data in data.get('datasets', [])]
         return group
+
+
+class Dataset2D:
+    """2D SAXS dataset loaded from a NeXus/HDF5 file (.h5 or .h5z)."""
+
+    def __init__(self, filepath, name=None):
+        self.filepath = Path(filepath)
+        self.name = name or self.filepath.stem
+        self.display_label = self.name
+        self.qx: np.ndarray | None = None  # nm⁻¹, valid pixels only
+        self.qy: np.ndarray | None = None  # nm⁻¹
+        self.I: np.ndarray | None = None
+        self.metadata: dict = {}
+        self.data_loaded = False
+
+    # ── Loading ──────────────────────────────────────────────────────────────
+
+    def load_data(self, raise_on_error=True):
+        from utils.nexus_loader import read_nexus_2d
+        logger = logging.getLogger(__name__)
+        try:
+            result = read_nexus_2d(self.filepath)
+            self.qx = result['qx']
+            self.qy = result['qy']
+            self.I = result['I']
+            self.metadata = result['metadata']
+            self.data_loaded = True
+            logger.debug(f"Dataset2D loaded: {self.name} ({len(self.I)} valid pixels)")
+        except Exception as e:
+            msg = f"Fehler beim Laden von {self.filepath}: {e}"
+            if raise_on_error:
+                raise ValueError(msg)
+            else:
+                logger.warning(msg)
+                self.data_loaded = False
+
+    # ── Analysis methods ─────────────────────────────────────────────────────
+
+    def generate_cartesian_map(self, bins: int = 600):
+        """
+        Bin (qx, qy, I) onto a regular cartesian grid.
+        Returns (qx_edges, qy_edges, H) where H[i,j] is the mean intensity,
+        NaN for empty bins.
+        """
+        H, qx_e, qy_e = np.histogram2d(
+            self.qx, self.qy, bins=bins, weights=self.I
+        )
+        counts, _, _ = np.histogram2d(self.qx, self.qy, bins=[qx_e, qy_e])
+        with np.errstate(invalid='ignore'):
+            H = np.where(counts > 0, H / counts, np.nan)
+        return qx_e, qy_e, H.T  # transpose so (row=qy, col=qx) for imshow
+
+    def generate_polar_map(self, q_bins: int = 300, phi_bins: int = 360, log_q: bool = True):
+        """
+        Bin I(|q|, φ) onto a polar grid.
+        Returns (q_edges, phi_edges, H) with H[i,j] mean intensity,
+        phi in degrees [-180, 180], |q| in nm⁻¹ (log-spaced if log_q).
+        """
+        q = np.sqrt(self.qx**2 + self.qy**2)
+        phi = np.degrees(np.arctan2(self.qy, self.qx))  # [-180, 180]
+
+        q_pos = q > 0
+        if not np.any(q_pos):
+            raise ValueError("No valid q > 0 pixels for polar map")
+
+        q_min = np.nanmin(q[q_pos])
+        q_max = np.nanmax(q[q_pos])
+
+        if log_q and q_min > 0:
+            q_edges = np.logspace(np.log10(q_min), np.log10(q_max), q_bins + 1)
+        else:
+            q_edges = np.linspace(q_min, q_max, q_bins + 1)
+
+        phi_edges = np.linspace(-180, 180, phi_bins + 1)
+
+        H, _, _ = np.histogram2d(q, phi, bins=[q_edges, phi_edges], weights=self.I)
+        counts, _, _ = np.histogram2d(q, phi, bins=[q_edges, phi_edges])
+        with np.errstate(invalid='ignore'):
+            H = np.where(counts > 0, H / counts, np.nan)
+
+        return q_edges, phi_edges, H  # H[i_q, i_phi]
+
+    def azimuthal_profile(self, q_lo: float, q_hi: float, phi_bins: int = 360):
+        """
+        Integrate I over the q-ring [q_lo, q_hi] as a function of φ.
+        Returns (phi_centers [deg], I_mean).
+        """
+        q = np.sqrt(self.qx**2 + self.qy**2)
+        mask = (q >= q_lo) & (q <= q_hi)
+        if not np.any(mask):
+            raise ValueError(f"No pixels in q-ring [{q_lo:.3f}, {q_hi:.3f}] nm⁻¹")
+
+        phi = np.degrees(np.arctan2(self.qy[mask], self.qx[mask]))
+        I_ring = self.I[mask]
+
+        phi_edges = np.linspace(-180, 180, phi_bins + 1)
+        H, _ = np.histogram(phi, bins=phi_edges, weights=I_ring)
+        counts, _ = np.histogram(phi, bins=phi_edges)
+        with np.errstate(invalid='ignore'):
+            I_mean = np.where(counts > 0, H / counts, np.nan)
+
+        phi_centers = 0.5 * (phi_edges[:-1] + phi_edges[1:])
+        return phi_centers, I_mean
+
+    def sector_integral(self, phi_lo: float, phi_hi: float, q_bins: int = 300, log_q: bool = True):
+        """
+        Integrate I over the azimuthal sector [phi_lo, phi_hi] as a function of |q|.
+        phi in degrees.  Returns (q_centers [nm⁻¹], I_mean, I_std).
+        """
+        q = np.sqrt(self.qx**2 + self.qy**2)
+        phi = np.degrees(np.arctan2(self.qy, self.qx))
+
+        # Handle sector that wraps around ±180°
+        if phi_lo <= phi_hi:
+            mask = (phi >= phi_lo) & (phi <= phi_hi) & (q > 0)
+        else:
+            mask = ((phi >= phi_lo) | (phi <= phi_hi)) & (q > 0)
+
+        if not np.any(mask):
+            raise ValueError(f"No pixels in sector [{phi_lo:.1f}°, {phi_hi:.1f}°]")
+
+        q_sec = q[mask]
+        I_sec = self.I[mask]
+
+        q_min = np.nanmin(q_sec)
+        q_max = np.nanmax(q_sec)
+
+        if log_q and q_min > 0:
+            q_edges = np.logspace(np.log10(q_min), np.log10(q_max), q_bins + 1)
+        else:
+            q_edges = np.linspace(q_min, q_max, q_bins + 1)
+
+        H, _ = np.histogram(q_sec, bins=q_edges, weights=I_sec)
+        counts, _ = np.histogram(q_sec, bins=q_edges)
+        H2, _ = np.histogram(q_sec, bins=q_edges, weights=I_sec**2)
+
+        with np.errstate(invalid='ignore'):
+            I_mean = np.where(counts > 0, H / counts, np.nan)
+            variance = np.where(counts > 1, H2 / counts - I_mean**2, np.nan)
+            I_std = np.sqrt(np.maximum(variance, 0))
+
+        q_centers = 0.5 * (q_edges[:-1] + q_edges[1:])
+        valid = counts > 0
+        return q_centers[valid], I_mean[valid], I_std[valid]
+
+    # ── Serialisation ─────────────────────────────────────────────────────────
+
+    def to_dict(self) -> dict:
+        return {
+            'type': 'Dataset2D',
+            'filepath': str(self.filepath),
+            'name': self.name,
+            'display_label': self.display_label,
+            'metadata': {k: v for k, v in self.metadata.items() if isinstance(v, (str, int, float, type(None)))},
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Dataset2D':
+        ds = cls(data['filepath'], data.get('name'))
+        ds.display_label = data.get('display_label', ds.name)
+        ds.metadata = data.get('metadata', {})
+        ds.load_data(raise_on_error=False)
+        return ds

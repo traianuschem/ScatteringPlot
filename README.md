@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.0.4
+# ScatterForge Plot v7.1.1
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.0.4-blue)
+![Version](https://img.shields.io/badge/version-7.1.1-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -35,6 +35,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 ## 📑 Inhaltsverzeichnis
 
 - [Feature-Übersicht](#-feature-übersicht)
+- [Was ist neu in v7.1](#-was-ist-neu-in-v71)
 - [Was ist neu in v7.0](#-was-ist-neu-in-v70)
 - [Installation](#-installation)
 - [Schnellstart (5 Minuten)](#-schnellstart-5-minuten)
@@ -60,6 +61,9 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
 | **Plot-Typen** | 7 spezialisierte Darstellungen (Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF) | ✅ |
+| **2D SAXS Viewer** | NeXus/HDF5-Laden, q-Map, Polarkarte, Azimutalprofil, Sektor-Integral | ✅ **v7.1** |
+| **q-Ring-Selektor** | Ziehbare Grenzen direkt in der Polarkarte | ✅ **v7.1** |
+| **sin(φ)-Korrektur** | Lorentz- und Jacobi-Korrektur mit Voigt-Polextrapolation | ✅ **v7.1** |
 | **Gruppen-Management** | Datasets organisieren mit Stack-Faktoren, Drag & Drop, Auto-Gruppierung | ✅ **USP** |
 | **Metadaten-Export** | XMP-Sidecar + eingebettete Metadaten, Benutzer-Profil-System | ✅ **USP** |
 | **LaTeX/MathText** | Wissenschaftliche Notation mit Live-Vorschau | ✅ v7.0 |
@@ -72,6 +76,41 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Stil-Vorlagen** | Auto-Erkennung (Messung, Fit, Simulation, Theorie) | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.1?
+
+**Minor Release v7.1.1** — Vollständiger 2D-SAXS-Analyzer + Qualitätsupdates
+
+### Hauptfeatures v7.1
+
+- 🔬 **2D SAXS Viewer**: NeXus/HDF5-Dateien laden und in 4 Ansichten analysieren (q-Map, Polarkarte, Azimutalprofil, Sektor-Integral)
+- 🎯 **q-Ring-Selektor**: Zwei ziehbare Linien in der Polarkarte setzen die Integrationsgrenzen für das Azimutalprofil direkt im Plot
+- 📐 **sin(φ)-Korrektur**: Lorentz-Korrektur (I/sin φ) und Jacobi-Gewichtung (I·sin φ) mit drei Polbehandlungen: Maskierung, Epsilon-Clamp und Voigt-Extrapolation
+- 🎨 **Farbskala-Schieberegler**: Interaktive vmin/vmax-Kontrolle per Perzentil-Slider ohne Neuberechnung des Histogramms
+- 📤 **Integrierter Export**: 2D-Export nutzt den bestehenden ExportSettingsDialog mit Metadaten-Unterstützung
+- 🔁 **1D-Transfer**: Azimutalprofil und Sektor-Integral direkt in den 1D-Datensatz-Baum übernehmen
+
+### Aktuelles Update v7.1.1 (29. April 2026)
+
+**Qualitätsupdates für den 2D-Analyzer:**
+- ✅ Farbskala-Schieberegler für q-Map und Polar Map (live, ohne Neuberechnung)
+- ✅ PNG-Export über ExportSettingsDialog (Metadaten, DPI, Format)
+- ✅ Optional: q-Ring-Overlay beim Export ein-/ausblenden
+- ✅ sin(φ)-Korrektur mit Voigt-Polextrapolation (scipy)
+- ✅ Colorbar-Textfarbe im Dark-Theme korrigiert (weiß statt schwarz)
+
+### Erstes 7.1-Release v7.1.0 (29. April 2026)
+
+**2D SAXS Viewer:**
+- ✅ NeXus/HDF5-Unterstützung (.h5 und .h5z)
+- ✅ Kartesische q-Map und logarithmische Polarkarte
+- ✅ Interaktiver q-Ring-Selektor mit Drag & Drop
+- ✅ Azimutalprofil I(φ) und Sektor-Integral I(|q|)
+- ✅ Session-Persistenz für 2D-Datensätze
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.1.md](CHANGELOG_v7.1.md)
 
 ---
 
@@ -88,25 +127,6 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 - 🔧 **UI-Verbesserungen**: Tree-Reihenfolge bestimmt Legende
 - 🖼️ **TIFF-Export**: Zusätzliches hochwertiges Format
 - 🐛 **Stabilitätsverbesserungen**: Kritische Bugfixes in v7.0.2-7.0.4
-
-### Aktuelles Update v7.0.4 (23. Januar 2026)
-
-**Kritische Session-Loading-Fixes:**
-- ✅ Behebt QTreeWidgetItem-Deletion-Fehler beim Laden von Sessions
-- ✅ Graceful Fallback für fehlende Datendateien auf verschiedenen PCs
-- ✅ Sessions laden jetzt mit leeren Gruppen statt komplett zu scheitern
-- ✅ Benutzer erhalten informative Warnung über fehlende Dateien
-
-### Update v7.0.3 (23. Januar 2026)
-
-**Neue Features:**
-- ✅ Font-Auswahl für Achsenbeschriftungen und Tick-Labels
-- ✅ Achsen-Tab im Plot-Design-Editor
-- ✅ Vollständige Plot-Design-Übersetzungen
-
-**Bug Fixes:**
-- ✅ AttributeError in axes_dialog.py behoben
-- ✅ Design-Namen-Übersetzungsprobleme gelöst
 
 **Vollständige Änderungen:** Siehe [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 
@@ -139,8 +159,10 @@ python scatter_plot.py
 
 ```txt
 PySide6>=6.5.0
-matplotlib>=3.7.0
-numpy>=1.24.0
+matplotlib>=3.5.0
+numpy>=1.20.0
+scipy>=1.7.0
+h5py>=3.0
 ```
 
 ---
@@ -995,7 +1017,7 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2026},
-  version = {7.0.2},
+  version = {7.1.1},
   url = {https://github.com/traianuschem/ScatteringPlot},
   note = {Software developed with Claude AI assistance}
 }
@@ -1022,7 +1044,8 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 ## 📚 Weitere Ressourcen
 
-- **CHANGELOG:** Detaillierte Versionshistorie → [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
+- **CHANGELOG v7.1:** Aktuelle Versionshistorie → [CHANGELOG_v7.1.md](CHANGELOG_v7.1.md)
+- **CHANGELOG v7.0:** Frühere Versionen → [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 - **GitHub:** Repository → [traianuschem/ScatteringPlot](https://github.com/traianuschem/ScatteringPlot)
 - **Releases:** Stabile Versionen → [GitHub Releases](https://github.com/traianuschem/ScatteringPlot/releases)
 
@@ -1030,6 +1053,6 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.0.4 - Januar 2026*
+*ScatterForge Plot v7.1.1 - April 2026*
 
 ---

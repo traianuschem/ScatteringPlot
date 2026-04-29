@@ -52,7 +52,49 @@
 
   "tree": {
     "unassigned": "▼ Unassigned",
-    "annotations": "▼ Annotations & Reference Lines"
+    "annotations": "▼ Annotations & Reference Lines",
+    "section_2d": "▼ 2D Datasets"
+  },
+
+  "2d": {
+    "load_button": "🔬 Load 2D (HDF5)",
+    "dialog_title": "2D Analysis",
+    "view_label": "View",
+    "view_qmap": "q-Map (Cartesian)",
+    "view_polar": "Polar Map",
+    "view_azimuthal": "Azimuthal Profile",
+    "view_sector": "Sector Integral",
+    "colormap_label": "Colormap",
+    "bins_label": "Bins",
+    "log_scale": "Log Scale",
+    "log_q_axis": "Logarithmic q axis",
+    "update_plot": "🔄 Update",
+    "q_lo": "q min (nm⁻¹):",
+    "q_hi": "q max (nm⁻¹):",
+    "phi_lo": "φ min (°):",
+    "phi_hi": "φ max (°):",
+    "phi_bins": "φ bins:",
+    "export_png": "Export PNG",
+    "export_ascii": "Export ASCII (.dat)",
+    "export_ascii_1d_only": "ASCII export is only available for Azimuthal Profile and Sector Integral views.",
+    "add_to_1d": "Add to 1D Plot",
+    "added_to_1d": "Projection '{name}' added to 1D datasets.",
+    "open_dialog": "Open 2D Analysis...",
+    "error_loading": "Error loading HDF5 file:\n{error}",
+    "polar_qring_group": "q-Ring Selector",
+    "polar_qring_hint": "Drag lines in plot to set q limits:",
+    "go_to_azimuthal": "→ Azimuthal Profile",
+    "polar_export_overlay": "Include overlay on export",
+    "cmap_range_group": "Color Scale",
+    "cmap_auto_reset": "⟳ Auto (1 % – 99 %)",
+    "sin_corr_group": "sin(φ) Correction",
+    "sin_corr_divide": "I / sin(φ)",
+    "sin_corr_multiply": "I · sin(φ)",
+    "sin_corr_pole_handling": "Pole handling",
+    "sin_corr_pole_mask": "Masking (NaN)",
+    "sin_corr_pole_clamp": "Epsilon-Clamp",
+    "sin_corr_pole_voigt": "Voigt Extrapolation",
+    "sin_corr_pole_threshold": "Pole threshold:"
   },
 
   "options": {
