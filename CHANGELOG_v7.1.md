@@ -1,5 +1,41 @@
 # Changelog — Version 7.1
 
+## Version 7.1.2 — ScatterForge Plot (RELEASE)
+
+**Release Date:** 30. April 2026  
+**Status:** Stable Release — Azimuthal Profile im 1D-Plotter
+
+### ✨ Neue Features & Verbesserungen (7.1.2)
+
+#### 1. Plot-Typ „Azimuthal Profile" im 1D-Plotter (Commit: b8e5174)
+
+Neuer achter Plot-Typ speziell für azimutale Intensitätsprofile aus dem 2D-Analyzer:
+
+- **Achsen:** φ / ° (X) und I / a.u. (Y), beide standardmäßig linear
+- **Automatische X-Limits:** −180° … 180° werden beim Plotten automatisch gesetzt, sofern Auto-Scaling aktiv ist
+- **Tastenkürzel:** `Ctrl+Shift+8`
+- **Auto-Style-Erkennung:** Dateinamen mit `azim*`, `azimuthal*` oder `azimutal*` werden automatisch als *Messung*-Stil erkannt
+- Dateien: `core/constants.py`, `utils/user_config.py`, `scatter_plot.py`
+
+#### 2. Y-Achsen-Skala-Override im Achsen-Dialog (Commit: b8e5174)
+
+Neue **Y-Achsen-Skala**-Auswahlbox im Achsen-und-Limits-Dialog:
+
+- Drei Optionen: **Auto (Plottyp-Standard)** / **Linear** / **Logarithmisch**
+- Überschreibt den im Plot-Typ definierten Standard; ermöglicht z. B. Log-Darstellung des Azimutalprofils ohne Plottyp-Wechsel
+- Rückwärtskompatibel: gespeicherte Sessions ohne `yscale`-Key erhalten den Standardwert `None` (= Auto)
+- Reset-Button setzt auch die Y-Skala auf Auto zurück
+- Dateien: `dialogs/axes_dialog.py`, `scatter_plot.py`, `i18n/translations/en.json`, `i18n/translations/de.json`
+
+### 🔑 Neue i18n-Keys (7.1.2)
+
+```
+axes.limits.y_scale   axes.limits.y_scale_auto
+axes.limits.y_scale_linear   axes.limits.y_scale_log
+```
+
+---
+
 ## Version 7.1.1 — ScatterForge Plot (RELEASE)
 
 **Release Date:** 29. April 2026  
@@ -144,4 +180,4 @@ Der Programmcode für ScatterForge Plot v7.1 wurde von Claude (Anthropic AI) unt
 
 ---
 
-*Letzte Aktualisierung: 2026-04-29*
+*Letzte Aktualisierung: 2026-04-30*

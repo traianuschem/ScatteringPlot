@@ -3,7 +3,7 @@
   "_language_code": "de",
 
   "app": {
-    "title": "ScatterForge Plot v7.0.4"
+    "title": "ScatterForge Plot v7.1.2"
   },
 
   "menu": {
@@ -297,7 +297,11 @@
       "y_max": "Y-Maximum:",
       "placeholder": "z.B. {value}",
       "auto_scaling": "Automatische Skalierung (ignoriert obige Werte)",
-      "reset": "Limits zurücksetzen"
+      "reset": "Limits zurücksetzen",
+      "y_scale": "Y-Achsen-Skala:",
+      "y_scale_auto": "Auto (Plottyp-Standard)",
+      "y_scale_linear": "Linear",
+      "y_scale_log": "Logarithmisch"
     },
 
     "font_labels": {

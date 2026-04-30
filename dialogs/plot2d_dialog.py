@@ -1158,7 +1158,9 @@ class Plot2DDialog(QDialog):
                 f.write(header)
                 np.savetxt(f, data_arr, fmt=fmt, delimiter='\t')
 
-            ds = DataSet(tmp_path, name=name, apply_auto_style=False)
+            # filter_nonpositive=False: azimutale Profile haben negative φ-Werte
+            # (−180…0°) und dürfen nicht durch den SAXS-log-Plot-Filter beschnitten werden.
+            ds = DataSet(tmp_path, name=name, apply_auto_style=False, filter_nonpositive=False)
             ds.display_label = name
             self.projection_ready.emit(ds)
             QMessageBox.information(

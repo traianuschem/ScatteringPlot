@@ -48,5 +48,12 @@ PLOT_TYPES = {
         'ylabel': 'I / a.u.',
         'xscale': 'log',
         'yscale': 'log'
+    },
+    'Azimuthal Profile': {
+        'xlabel': 'φ / °',
+        'ylabel': 'I / a.u.',
+        'xscale': 'linear',
+        'yscale': 'linear',
+        'xlim': (-180.0, 180.0),   # default x-limits applied automatically
     }
 }

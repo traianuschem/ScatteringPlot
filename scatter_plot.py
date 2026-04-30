@@ -163,7 +163,7 @@ class ScatterPlotApp(QMainWindow):
         # Plot-Einstellungen
         self.plot_type = 'Log-Log'
         self.stack_mode = True
-        self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True}
+        self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True, 'yscale': None}
         self.wavelength = 0.1524  # Standardwellenlänge: Cu K-alpha in nm
 
         # Erweiterte Einstellungen (Version 5.1)
@@ -419,8 +419,9 @@ class ScatterPlotApp(QMainWindow):
         """
         Richtet globale Shortcuts ein (v7.0)
         """
-        # Plot-Typ-Shortcuts (Ctrl+Shift+1-7)
-        plot_types = ['Log-Log', 'Porod', 'Kratky', 'Guinier', 'Bragg Spacing', '2-Theta', 'PDDF']
+        # Plot-Typ-Shortcuts (Ctrl+Shift+1-8)
+        plot_types = ['Log-Log', 'Porod', 'Kratky', 'Guinier',
+                      'Bragg Spacing', '2-Theta', 'PDDF', 'Azimuthal Profile']
         for i, plot_type in enumerate(plot_types, start=1):
             shortcut = QShortcut(QKeySequence(f"Ctrl+Shift+{i}"), self)
             shortcut.activated.connect(lambda pt=plot_type: self.change_plot_type_shortcut(pt))
@@ -979,7 +980,14 @@ class ScatterPlotApp(QMainWindow):
                                fontfamily=self.font_settings.get('labels_font_family',
                                                                  self.font_settings.get('font_family', 'sans-serif')))
         self.ax_main.set_xscale(plot_info['xscale'])
-        self.ax_main.set_yscale(plot_info['yscale'])
+
+        # Y-Skala: Plot-Typ-Standard, aber überschreibbar via Achsen-Dialog
+        yscale_override = self.axis_limits.get('yscale')
+        self.ax_main.set_yscale(yscale_override if yscale_override else plot_info['yscale'])
+
+        # X-Limits: Plot-Typ-spezifische Defaults (z. B. Azimutalprofil → −180 … 180)
+        if self.axis_limits.get('auto', True) and 'xlim' in plot_info:
+            self.ax_main.set_xlim(*plot_info['xlim'])
 
         # Tick-Einstellungen (v5.7: Erweitert um Länge, Breite, Richtung)
         tick_weight = 'bold' if self.font_settings.get('ticks_bold', False) else 'normal'
@@ -3247,7 +3255,10 @@ class ScatterPlotApp(QMainWindow):
                 self.color_scheme_combo.setCurrentText(color_scheme)
 
                 self.axis_limits = session.get('axis_limits', {'xmin': None, 'xmax': None,
-                                                               'ymin': None, 'ymax': None, 'auto': True})
+                                                               'ymin': None, 'ymax': None, 'auto': True,
+                                                               'yscale': None})
+                # Ensure 'yscale' key exists in loaded sessions (backward compat)
+                self.axis_limits.setdefault('yscale', None)
 
                 # Version 6.2: Wellenlänge für 2-Theta Plot
                 if 'wavelength' in session:

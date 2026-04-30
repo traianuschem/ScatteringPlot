@@ -82,7 +82,7 @@ def skip_header_lines(filepath):
     return skip_lines
 
 
-def load_scattering_data(filepath):
+def load_scattering_data(filepath, filter_nonpositive=True):
     """
     Lädt Streudaten aus verschiedenen ASCII-Formaten
 
@@ -93,6 +93,9 @@ def load_scattering_data(filepath):
 
     Args:
         filepath: Pfad zur Datendatei
+        filter_nonpositive: Wenn True (Standard), werden Zeilen mit x ≤ 0 oder y ≤ 0
+            entfernt (sinnvoll für log-log SAXS-Plots, aber NICHT für azimutale Profile
+            mit negativen φ-Werten oder negativen Intensitäten nach Korrekturen).
 
     Returns:
         numpy array mit shape (n, 2) oder (n, 3)
@@ -135,13 +138,15 @@ def load_scattering_data(filepath):
             # Nehme nur die ersten 3 Spalten
             data = data[:, :3]
 
-        # Entferne NaN und Inf Werte
+        # Entferne NaN und Inf Werte (immer)
         mask = np.isfinite(data).all(axis=1)
         data = data[mask]
 
-        # Entferne negative oder Null-Werte für log-Plot
-        mask = (data[:, 0] > 0) & (data[:, 1] > 0)
-        data = data[mask]
+        # Entferne x ≤ 0 und y ≤ 0 nur für log-kompatible Plots (z.B. SAXS q/I).
+        # Für azimutale Profile (φ ∈ [−180°, 180°]) oder lineare Plots NICHT anwenden.
+        if filter_nonpositive:
+            mask = (data[:, 0] > 0) & (data[:, 1] > 0)
+            data = data[mask]
 
         if len(data) == 0:
             raise ValueError(f"Keine gültigen Datenpunkte in Datei: {filepath}")

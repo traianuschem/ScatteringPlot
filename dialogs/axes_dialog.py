@@ -7,7 +7,7 @@ This dialog allows users to configure axis labels and titles.
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
     QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton, QMessageBox, QHBoxLayout,
-    QSpinBox, QFontComboBox
+    QSpinBox, QFontComboBox, QComboBox
 )
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 from i18n import tr
@@ -128,10 +128,26 @@ class AxesSettingsDialog(QDialog):
         self.auto_checkbox.setChecked(axis_limits.get('auto', True))
         limits_layout.addWidget(self.auto_checkbox, 5, 0, 1, 2)
 
+        # Y-Scale Override
+        limits_layout.addWidget(QLabel(tr("axes.limits.y_scale")), 6, 0)
+        self.yscale_combo = QComboBox()
+        self.yscale_combo.addItem(tr("axes.limits.y_scale_auto"), userData=None)
+        self.yscale_combo.addItem(tr("axes.limits.y_scale_linear"), userData='linear')
+        self.yscale_combo.addItem(tr("axes.limits.y_scale_log"), userData='log')
+        # Pre-select from axis_limits
+        yscale_val = axis_limits.get('yscale', None)
+        if yscale_val == 'linear':
+            self.yscale_combo.setCurrentIndex(1)
+        elif yscale_val == 'log':
+            self.yscale_combo.setCurrentIndex(2)
+        else:
+            self.yscale_combo.setCurrentIndex(0)
+        limits_layout.addWidget(self.yscale_combo, 6, 1)
+
         # Reset Limits Button
         reset_limits_btn = QPushButton(tr("axes.limits.reset"))
         reset_limits_btn.clicked.connect(self.reset_limits)
-        limits_layout.addWidget(reset_limits_btn, 6, 0, 1, 2)
+        limits_layout.addWidget(reset_limits_btn, 7, 0, 1, 2)
 
         limits_group.setLayout(limits_layout)
         layout.addWidget(limits_group)
@@ -233,6 +249,7 @@ class AxesSettingsDialog(QDialog):
         self.ymin_edit.clear()
         self.ymax_edit.clear()
         self.auto_checkbox.setChecked(True)
+        self.yscale_combo.setCurrentIndex(0)
 
     def get_labels(self):
         """Gibt die Achsenbeschriftungen zurück"""
@@ -267,7 +284,8 @@ class AxesSettingsDialog(QDialog):
             'xmax': xmax,
             'ymin': ymin,
             'ymax': ymax,
-            'auto': self.auto_checkbox.isChecked()
+            'auto': self.auto_checkbox.isChecked(),
+            'yscale': self.yscale_combo.currentData()
         }
 
     def get_font_settings(self):

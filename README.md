@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.1.1
+# ScatterForge Plot v7.1.2
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.1.1-blue)
+![Version](https://img.shields.io/badge/version-7.1.2-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -60,7 +60,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
-| **Plot-Typen** | 7 spezialisierte Darstellungen (Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF) | ✅ |
+| **Plot-Typen** | 8 spezialisierte Darstellungen (Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile) | ✅ **v7.1.2** |
 | **2D SAXS Viewer** | NeXus/HDF5-Laden, q-Map, Polarkarte, Azimutalprofil, Sektor-Integral | ✅ **v7.1** |
 | **q-Ring-Selektor** | Ziehbare Grenzen direkt in der Polarkarte | ✅ **v7.1** |
 | **sin(φ)-Korrektur** | Lorentz- und Jacobi-Korrektur mit Voigt-Polextrapolation | ✅ **v7.1** |
@@ -81,7 +81,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 ## 🎉 Was ist neu in v7.1?
 
-**Minor Release v7.1.1** — Vollständiger 2D-SAXS-Analyzer + Qualitätsupdates
+**Minor Release v7.1.2** — Vollständiger 2D-SAXS-Analyzer + Qualitätsupdates
 
 ### Hauptfeatures v7.1
 
@@ -92,7 +92,16 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 - 📤 **Integrierter Export**: 2D-Export nutzt den bestehenden ExportSettingsDialog mit Metadaten-Unterstützung
 - 🔁 **1D-Transfer**: Azimutalprofil und Sektor-Integral direkt in den 1D-Datensatz-Baum übernehmen
 
-### Aktuelles Update v7.1.1 (29. April 2026)
+### Aktuelles Update v7.1.2 (30. April 2026)
+
+**Azimutalprofil im 1D-Plotter:**
+- ✅ Neuer Plot-Typ „Azimuthal Profile" (φ [°] / I [a.u.], lineare Achsen)
+- ✅ Automatische X-Limits −180…180° bei aktiviertem Auto-Scaling
+- ✅ Y-Achsen-Skala-Override im Achsen-Dialog (Auto / Linear / Logarithmisch)
+- ✅ Tastenkürzel Ctrl+Shift+8 für Azimutalprofil
+- ✅ Auto-Style-Erkennung für azim*/azimuthal*-Dateien (→ Messung-Stil)
+
+### v7.1.1 (29. April 2026)
 
 **Qualitätsupdates für den 2D-Analyzer:**
 - ✅ Farbskala-Schieberegler für q-Map und Polar Map (live, ohne Neuberechnung)
@@ -1017,7 +1026,7 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2026},
-  version = {7.1.1},
+  version = {7.1.2},
   url = {https://github.com/traianuschem/ScatteringPlot},
   note = {Software developed with Claude AI assistance}
 }
@@ -1053,6 +1062,6 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.1.1 - April 2026*
+*ScatterForge Plot v7.1.2 - April 2026*
 
 ---

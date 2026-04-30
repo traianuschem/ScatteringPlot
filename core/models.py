@@ -16,7 +16,8 @@ from utils.user_config import get_user_config
 
 class DataSet:
     """Datensatz mit Stil-Informationen"""
-    def __init__(self, filepath, name=None, apply_auto_style=True, skip_load=False):
+    def __init__(self, filepath, name=None, apply_auto_style=True, skip_load=False,
+                 filter_nonpositive=True):
         self.filepath = Path(filepath)
         self.name = name or self.filepath.stem
         self.display_label = self.name
@@ -25,6 +26,9 @@ class DataSet:
         self.y = None
         self.y_err = None
         self.data_loaded = False  # Flag für erfolgreiches Laden
+        # Wenn False, werden x≤0/y≤0-Werte beim Laden NICHT gefiltert.
+        # Notwendig für azimutale Profile (φ < 0) und andere lineare Daten.
+        self.filter_nonpositive = filter_nonpositive
 
         # Stil
         self.line_style = None
@@ -64,7 +68,10 @@ class DataSet:
         """
         logger = logging.getLogger(__name__)
         try:
-            self.data = load_scattering_data(self.filepath)
+            self.data = load_scattering_data(
+                self.filepath,
+                filter_nonpositive=getattr(self, 'filter_nonpositive', True)
+            )
             self.x = self.data[:, 0]
             self.y = self.data[:, 1]
             if self.data.shape[1] > 2:
@@ -141,14 +148,16 @@ class DataSet:
             'x_min': self.x_min,
             'x_max': self.x_max,
             'y_min': self.y_min,
-            'y_max': self.y_max
+            'y_max': self.y_max,
+            'filter_nonpositive': self.filter_nonpositive
         }
 
     @classmethod
     def from_dict(cls, data):
         """Deserialisierung mit Fehlertoleranz für fehlende Dateien"""
         # Dataset ohne Daten laden erstellen (skip_load=True)
-        ds = cls(data['filepath'], data.get('name'), apply_auto_style=False, skip_load=True)
+        ds = cls(data['filepath'], data.get('name'), apply_auto_style=False, skip_load=True,
+                 filter_nonpositive=data.get('filter_nonpositive', True))
         ds.display_label = data.get('display_label', ds.name)
         ds.line_style = data.get('line_style')
         ds.marker_style = data.get('marker_style')

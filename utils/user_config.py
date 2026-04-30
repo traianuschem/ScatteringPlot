@@ -139,7 +139,10 @@ DEFAULT_AUTO_DETECTION_RULES = {
     'simulation': 'Simulation',
     'theo': 'Theorie',
     'theory': 'Theorie',
-    'theorie': 'Theorie'
+    'theorie': 'Theorie',
+    'azim': 'Messung',
+    'azimuthal': 'Messung',
+    'azimutal': 'Messung',
 }
 
 
