@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.1.2
+# ScatterForge Plot v7.3.2
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.1.2-blue)
+![Version](https://img.shields.io/badge/version-7.3.2-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -35,6 +35,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 ## 📑 Inhaltsverzeichnis
 
 - [Feature-Übersicht](#-feature-übersicht)
+- [Was ist neu in v7.3](#-was-ist-neu-in-v73)
 - [Was ist neu in v7.1](#-was-ist-neu-in-v71)
 - [Was ist neu in v7.0](#-was-ist-neu-in-v70)
 - [Installation](#-installation)
@@ -60,22 +61,58 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
-| **Plot-Typen** | 8 spezialisierte Darstellungen (Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile) | ✅ **v7.1.2** |
+| **Plot-Typen** | 9 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, **ASAXS** | ✅ **v7.3.2** |
+| **ASAXS-Analyse** | Separation I_N / I_cross / I_A mit optionalem linearem Subplot für negative Werte | ✅ **v7.3** |
+| **SNR-Qualitätsmarker** | Datenpunkte nach Signal-Rausch-Verhältnis visuell differenzieren (alle Plot-Typen) | ✅ **v7.3** |
+| **Subplot-Routing** | Pro Gruppe wählbar: Hauptplot, Subplot oder beides (ASAXS & PDDF) | ✅ **v7.3** |
 | **2D SAXS Viewer** | NeXus/HDF5-Laden, q-Map, Polarkarte, Azimutalprofil, Sektor-Integral | ✅ **v7.1** |
 | **q-Ring-Selektor** | Ziehbare Grenzen direkt in der Polarkarte | ✅ **v7.1** |
 | **sin(φ)-Korrektur** | Lorentz- und Jacobi-Korrektur mit Voigt-Polextrapolation | ✅ **v7.1** |
 | **Gruppen-Management** | Datasets organisieren mit Stack-Faktoren, Drag & Drop, Auto-Gruppierung | ✅ **USP** |
 | **Metadaten-Export** | XMP-Sidecar + eingebettete Metadaten, Benutzer-Profil-System | ✅ **USP** |
 | **LaTeX/MathText** | Wissenschaftliche Notation mit Live-Vorschau | ✅ v7.0 |
-| **Mehrsprachigkeit** | Deutsch/Englisch | ✅ v7.0 |
+| **Mehrsprachigkeit** | Deutsch/Englisch, vollständig lokalisiert | ✅ v7.0 |
 | **Export-Formate** | PNG, SVG, PDF, EPS, TIFF mit Live-Vorschau | ✅ |
-| **Fehlerbalken** | 2 Darstellungen: Transparente Fläche oder Balken mit Caps | ✅ |
+| **Fehlerbalken** | 3 Darstellungen: Transparente Fläche, Balken mit Caps, Stem/Anker | ✅ |
+| **Stil-Vorlagen** | Vollständig konfigurierbarer Editor (Marker, Linie, Fehlerbalken, SNR) | ✅ **v7.3.2** |
 | **Farbpaletten** | 30+ Paletten (TUBAF, Matplotlib), gruppenspezifisch | ✅ |
 | **Keyboard Shortcuts** | Vollständige Tastatursteuerung | ✅ v7.0 |
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
-| **Stil-Vorlagen** | Auto-Erkennung (Messung, Fit, Simulation, Theorie) | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.3?
+
+**Minor Release v7.3.2** — ASAXS-Analyse, SNR-Qualitätsmarker, Subplot-Routing, Unified Editor
+
+### Hauptfeatures v7.3
+
+- 🔬 **ASAXS Plot-Typ**: Neuer spezialisierter Log-Log-Plot für anomale Kleinwinkelröntgenstreuung mit automatischer Term-Erkennung (`_IN`, `_Icross`, `_IA`) aus dem Dateinamen und optionalem linearen Subplot für den Cross-Term I_cross (inkl. negativer Werte)
+- 📊 **SNR-Qualitätsmarker**: Datenpunkte werden nach SNR = |y|/σ visuell differenziert — gute Punkte (SNR ≥ Schwellenwert) als gefüllter Marker, schlechte Punkte als offener, gedimmter Marker. Für alle Plot-Typen verfügbar, konfigurierbar per Datensatz
+- 🎯 **Subplot-Routing per Gruppe**: Jede Gruppe kann individuell in Hauptplot, Subplot oder beiden Bereichen gezeigt werden — relevant für ASAXS und PDDF
+- 🎨 **Unified Curve & Preset Editor**: Der „Kurve bearbeiten"-Dialog und der Stil-Vorlagen-Editor im Design-Manager sind vollständig vereinheitlicht — Stil-Vorlagen enthalten jetzt alle Fehlerbalken- und SNR-Einstellungen
+- 🐛 **Drag & Drop Bugfix**: Gruppenfarben werden beim Zuweisen eines Datensatzes nicht mehr fälschlicherweise zurückgesetzt
+
+### Aktuelles Update v7.3.2 (13. Mai 2026)
+
+- ✅ `StylePresetEditDialog` durch vollständigen `CurveSettingsDialog` (preset_mode) ersetzt
+- ✅ Alle hardcodierten deutschen Strings im CurveSettingsDialog durch `tr()` ersetzt
+- ✅ Neue i18n-Abschnitte: `quality`, `subplot`, `asaxs`, `preset_meta`, Fehlerbalken-Info-Texte
+- ✅ Bugfix: Doppelter `errorbar_alpha`-Widget in CurveSettingsDialog entfernt
+- ✅ `apply_style_preset()` wendet jetzt alle Fehlerbalken- und SNR-Einstellungen an
+- ✅ Neue Stil-Vorlage öffnet sofort den vollständigen Editor
+
+### v7.3.1 (12. Mai 2026)
+
+- ✅ Neuer Plot-Typ „ASAXS" mit Log-Log-Haupt-Plot und optionalem linearen Subplot
+- ✅ Auto-Erkennung des ASAXS-Terms aus dem Dateinamen
+- ✅ SNR-Qualitätsmarker für alle Datensätze (konfigurierbar pro Datensatz)
+- ✅ Subplot-Routing: `group.subplot_target` steuert Rendering-Ziel
+- ✅ Drag & Drop Farb-Reset-Bugfix in `unify_group_colors()`
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.3.md](CHANGELOG_v7.3.md)
 
 ---
 
@@ -258,7 +295,7 @@ Strg+O → Dateien auswählen
 
 ### 2. Plot-Typ wählen
 
-ScatterForge Plot bietet 7 spezialisierte Plot-Typen für verschiedene Analysen:
+ScatterForge Plot bietet 9 spezialisierte Plot-Typen für verschiedene Analysen:
 
 | Plot-Typ | X-Achse | Y-Achse | Anwendung |
 |----------|---------|---------|-----------|
@@ -269,12 +306,22 @@ ScatterForge Plot bietet 7 spezialisierte Plot-Typen für verschiedene Analysen:
 | **Bragg Spacing** | d [nm] | I [a.u.] | Realraum-Darstellung (d = 2π/q) |
 | **2-Theta** | 2θ [°] | I [a.u.] | XRD-Winkeldarstellung |
 | **PDDF** | r [nm] | p(r) | Paardistanzverteilungsfunktion |
+| **Azimuthal Profile** | φ [°] | I [a.u.] | Azimutale Intensitätsprofile aus 2D-Daten |
+| **ASAXS** | q [nm⁻¹] | I [cm⁻¹] | Anomale SAXS-Separation (I_N, I_cross, I_A) |
 
 **Plot-Typ wechseln:**
 ```
 Dropdown "Plot-Typ" → Typ auswählen
 oder
 Strg+1 bis Strg+7 (Tastaturkürzel)
+```
+
+**ASAXS-Spezial-Einstellungen:**
+```
+1. Plot-Typ „ASAXS" wählen
+2. Datensätze laden → Term-Typ wird auto-erkannt (_IN, _Icross, _IA)
+3. „± Subplot" Button aktivieren für linearen I_cross-Subplot
+4. Per Rechtsklick → „Kurve bearbeiten" → ASAXS: Term-Typ manuell überschreiben
 ```
 
 **2-Theta Spezial-Einstellung:**
@@ -423,9 +470,16 @@ Rechtsklick auf Dataset → "🎨 Kurve bearbeiten..."
 - **Darstellung:**
   - **Transparente Fläche** (`fill_between`): Ideal für dichte Datenpunkte
   - **Balken mit Caps** (`errorbar`): Klassische Darstellung
-- **Transparenz:** 0-100% (Standard: 30% für Flächen)
+  - **Stem/Anker**: Vertikale Linien von der x-Achse (XRD-Reflexmuster)
+- **Transparenz:** 0-100% (Standard: 30%)
 - **Cap-Größe:** 0-10 pt (nur bei Balken)
-- **Linienbreite:** 0.1-5 pt (nur bei Balken)
+- **Linienbreite:** 0.1-5 pt (bei Balken und Stem)
+
+**5. SNR-Qualitätsmarker** (benötigt Fehlerdaten)
+- Aktivieren unter „Datenqualität" im Kurven-Dialog
+- Punkte mit SNR ≥ Schwellenwert: gefüllter Marker
+- Punkte mit SNR < Schwellenwert: offener Marker, gedimmt
+- Konfigurierbar: Schwellenwert, Marker-Stile, Transparenz, Fehlerbalken
 
 #### Schnellfarben
 
@@ -448,6 +502,21 @@ Rechtsklick auf Dataset → "Stil anwenden" → Stil wählen:
 - Simulation (gestrichelte Linie)
 - Theorie (Strich-Punkt-Linie)
 ```
+
+#### Stil-Vorlagen bearbeiten (v7.3.2)
+
+Vollständiger Editor — identisch mit dem Kurven-Dialog:
+
+```
+Design → Design-Manager... → Tab "Stil-Vorlagen" → Vorlage auswählen → "Bearbeiten..."
+```
+
+**Einstellbar in der Vorlage:**
+- Name und Beschreibung
+- Marker-Stil und -Größe
+- Linien-Stil und -Breite
+- Fehlerbalken (Stil, Cap-Größe, Linienbreite, Transparenz)
+- SNR-Qualitätsmarker (Schwellenwert, Marker, Transparenz)
 
 #### Individuelle Plotgrenzen
 
@@ -1026,7 +1095,7 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2026},
-  version = {7.1.2},
+  version = {7.3.2},
   url = {https://github.com/traianuschem/ScatteringPlot},
   note = {Software developed with Claude AI assistance}
 }
@@ -1053,7 +1122,8 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 ## 📚 Weitere Ressourcen
 
-- **CHANGELOG v7.1:** Aktuelle Versionshistorie → [CHANGELOG_v7.1.md](CHANGELOG_v7.1.md)
+- **CHANGELOG v7.3:** Aktuelle Versionshistorie → [CHANGELOG_v7.3.md](CHANGELOG_v7.3.md)
+- **CHANGELOG v7.1:** Ältere Versionen → [CHANGELOG_v7.1.md](CHANGELOG_v7.1.md)
 - **CHANGELOG v7.0:** Frühere Versionen → [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 - **GitHub:** Repository → [traianuschem/ScatteringPlot](https://github.com/traianuschem/ScatteringPlot)
 - **Releases:** Stabile Versionen → [GitHub Releases](https://github.com/traianuschem/ScatteringPlot/releases)
@@ -1062,6 +1132,6 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.1.2 - April 2026*
+*ScatterForge Plot v7.3.2 - Mai 2026*
 
 ---

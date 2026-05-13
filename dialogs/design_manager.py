@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor, QPixmap, QIcon
 from utils.logger import get_logger
 from i18n import tr
+from types import SimpleNamespace
 
 
 # Vordefinierte Design-Keys (intern, nicht übersetzt)
@@ -244,30 +245,48 @@ class DesignManagerDialog(QDialog):
             self.autodetect_list.addItem(f"{keyword} → {style}")
 
     def create_new_style(self):
-        """Erstellt neuen Stil"""
-        name, ok = QInputDialog.getText(self, tr("design_manager.styles.new_title"), tr("design_manager.styles.name_prompt"))
+        """Erstellt neuen Stil und öffnet den vollständigen Bearbeitungsdialog."""
+        name, ok = QInputDialog.getText(
+            self,
+            tr("design_manager.styles.new"),
+            tr("design_manager.styles.name_prompt")
+        )
         if ok and name:
+            # Standard-Vorlage anlegen
             style = {
                 'line_style': '-',
                 'marker_style': '',
-                'line_width': 2,
-                'marker_size': 4,
+                'line_width': 2.0,
+                'marker_size': 4.0,
                 'description': tr("design_manager.styles.custom")
             }
             self.config.add_style_preset(name, style)
             self.refresh_styles_list()
-            self.parent_app.update_plot()
+            # Sofort in den vollständigen Editor
+            _open_style_preset_editor(
+                parent=self,
+                style_name=name,
+                config=self.config,
+                refresh_callback=self.refresh_styles_list,
+                plot_callback=self.parent_app.update_plot
+            )
 
     def edit_style(self):
-        """Bearbeitet Stil"""
+        """Bearbeitet Stil mit dem vollständigen CurveSettingsDialog (preset_mode)."""
         current_item = self.styles_list.currentItem()
         if not current_item:
-            QMessageBox.information(self, tr("design_manager.info"), tr("design_manager.styles.select_style"))
+            QMessageBox.information(self, tr("design_manager.info"),
+                                    tr("design_manager.styles.select_style"))
             return
 
-        name = current_item.text().split(':')[0]
-        dialog = StylePresetEditDialog(self, name, self.config, self.refresh_styles_list, self.parent_app.update_plot)
-        dialog.exec()
+        style_name = current_item.text().split(':')[0].strip()
+        _open_style_preset_editor(
+            parent=self,
+            style_name=style_name,
+            config=self.config,
+            refresh_callback=self.refresh_styles_list,
+            plot_callback=self.parent_app.update_plot
+        )
 
     def delete_style(self):
         """Löscht Stil"""
@@ -739,100 +758,89 @@ class DesignManagerDialog(QDialog):
             return None
 
 
-class StylePresetEditDialog(QDialog):
-    """Dialog zum Bearbeiten von Stil-Vorlagen"""
+def _build_preset_dummy(style_name, style):
+    """Erstellt ein SimpleNamespace-Objekt aus einem Style-Preset-Dict,
+    das als 'dataset'-Argument für CurveSettingsDialog(preset_mode=True) dient."""
+    dummy = SimpleNamespace()
+    dummy.name = style_name
+    dummy.color = None
+    dummy.y_err = None
+    dummy.marker_style = style.get('marker_style', '')
+    dummy.line_style = style.get('line_style', '-')
+    dummy.line_width = float(style.get('line_width', 2.0))
+    dummy.marker_size = float(style.get('marker_size', 4.0))
+    dummy.show_errorbars = style.get('show_errorbars', True)
+    dummy.errorbar_style = style.get('errorbar_style', 'fill')
+    dummy.errorbar_capsize = float(style.get('errorbar_capsize', 3.0))
+    dummy.errorbar_alpha = float(style.get('errorbar_alpha', 0.3))
+    dummy.errorbar_linewidth = float(style.get('errorbar_linewidth', 1.0))
+    dummy.snr_visualization = style.get('snr_visualization', False)
+    dummy.snr_threshold = float(style.get('snr_threshold', 1.0))
+    dummy.snr_good_marker = style.get('snr_good_marker', 'o')
+    dummy.snr_poor_marker = style.get('snr_poor_marker', '^')
+    dummy.snr_poor_alpha = float(style.get('snr_poor_alpha', 0.3))
+    dummy.snr_show_errorbars = style.get('snr_show_errorbars', True)
+    dummy.data_term = ''
+    dummy._description = style.get('description', '')
+    return dummy
+
+
+def _open_style_preset_editor(parent, style_name, config, refresh_callback, plot_callback):
+    """Öffnet CurveSettingsDialog im Preset-Modus und speichert das Ergebnis."""
+    from dialogs.curve_settings_dialog import CurveSettingsDialog
+
+    style = config.style_presets.get(style_name, {}).copy()
+    dummy = _build_preset_dummy(style_name, style)
+
+    dialog = CurveSettingsDialog(parent, dummy, preset_mode=True)
+    if dialog.exec():
+        settings = dialog.get_settings()
+        new_name = settings.get('preset_name', style_name).strip() or style_name
+        new_style = {
+            'description':        settings.get('preset_description', ''),
+            'line_style':         settings['line_style'],
+            'marker_style':       settings['marker_style'],
+            'line_width':         settings['line_width'],
+            'marker_size':        settings['marker_size'],
+            'show_errorbars':     settings['show_errorbars'],
+            'errorbar_style':     settings['errorbar_style'],
+            'errorbar_capsize':   settings['errorbar_capsize'],
+            'errorbar_alpha':     settings['errorbar_alpha'],
+            'errorbar_linewidth': settings['errorbar_linewidth'],
+            'snr_visualization':  settings['snr_visualization'],
+            'snr_threshold':      settings['snr_threshold'],
+            'snr_good_marker':    settings['snr_good_marker'],
+            'snr_poor_marker':    settings['snr_poor_marker'],
+            'snr_poor_alpha':     settings['snr_poor_alpha'],
+            'snr_show_errorbars': settings['snr_show_errorbars'],
+        }
+        if new_name != style_name and style_name in config.style_presets:
+            del config.style_presets[style_name]
+        config.style_presets[new_name] = new_style
+        config.save_style_presets()
+        refresh_callback()
+        plot_callback()
+
+
+class StylePresetEditDialog:
+    """Kompatibilitäts-Wrapper: öffnet CurveSettingsDialog im preset_mode.
+
+    Wird nur noch für Rückwärtskompatibilität beibehalten.
+    Direktaufruf über _open_style_preset_editor() bevorzugen.
+    """
 
     def __init__(self, parent, style_name, config, refresh_callback, plot_callback):
-        super().__init__(parent)
-        self.style_name = style_name
-        self.config = config
-        self.refresh_callback = refresh_callback
-        self.plot_callback = plot_callback
-        self.style = config.style_presets[style_name].copy()
+        self._parent = parent
+        self._style_name = style_name
+        self._config = config
+        self._refresh = refresh_callback
+        self._plot = plot_callback
 
-        self.setWindowTitle(tr("style_preset.edit_title", name=style_name))
-        self.resize(450, 350)
-
-        layout = QGridLayout(self)
-        row = 0
-
-        # Name
-        layout.addWidget(QLabel(tr("style_preset.name")), row, 0)
-        self.name_edit = QLineEdit(style_name)
-        layout.addWidget(self.name_edit, row, 1)
-        row += 1
-
-        # Beschreibung
-        layout.addWidget(QLabel(tr("style_preset.description")), row, 0)
-        self.desc_edit = QLineEdit(self.style.get('description', ''))
-        layout.addWidget(self.desc_edit, row, 1)
-        row += 1
-
-        # Linientyp
-        layout.addWidget(QLabel(tr("style_preset.line_style")), row, 0)
-        self.line_combo = QComboBox()
-        self.line_combo.addItems(['', '-', '--', '-.', ':'])
-        self.line_combo.setCurrentText(self.style.get('line_style', ''))
-        layout.addWidget(self.line_combo, row, 1)
-        row += 1
-
-        # Marker
-        layout.addWidget(QLabel(tr("style_preset.marker")), row, 0)
-        self.marker_combo = QComboBox()
-        self.marker_combo.addItems(['', 'o', 's', '^', 'v', 'D', '*', '+', 'x', 'p', 'h'])
-        self.marker_combo.setCurrentText(self.style.get('marker_style', ''))
-        layout.addWidget(self.marker_combo, row, 1)
-        row += 1
-
-        # Linienbreite
-        layout.addWidget(QLabel(tr("style_preset.line_width")), row, 0)
-        self.lw_spin = QDoubleSpinBox()
-        self.lw_spin.setRange(0.5, 10.0)
-        self.lw_spin.setValue(self.style.get('line_width', 2))
-        self.lw_spin.setSingleStep(0.5)
-        layout.addWidget(self.lw_spin, row, 1)
-        row += 1
-
-        # Markergröße
-        layout.addWidget(QLabel(tr("style_preset.marker_size")), row, 0)
-        self.ms_spin = QSpinBox()
-        self.ms_spin.setRange(1, 20)
-        self.ms_spin.setValue(self.style.get('marker_size', 4))
-        layout.addWidget(self.ms_spin, row, 1)
-        row += 1
-
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.save)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons, row, 0, 1, 2)
-
-    def save(self):
-        """Speichert den bearbeiteten Stil"""
-        new_name = self.name_edit.text()
-        if not new_name:
-            QMessageBox.critical(self, tr("design_manager.error"), tr("style_preset.name_required"))
-            return
-
-        # Stil aktualisieren
-        new_style = {
-            'line_style': self.line_combo.currentText() or '',
-            'marker_style': self.marker_combo.currentText() or '',
-            'line_width': self.lw_spin.value(),
-            'marker_size': self.ms_spin.value(),
-            'description': self.desc_edit.text()
-        }
-
-        # Wenn Name geändert, alten löschen
-        if new_name != self.style_name and self.style_name in self.config.style_presets:
-            del self.config.style_presets[self.style_name]
-
-        self.config.style_presets[new_name] = new_style
-        self.config.save_style_presets()
-
-        self.refresh_callback()
-        self.plot_callback()
-        self.accept()
+    def exec(self):
+        _open_style_preset_editor(
+            self._parent, self._style_name, self._config,
+            self._refresh, self._plot
+        )
 
 
 class ColorSchemeEditDialog(QDialog):

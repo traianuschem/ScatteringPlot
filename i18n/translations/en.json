@@ -3,7 +3,7 @@
   "_language_code": "en",
 
   "app": {
-    "title": "ScatterForge Plot v7.1.2"
+    "title": "ScatterForge Plot v7.3.2"
   },
 
   "menu": {
@@ -554,6 +554,15 @@
   "curve_settings": {
     "title": "Curve Settings for '{dataset}'",
     "info": "Edit all visual properties of this curve.",
+    "preset_title": "Edit Style Template: '{name}'",
+    "preset_info": "Sets the default appearance for curves that use this template.",
+
+    "preset_meta": {
+      "title": "Template",
+      "name": "Name:",
+      "description": "Description:",
+      "name_required": "Please enter a template name."
+    },
 
     "color": {
       "title": "Color",
@@ -596,6 +605,7 @@
     "error_bars": {
       "title": "Error Bars",
       "show": "Show Error Bars",
+      "stem_show": "Enable Stem Plot",
       "available": "✓ Error data available",
       "not_available": "✗ No error data in file",
       "representation": "Representation:",
@@ -605,7 +615,45 @@
       "transparency": "Transparency:",
       "transparency_bars": "Transparency (Bars):",
       "transparency_fill": "Transparency (Fill):",
-      "line_width": "Line Width:"
+      "transparency_stem": "Transparency (Lines):",
+      "line_width": "Line Width:",
+      "line_width_stem": "Stem Line Width:",
+      "info_fill": "Shows errors as a transparent band around the curve. Ideal for continuous measurements.",
+      "info_bars": "Shows errors as bars with caps. Classic representation for discrete data points.",
+      "info_stem": "Shows each data point as a vertical line from the x-axis. Ideal for XRD reference patterns.",
+      "stem_hint": "💡 Tip: Marker settings are especially important for stem plots!"
+    },
+
+    "quality": {
+      "title": "Data Quality",
+      "snr_show": "Show SNR Quality Markers",
+      "snr_tooltip": "Good points (SNR ≥ threshold): filled marker\nPoor points (SNR < threshold): open marker, dimmed\nRequires error data (3rd column) in the file.",
+      "snr_tooltip_unavailable": "No error data available — SNR markers not available.",
+      "snr_threshold": "SNR Threshold:",
+      "snr_threshold_tooltip": "Points with SNR ≥ threshold are considered 'good'",
+      "snr_good_marker": "Marker (good, SNR ≥ thresh):",
+      "snr_poor_marker": "Marker (poor, SNR < thresh):",
+      "snr_poor_alpha": "Transparency (poor):",
+      "snr_errorbars": "Show Error Bars:",
+      "snr_errorbars_tooltip": "Subtle error bars on all visible SNR points"
+    },
+
+    "subplot": {
+      "title": "Plot Area",
+      "show_in": "Display in:",
+      "both": "Main Plot and Subplot",
+      "main": "Main Plot Only",
+      "sub": "Subplot Only",
+      "tooltip": "Controls which axes area this group is rendered in\nwhen a subplot is active (ASAXS ± Subplot, PDDF)."
+    },
+
+    "asaxs": {
+      "title": "ASAXS",
+      "term_type": "Term Type:",
+      "none": "(none)",
+      "normal": "Normal (I_N)",
+      "cross": "Cross-Term (I_cross)",
+      "anomalous": "Anomalous (I_A)"
     }
   },
 
@@ -619,6 +667,9 @@
     "apply": "Apply Design",
     "save_current": "Save Current...",
     "save_as_default": "⭐ Save as Program Default",
+    "info": "Info",
+    "error": "Error",
+    "warning": "Warning",
     "success": "Success",
 
     "tabs": {
@@ -643,7 +694,11 @@
       "marker": "Marker:",
       "line_width": "Line Width:",
       "marker_size": "Marker Size:",
-      "delete_confirm": "Delete style '{name}'?"
+      "delete_confirm": "Delete style '{name}'?",
+      "select_style": "Please select a style.",
+      "name_required": "Please enter a name.",
+      "custom": "Custom Style",
+      "name_prompt": "Style Name:"
     },
 
     "colors": {

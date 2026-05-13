@@ -4,7 +4,7 @@ Version Management für ScatterForge Plot
 Zentrale Definition von Version und Metadaten für die Software-Provenienz.
 """
 
-__version__ = "7.3.1"
+__version__ = "7.3.2"
 __app_name__ = "ScatterForge Plot"
 __year__ = "2026"
 __author__ = "TU Bergakademie Freiberg"

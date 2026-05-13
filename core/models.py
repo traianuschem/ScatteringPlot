@@ -133,11 +133,30 @@ class DataSet:
             self.marker_style = style.get('marker_style')
             self.line_width = style.get('line_width', 2)
             self.marker_size = style.get('marker_size', 4)
-            # Fehlerbalken-Einstellungen (v6.0)
+            # Fehlerbalken-Einstellungen (v6.0, erweitert v7.3.1)
+            if 'show_errorbars' in style:
+                self.show_errorbars = style['show_errorbars']
             if 'errorbar_style' in style:
-                self.errorbar_style = style.get('errorbar_style', 'fill')
+                self.errorbar_style = style['errorbar_style']
             if 'errorbar_alpha' in style:
-                self.errorbar_alpha = style.get('errorbar_alpha', 0.3)
+                self.errorbar_alpha = style['errorbar_alpha']
+            if 'errorbar_capsize' in style:
+                self.errorbar_capsize = style['errorbar_capsize']
+            if 'errorbar_linewidth' in style:
+                self.errorbar_linewidth = style['errorbar_linewidth']
+            # SNR-Einstellungen (v7.3.1)
+            if 'snr_visualization' in style:
+                self.snr_visualization = style['snr_visualization']
+            if 'snr_threshold' in style:
+                self.snr_threshold = style['snr_threshold']
+            if 'snr_good_marker' in style:
+                self.snr_good_marker = style['snr_good_marker']
+            if 'snr_poor_marker' in style:
+                self.snr_poor_marker = style['snr_poor_marker']
+            if 'snr_poor_alpha' in style:
+                self.snr_poor_alpha = style['snr_poor_alpha']
+            if 'snr_show_errorbars' in style:
+                self.snr_show_errorbars = style['snr_show_errorbars']
 
     def get_plot_style(self):
         """Gibt Plot-Stil zurück"""
@@ -235,6 +254,10 @@ class DataGroup:
         self.legend_bold = False
         self.legend_italic = False
         self.display_label = name
+        # Subplot-Zuweisung (v7.3.1): 'both' | 'main' | 'sub'
+        # Steuert, in welchem Axes-Bereich diese Gruppe gerendert wird,
+        # wenn ein Subplot aktiv ist (ASAXS ± Subplot, PDDF).
+        self.subplot_target = 'both'
 
     def add_dataset(self, dataset):
         """Datensatz hinzufügen"""
@@ -257,6 +280,7 @@ class DataGroup:
             'legend_bold': self.legend_bold,
             'legend_italic': self.legend_italic,
             'display_label': self.display_label,
+            'subplot_target': self.subplot_target,
             'datasets': [ds.to_dict() for ds in self.datasets]
         }
 
@@ -270,6 +294,7 @@ class DataGroup:
         group.legend_bold = data.get('legend_bold', False)
         group.legend_italic = data.get('legend_italic', False)
         group.display_label = data.get('display_label', group.name)
+        group.subplot_target = data.get('subplot_target', 'both')
         group.datasets = [DataSet.from_dict(ds_data) for ds_data in data.get('datasets', [])]
         return group
 

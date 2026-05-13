@@ -701,7 +701,7 @@ class ScatterPlotApp(QMainWindow):
             warnings.filterwarnings('ignore', message='.*non-positive.*')
             self.fig.clear()
 
-        # PDDF hat Subplot; ASAXS hat optionalen Subplot für Cross-Term
+        # PDDF und ASAXS nutzen beide ax_sub als einheitliche Subplot-Achse
         asaxs_subplot_active = (
             self.plot_type == 'ASAXS'
             and getattr(self, 'asaxs_subplot_btn', None) is not None
@@ -710,15 +710,16 @@ class ScatterPlotApp(QMainWindow):
         if self.plot_type == 'PDDF':
             gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.05, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
-            self.ax_pddf = self.fig.add_subplot(gs[1], sharex=self.ax_main)
-            ax_sub = None
+            ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
+            ax_sub.set_ylabel('p(r)')
+            self.ax_pddf = ax_sub  # Rückwärtskompatibilität
         elif asaxs_subplot_active:
             gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
             ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
             ax_sub.set_ylabel('$I_{cross}$ / cm⁻¹')
             ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
-            self.ax_pddf = None
+            self.ax_pddf = ax_sub
         else:
             self.ax_main = self.fig.add_subplot(111)
             self.ax_pddf = None
@@ -746,8 +747,10 @@ class ScatterPlotApp(QMainWindow):
 
             # Dummy-Plot für Gruppen-Header in Legende
             # v7.0: Verwende datasets_in_order (Tree-Order)
+            # Nur wenn Gruppe im Hauptplot gerendert wird (nicht 'sub'-only)
+            _grp_target = getattr(group, 'subplot_target', 'both')
             has_visible_datasets = any(ds.show_in_legend for ds in datasets_in_order)
-            if has_visible_datasets:
+            if has_visible_datasets and _grp_target != 'sub':
                 self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
                 self.logger.debug(f"  Gruppe '{group.name}': {len(datasets_in_order)} Datasets (Tree-Order), Stack=×{stack_factor:.1f}")
 
@@ -812,10 +815,18 @@ class ScatterPlotApp(QMainWindow):
                     y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
 
+                # Subplot-Routing basierend auf group.subplot_target
+                _subplot_target = getattr(group, 'subplot_target', 'both')
+                render_in_main = _subplot_target in ('main', 'both') or ax_sub is None
+                render_in_sub = _subplot_target in ('sub', 'both') and ax_sub is not None
+
                 # ASAXS Cross-Term: in Subplot rendern (alle Werte inkl. negativ),
                 # im Haupt-Plot nur positive Werte zeigen
-                if ax_sub is not None and getattr(dataset, 'data_term', '') == 'cross':
-                    self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
+                if getattr(dataset, 'data_term', '') == 'cross':
+                    if render_in_sub:
+                        self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
+                    if not render_in_main:
+                        continue
                     pos_mask = y > 0
                     if not np.any(pos_mask):
                         continue
@@ -824,56 +835,70 @@ class ScatterPlotApp(QMainWindow):
                     if y_err_trans is not None:
                         y_err_trans = y_err_trans[pos_mask]
 
-                # Plotten
+                # Ziel-Achsen für normales Rendering bestimmen
                 plot_style = dataset.get_plot_style()
                 errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
+                is_cross = getattr(dataset, 'data_term', '') == 'cross'
 
-                # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
-                if getattr(dataset, 'snr_visualization', False) and y_err_trans is not None and len(x) > 0:
-                    self._render_snr_markers(self.ax_main, x, y, y_err_trans, dataset, color, plot_info)
-                # Spezialfall: stem plot für XRD-Referenz
-                elif errorbar_style == 'stem':
-                    markerline, stemlines, baseline = self.ax_main.stem(
-                        x, y,
-                        linefmt=color,
-                        markerfmt=dataset.marker_style if dataset.marker_style else 'o',
-                        basefmt=' '
-                    )
-                    markerline.set_markerfacecolor(color)
-                    markerline.set_markeredgecolor(color)
-                    markerline.set_markersize(dataset.marker_size)
-                    stemlines.set_linewidth(dataset.line_width)
-                    stemlines.set_alpha(dataset.errorbar_alpha)
-                    self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
-                                     markersize=dataset.marker_size, linestyle='',
-                                     label=dataset.display_label)
-                # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-                elif y_err_trans is not None and dataset.show_errorbars:
-                    if errorbar_style == 'fill':
-                        self.ax_main.fill_between(
-                            x, y - y_err_trans, y + y_err_trans,
-                            alpha=dataset.errorbar_alpha,
-                            color=color
+                target_axes = []
+                if render_in_main:
+                    target_axes.append(self.ax_main)
+                if render_in_sub and not is_cross:
+                    target_axes.append(ax_sub)
+
+                if not target_axes:
+                    continue
+
+                for i, target_ax in enumerate(target_axes):
+                    # Legende nur auf erster Achse, um doppelte Einträge zu vermeiden
+                    ds_label = dataset.display_label if i == 0 else ''
+
+                    # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
+                    if getattr(dataset, 'snr_visualization', False) and y_err_trans is not None and len(x) > 0:
+                        self._render_snr_markers(target_ax, x, y, y_err_trans, dataset, color, plot_info, label=ds_label)
+                    # Spezialfall: stem plot für XRD-Referenz
+                    elif errorbar_style == 'stem':
+                        markerline, stemlines, baseline = target_ax.stem(
+                            x, y,
+                            linefmt=color,
+                            markerfmt=dataset.marker_style if dataset.marker_style else 'o',
+                            basefmt=' '
                         )
-                        self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
-                                         linewidth=dataset.line_width, markersize=dataset.marker_size)
-                    else:  # 'bars'
-                        self.ax_main.errorbar(
-                            x, y, yerr=y_err_trans,
-                            fmt=plot_style,
-                            color=color,
-                            label=dataset.display_label,
-                            linewidth=dataset.line_width,
-                            markersize=dataset.marker_size,
-                            capsize=dataset.errorbar_capsize,
-                            elinewidth=dataset.errorbar_linewidth,
-                            alpha=dataset.errorbar_alpha,
-                            ecolor=color,
-                            capthick=dataset.errorbar_linewidth
-                        )
-                else:
-                    self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
-                                     linewidth=dataset.line_width, markersize=dataset.marker_size)
+                        markerline.set_markerfacecolor(color)
+                        markerline.set_markeredgecolor(color)
+                        markerline.set_markersize(dataset.marker_size)
+                        stemlines.set_linewidth(dataset.line_width)
+                        stemlines.set_alpha(dataset.errorbar_alpha)
+                        target_ax.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
+                                       markersize=dataset.marker_size, linestyle='',
+                                       label=ds_label)
+                    # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
+                    elif y_err_trans is not None and dataset.show_errorbars:
+                        if errorbar_style == 'fill':
+                            target_ax.fill_between(
+                                x, y - y_err_trans, y + y_err_trans,
+                                alpha=dataset.errorbar_alpha,
+                                color=color
+                            )
+                            target_ax.plot(x, y, plot_style, color=color, label=ds_label,
+                                           linewidth=dataset.line_width, markersize=dataset.marker_size)
+                        else:  # 'bars'
+                            target_ax.errorbar(
+                                x, y, yerr=y_err_trans,
+                                fmt=plot_style,
+                                color=color,
+                                label=ds_label,
+                                linewidth=dataset.line_width,
+                                markersize=dataset.marker_size,
+                                capsize=dataset.errorbar_capsize,
+                                elinewidth=dataset.errorbar_linewidth,
+                                alpha=dataset.errorbar_alpha,
+                                ecolor=color,
+                                capthick=dataset.errorbar_linewidth
+                            )
+                    else:
+                        target_ax.plot(x, y, plot_style, color=color, label=ds_label,
+                                       linewidth=dataset.line_width, markersize=dataset.marker_size)
 
         # v7.0: Auch nicht zugeordnete Datensätze plotten in Tree-Order (ohne Stack-Faktor)
         unassigned_count = sum(1 for ds in ordered_unassigned if ds.show_in_legend)
@@ -1400,7 +1425,7 @@ class ScatterPlotApp(QMainWindow):
 
         return label
 
-    def _render_snr_markers(self, ax, x, y, y_err, dataset, color, plot_info):
+    def _render_snr_markers(self, ax, x, y, y_err, dataset, color, plot_info, label=None):
         """Rendert Datenpunkte mit SNR-basierten Qualitätsmarkern.
 
         Gute Punkte (SNR ≥ Schwellenwert): konfigurierbarer gefüllter Marker.
@@ -1426,13 +1451,16 @@ class ScatterPlotApp(QMainWindow):
             mask_good &= pos
             mask_poor &= pos
 
+        if label is None:
+            label = dataset.display_label
+
         marker_s = max(float(dataset.marker_size), 2.0) ** 2 * 3.5
         label_shown = False
 
         if np.any(mask_good):
             ax.scatter(x[mask_good], y[mask_good],
                        marker=good_marker, s=marker_s, color=color, zorder=3,
-                       label=dataset.display_label)
+                       label=label)
             label_shown = True
 
         if np.any(mask_poor):
@@ -1442,7 +1470,7 @@ class ScatterPlotApp(QMainWindow):
 
         if not label_shown:
             ax.plot([], [], color=color, marker=good_marker, linestyle='',
-                    markersize=dataset.marker_size, label=dataset.display_label)
+                    markersize=dataset.marker_size, label=label)
 
         # Optionale Fehlerbalken auf alle sichtbaren Punkte
         if show_eb:
@@ -2267,19 +2295,24 @@ class ScatterPlotApp(QMainWindow):
         # Bestimme aktive Farbpalette (Gruppe oder global)
         active_palette_name = group.color_scheme if group.color_scheme else self.color_scheme_combo.currentText()
 
-        # Dialog öffnen mit Template-Dataset
+        # Dialog öffnen mit Template-Dataset und Gruppenreferenz
         dialog = CurveSettingsDialog(
             self,
             template_dataset,
             current_color_scheme=active_palette_name,
-            color_schemes=self.config.color_schemes
+            color_schemes=self.config.color_schemes,
+            group=group,
         )
         dialog.setWindowTitle(f"Gruppeneinstellungen für '{group.name}' ({len(group.datasets)} Kurven)")
 
         if dialog.exec():
             settings = dialog.get_settings()
 
-            # Einstellungen auf ALLE Datasets in der Gruppe anwenden
+            # Gruppenspezifische Einstellungen direkt am Group-Objekt setzen
+            if settings.get('subplot_target') is not None:
+                group.subplot_target = settings['subplot_target']
+
+            # Kurveneinstellungen auf ALLE Datasets in der Gruppe anwenden
             for dataset in group.datasets:
                 dataset.color = settings['color']
                 dataset.marker_style = settings['marker_style']

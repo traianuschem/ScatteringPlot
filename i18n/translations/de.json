@@ -3,7 +3,7 @@
   "_language_code": "de",
 
   "app": {
-    "title": "ScatterForge Plot v7.1.2"
+    "title": "ScatterForge Plot v7.3.2"
   },
 
   "menu": {
@@ -554,6 +554,15 @@
   "curve_settings": {
     "title": "Kurveneinstellungen für '{dataset}'",
     "info": "Bearbeiten Sie alle visuellen Eigenschaften dieser Kurve.",
+    "preset_title": "Stil-Vorlage bearbeiten: '{name}'",
+    "preset_info": "Legt die Standard-Darstellung für Kurven fest, denen diese Vorlage zugewiesen wird.",
+
+    "preset_meta": {
+      "title": "Vorlage",
+      "name": "Name:",
+      "description": "Beschreibung:",
+      "name_required": "Bitte geben Sie einen Vorlagen-Namen ein."
+    },
 
     "color": {
       "title": "Farbe",
@@ -596,6 +605,7 @@
     "error_bars": {
       "title": "Fehlerbalken",
       "show": "Fehlerbalken anzeigen",
+      "stem_show": "Ankerlinien-Darstellung aktivieren",
       "available": "✓ Fehlerdaten verfügbar",
       "not_available": "✗ Keine Fehlerdaten in Datei",
       "representation": "Darstellung:",
@@ -605,7 +615,45 @@
       "transparency": "Transparenz:",
       "transparency_bars": "Transparenz (Balken):",
       "transparency_fill": "Transparenz (Fläche):",
-      "line_width": "Linienbreite:"
+      "transparency_stem": "Transparenz (Linien):",
+      "line_width": "Linienbreite:",
+      "line_width_stem": "Ankerlinien-Breite:",
+      "info_fill": "Zeigt Fehler als transparente Fläche um die Kurve. Ideal für kontinuierliche Messungen.",
+      "info_bars": "Zeigt Fehler als Balken mit Endkappen. Klassische Darstellung für diskrete Messpunkte.",
+      "info_stem": "Zeigt jeden Datenpunkt als vertikale Linie von der x-Achse. Ideal für XRD-Reflexmuster.",
+      "stem_hint": "💡 Hinweis: Bei Ankerlinien sind die Marker-Einstellungen besonders wichtig!"
+    },
+
+    "quality": {
+      "title": "Datenqualität",
+      "snr_show": "SNR-Qualitätsmarker anzeigen",
+      "snr_tooltip": "Gute Punkte (SNR ≥ Schwellenwert): gefüllter Marker\nSchlechte Punkte (SNR < Schwellenwert): offener Marker, gedimmt\nBenötigt Fehlerdaten (3. Spalte) in der Datei.",
+      "snr_tooltip_unavailable": "Keine Fehlerdaten vorhanden — SNR-Marker nicht verfügbar.",
+      "snr_threshold": "SNR-Schwellenwert:",
+      "snr_threshold_tooltip": "Punkte mit SNR ≥ Schwellenwert gelten als 'gut'",
+      "snr_good_marker": "Marker (gut, SNR ≥ thresh):",
+      "snr_poor_marker": "Marker (schlecht, SNR < thresh):",
+      "snr_poor_alpha": "Transparenz (schlecht):",
+      "snr_errorbars": "Fehlerbalken anzeigen:",
+      "snr_errorbars_tooltip": "Subtile Fehlerbalken auf alle sichtbaren SNR-Punkte"
+    },
+
+    "subplot": {
+      "title": "Plotbereich",
+      "show_in": "Anzeigen in:",
+      "both": "Hauptplot und Subplot",
+      "main": "Nur Hauptplot",
+      "sub": "Nur Subplot",
+      "tooltip": "Steuert, in welchem Axes-Bereich diese Gruppe dargestellt wird,\nwenn ein Subplot aktiv ist (ASAXS ± Subplot, PDDF)."
+    },
+
+    "asaxs": {
+      "title": "ASAXS",
+      "term_type": "Term-Typ:",
+      "none": "(keiner)",
+      "normal": "Normal (I_N)",
+      "cross": "Cross-Term (I_cross)",
+      "anomalous": "Anomal (I_A)"
     }
   },
 
@@ -619,6 +667,9 @@
     "apply": "Design anwenden",
     "save_current": "Aktuelles speichern...",
     "save_as_default": "⭐ Als Programmstandard speichern",
+    "info": "Info",
+    "error": "Fehler",
+    "warning": "Warnung",
     "success": "Erfolg",
 
     "tabs": {
@@ -643,7 +694,11 @@
       "marker": "Marker:",
       "line_width": "Linienbreite:",
       "marker_size": "Markergröße:",
-      "delete_confirm": "Stil '{name}' löschen?"
+      "delete_confirm": "Stil '{name}' löschen?",
+      "select_style": "Bitte wählen Sie einen Stil aus.",
+      "name_required": "Bitte geben Sie einen Namen ein.",
+      "custom": "Benutzerdefinierter Stil",
+      "name_prompt": "Stil-Name:"
     },
 
     "colors": {
