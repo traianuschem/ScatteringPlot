@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python -m pip install h5py)",
+      "Bash(python -c \"import h5py; print\\('h5py version:', h5py.__version__\\)\")",
+      "Bash(where python *)",
+      "Bash(py -3 -m pip install h5py)",
+      "Bash(py -3 -c \"import h5py; print\\('h5py OK:', h5py.__version__\\)\")",
+      "PowerShell(pip install h5py)",
+      "PowerShell(python -c \"import h5py; print\\('h5py OK:', h5py.__version__\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(python3.13 -c \"import ast; ast.parse\\(open\\('dialogs/plot2d_dialog.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python3.13 -c \"import ast; ast.parse\\(open\\('dialogs/plot2d_dialog.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
+    ]
+  }
+}
