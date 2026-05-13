@@ -2365,37 +2365,43 @@ class ScatterPlotApp(QMainWindow):
             print(f"✓ Einheitliche Farbe für Gruppe '{group.name}' gesetzt: {color_hex}")
 
     def unify_group_colors(self, group):
-        """Vereinheitlicht die Farben aller Datasets in einer Gruppe (v5.7)"""
+        """Setzt Farbe für Datasets ohne Farbe in einer Gruppe (v5.7, fix v7.3.1).
+
+        Nur Datasets ohne gesetzte Farbe (color=None) werden angepasst.
+        Bereits manuell gesetzte Einzelfarben bleiben erhalten.
+        """
         if not group.datasets:
             return
 
-        # Erste verfügbare Farbe finden (von bereits gesetzten Datasets)
-        unified_color = None
+        # Nur unkolorierte Datasets behandeln
+        uncolored = [ds for ds in group.datasets if not ds.color]
+        if not uncolored:
+            return  # Alle haben bereits eine Farbe — nichts tun
+
+        # Referenzfarbe: erste gesetzte Farbe in der Gruppe
+        reference_color = None
         for dataset in group.datasets:
             if dataset.color:
-                unified_color = dataset.color
+                reference_color = dataset.color
                 break
 
-        # Wenn keine Farbe gesetzt ist, eine neue aus der Palette holen
-        if not unified_color:
-            # Farbpalette für diese Gruppe
+        # Wenn keine Farbe in der Gruppe gesetzt ist, aus der Palette holen
+        if not reference_color:
             if group.color_scheme and group.color_scheme in self.config.color_schemes:
                 colors = self.config.color_schemes[group.color_scheme]
             else:
-                # Standard-Farbpalette
                 scheme_name = self.color_scheme_combo.currentText()
                 colors = self.config.color_schemes.get(scheme_name, ['#1f77b4'])
-
-            # Erste Farbe aus der Palette nehmen
             from itertools import cycle
-            color_cycle = cycle(colors)
-            unified_color = next(color_cycle)
+            reference_color = next(cycle(colors))
 
-        # Alle Datasets in der Gruppe auf diese Farbe setzen
-        for dataset in group.datasets:
-            dataset.color = unified_color
+        # Nur die Datasets ohne Farbe anpassen
+        for dataset in uncolored:
+            dataset.color = reference_color
 
-        print(f"✓ Farben in Gruppe '{group.name}' vereinheitlicht: {unified_color}")
+        self.logger.debug(
+            f"Farbe für {len(uncolored)} neue Dataset(s) in '{group.name}' gesetzt: {reference_color}"
+        )
 
     def apply_style_to_dataset(self, item, preset_name):
         """Wendet Stil-Vorlage auf Datensatz an (v5.2+)"""
@@ -2433,11 +2439,11 @@ class ScatterPlotApp(QMainWindow):
         self.rebuild_tree()
         self.update_plot()
 
-        print(f"✓ Dataset '{dataset.name}' zu Gruppe '{target_group.name}' verschoben")
+        self.logger.debug(f"Dataset '{dataset.name}' zu Gruppe '{target_group.name}' verschoben")
 
     def sync_data_from_tree(self):
         """Synchronisiert Datenstrukturen nach Drag & Drop im Tree"""
-        print("🔄 Synchronisiere Datenstrukturen nach Drag & Drop...")
+        self.logger.debug("Synchronisiere Datenstrukturen nach Drag & Drop...")
 
         # Alle Gruppen leeren
         for group in self.groups:
@@ -2478,7 +2484,7 @@ class ScatterPlotApp(QMainWindow):
 
         # Plot aktualisieren
         self.update_plot()
-        print(f"✓ Synchronisation abgeschlossen: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
+        self.logger.debug(f"Synchronisation abgeschlossen: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
 
     def rebuild_tree(self):
         """Baut Tree komplett neu auf"""
