@@ -53,12 +53,36 @@ class DataSet:
         self.y_min = None
         self.y_max = None
 
+        # ASAXS (v7.3)
+        self.data_term = ''        # '', 'normal', 'cross', 'anomalous'
+        self.snr_visualization = False  # SNR-basierte Qualitätsmarker
+        # SNR-Visualisierungseinstellungen
+        self.snr_threshold = 1.0          # SNR-Schwellenwert (Standard: 1)
+        self.snr_good_marker = 'o'        # Marker für gute Punkte
+        self.snr_poor_marker = '^'        # Marker für schlechte Punkte
+        self.snr_poor_alpha = 0.3         # Transparenz der schlechten Punkte
+        self.snr_show_errorbars = True    # Fehlerbalken im SNR-Modus anzeigen
+        self._auto_detect_asaxs_term()
+        # Cross-term kann negative Intensitäten haben — positiv-Filter deaktivieren
+        if self.data_term == 'cross' and self.filter_nonpositive:
+            self.filter_nonpositive = False
+
         if not skip_load:
             self.load_data()
 
         # Auto-Stil anwenden
         if apply_auto_style:
             self.apply_auto_style()
+
+    def _auto_detect_asaxs_term(self):
+        """Erkennt ASAXS-Term-Typ automatisch aus dem Dateinamen."""
+        stem = self.filepath.stem.lower()
+        if stem.endswith('_icross') or '_icross_' in stem:
+            self.data_term = 'cross'
+        elif stem.endswith('_in') or '_in_' in stem:
+            self.data_term = 'normal'
+        elif stem.endswith('_ia') or '_ia_' in stem:
+            self.data_term = 'anomalous'
 
     def load_data(self, raise_on_error=True):
         """Lädt Daten
@@ -149,7 +173,14 @@ class DataSet:
             'x_max': self.x_max,
             'y_min': self.y_min,
             'y_max': self.y_max,
-            'filter_nonpositive': self.filter_nonpositive
+            'filter_nonpositive': self.filter_nonpositive,
+            'data_term': self.data_term,
+            'snr_visualization': self.snr_visualization,
+            'snr_threshold': self.snr_threshold,
+            'snr_good_marker': self.snr_good_marker,
+            'snr_poor_marker': self.snr_poor_marker,
+            'snr_poor_alpha': self.snr_poor_alpha,
+            'snr_show_errorbars': self.snr_show_errorbars,
         }
 
     @classmethod
@@ -176,6 +207,14 @@ class DataSet:
         ds.x_max = data.get('x_max')
         ds.y_min = data.get('y_min')
         ds.y_max = data.get('y_max')
+        if 'data_term' in data:
+            ds.data_term = data['data_term']
+        ds.snr_visualization = data.get('snr_visualization', False)
+        ds.snr_threshold = data.get('snr_threshold', 1.0)
+        ds.snr_good_marker = data.get('snr_good_marker', 'o')
+        ds.snr_poor_marker = data.get('snr_poor_marker', '^')
+        ds.snr_poor_alpha = data.get('snr_poor_alpha', 0.3)
+        ds.snr_show_errorbars = data.get('snr_show_errorbars', True)
 
         # Versuche Daten zu laden, aber ignoriere Fehler (z.B. fehlende Dateien)
         ds.load_data(raise_on_error=False)

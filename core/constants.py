@@ -55,5 +55,11 @@ PLOT_TYPES = {
         'xscale': 'linear',
         'yscale': 'linear',
         'xlim': (-180.0, 180.0),   # default x-limits applied automatically
+    },
+    'ASAXS': {
+        'xlabel': 'q / nm⁻¹',
+        'ylabel': 'I / cm⁻¹',
+        'xscale': 'log',
+        'yscale': 'log',
     }
 }

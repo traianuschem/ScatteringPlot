@@ -577,6 +577,16 @@ class ScatterPlotApp(QMainWindow):
         self.wavelength_edit.editingFinished.connect(self.update_wavelength)
         options_layout.addWidget(self.wavelength_edit, 3, 1)
 
+        # ASAXS: Linearer Cross-Term Subplot (nur sichtbar im ASAXS-Modus)
+        self.asaxs_subplot_btn = QPushButton("± Subplot")
+        self.asaxs_subplot_btn.setCheckable(True)
+        self.asaxs_subplot_btn.setVisible(False)
+        self.asaxs_subplot_btn.setToolTip(
+            "Linearen Cross-Term Subplot anzeigen (zeigt I_cross inkl. negativer Werte)"
+        )
+        self.asaxs_subplot_btn.toggled.connect(self.update_plot)
+        options_layout.addWidget(self.asaxs_subplot_btn, 4, 0, 1, 2)
+
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
 
@@ -691,14 +701,28 @@ class ScatterPlotApp(QMainWindow):
             warnings.filterwarnings('ignore', message='.*non-positive.*')
             self.fig.clear()
 
-        # PDDF hat Subplot
+        # PDDF hat Subplot; ASAXS hat optionalen Subplot für Cross-Term
+        asaxs_subplot_active = (
+            self.plot_type == 'ASAXS'
+            and getattr(self, 'asaxs_subplot_btn', None) is not None
+            and self.asaxs_subplot_btn.isChecked()
+        )
         if self.plot_type == 'PDDF':
             gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.05, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
             self.ax_pddf = self.fig.add_subplot(gs[1], sharex=self.ax_main)
+            ax_sub = None
+        elif asaxs_subplot_active:
+            gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
+            self.ax_main = self.fig.add_subplot(gs[0])
+            ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
+            ax_sub.set_ylabel('$I_{cross}$ / cm⁻¹')
+            ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
+            self.ax_pddf = None
         else:
             self.ax_main = self.fig.add_subplot(111)
             self.ax_pddf = None
+            ax_sub = None
 
         # Farben holen (global)
         color_scheme = self.color_scheme_combo.currentText()
@@ -782,47 +806,58 @@ class ScatterPlotApp(QMainWindow):
                 # Stack-Multiplikation mit eigenem Gruppen-Faktor
                 y = y * stack_factor
 
+                # Fehler vorberechnen (wird für SNR und Cross-Term-Subplot benötigt)
+                y_err_trans = None
+                if y_err_data is not None:
+                    y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
+                    y_err_trans = y_err_trans * stack_factor
+
+                # ASAXS Cross-Term: in Subplot rendern (alle Werte inkl. negativ),
+                # im Haupt-Plot nur positive Werte zeigen
+                if ax_sub is not None and getattr(dataset, 'data_term', '') == 'cross':
+                    self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
+                    pos_mask = y > 0
+                    if not np.any(pos_mask):
+                        continue
+                    x = x[pos_mask]
+                    y = y[pos_mask]
+                    if y_err_trans is not None:
+                        y_err_trans = y_err_trans[pos_mask]
+
                 # Plotten
                 plot_style = dataset.get_plot_style()
                 errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
+                # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
+                if getattr(dataset, 'snr_visualization', False) and y_err_trans is not None and len(x) > 0:
+                    self._render_snr_markers(self.ax_main, x, y, y_err_trans, dataset, color, plot_info)
                 # Spezialfall: stem plot für XRD-Referenz
-                if errorbar_style == 'stem':
-                    # Stem plot: Vertikale Linien von x-Achse zu Datenpunkten
+                elif errorbar_style == 'stem':
                     markerline, stemlines, baseline = self.ax_main.stem(
                         x, y,
                         linefmt=color,
                         markerfmt=dataset.marker_style if dataset.marker_style else 'o',
-                        basefmt=' '  # Keine Basislinie
+                        basefmt=' '
                     )
-                    # Stil anpassen
                     markerline.set_markerfacecolor(color)
                     markerline.set_markeredgecolor(color)
                     markerline.set_markersize(dataset.marker_size)
                     stemlines.set_linewidth(dataset.line_width)
                     stemlines.set_alpha(dataset.errorbar_alpha)
-                    # Label für Legende (manuell, da stem keinen label Parameter hat)
                     self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
                                      markersize=dataset.marker_size, linestyle='',
                                      label=dataset.display_label)
                 # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-                elif y_err_data is not None and dataset.show_errorbars:
-                    # Fehler transformieren
-                    y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-                    y_err_trans = y_err_trans * stack_factor
-
+                elif y_err_trans is not None and dataset.show_errorbars:
                     if errorbar_style == 'fill':
-                        # Transparente Fehlerfläche (klassische Methode)
                         self.ax_main.fill_between(
                             x, y - y_err_trans, y + y_err_trans,
                             alpha=dataset.errorbar_alpha,
                             color=color
                         )
-                        # Hauptkurve plotten
                         self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                          linewidth=dataset.line_width, markersize=dataset.marker_size)
                     else:  # 'bars'
-                        # Fehlerbalken mit Caps
                         self.ax_main.errorbar(
                             x, y, yerr=y_err_trans,
                             fmt=plot_style,
@@ -837,7 +872,6 @@ class ScatterPlotApp(QMainWindow):
                             capthick=dataset.errorbar_linewidth
                         )
                 else:
-                    # Ohne Fehlerbalken normal plotten
                     self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                      linewidth=dataset.line_width, markersize=dataset.marker_size)
 
@@ -889,46 +923,56 @@ class ScatterPlotApp(QMainWindow):
             # Daten transformieren
             x, y = self.transform_data(x_data, y_data, self.plot_type)
 
+            # Fehler vorberechnen
+            y_err_trans = None
+            if y_err_data is not None:
+                y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
+
+            # ASAXS Cross-Term: in Subplot rendern, im Haupt-Plot nur positive Werte
+            if ax_sub is not None and getattr(dataset, 'data_term', '') == 'cross':
+                self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
+                pos_mask = y > 0
+                if not np.any(pos_mask):
+                    continue
+                x = x[pos_mask]
+                y = y[pos_mask]
+                if y_err_trans is not None:
+                    y_err_trans = y_err_trans[pos_mask]
+
             # Plotten
             plot_style = dataset.get_plot_style()
             errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
 
+            # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
+            if getattr(dataset, 'snr_visualization', False) and y_err_trans is not None and len(x) > 0:
+                self._render_snr_markers(self.ax_main, x, y, y_err_trans, dataset, color, plot_info)
             # Spezialfall: stem plot für XRD-Referenz
-            if errorbar_style == 'stem':
-                # Stem plot: Vertikale Linien von x-Achse zu Datenpunkten
+            elif errorbar_style == 'stem':
                 markerline, stemlines, baseline = self.ax_main.stem(
                     x, y,
                     linefmt=color,
                     markerfmt=dataset.marker_style if dataset.marker_style else 'o',
-                    basefmt=' '  # Keine Basislinie
+                    basefmt=' '
                 )
-                # Stil anpassen
                 markerline.set_markerfacecolor(color)
                 markerline.set_markeredgecolor(color)
                 markerline.set_markersize(dataset.marker_size)
                 stemlines.set_linewidth(dataset.line_width)
                 stemlines.set_alpha(dataset.errorbar_alpha)
-                # Label für Legende (manuell, da stem keinen label Parameter hat)
                 self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
                                  markersize=dataset.marker_size, linestyle='',
                                  label=dataset.display_label)
             # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-            elif y_err_data is not None and dataset.show_errorbars:
-                # Fehler transformieren
-                y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-
+            elif y_err_trans is not None and dataset.show_errorbars:
                 if errorbar_style == 'fill':
-                    # Transparente Fehlerfläche (klassische Methode)
                     self.ax_main.fill_between(
                         x, y - y_err_trans, y + y_err_trans,
                         alpha=dataset.errorbar_alpha,
                         color=color
                     )
-                    # Hauptkurve plotten
                     self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                      linewidth=dataset.line_width, markersize=dataset.marker_size)
                 else:  # 'bars'
-                    # Fehlerbalken mit Caps
                     self.ax_main.errorbar(
                         x, y, yerr=y_err_trans,
                         fmt=plot_style,
@@ -943,7 +987,6 @@ class ScatterPlotApp(QMainWindow):
                         capthick=dataset.errorbar_linewidth
                     )
             else:
-                # Ohne Fehlerbalken normal plotten
                 self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
                                  linewidth=dataset.line_width, markersize=dataset.marker_size)
 
@@ -1048,6 +1091,20 @@ class ScatterPlotApp(QMainWindow):
                             linewidth=self.grid_settings['minor_linewidth'],
                             color=self.grid_settings['minor_color'],
                             alpha=self.grid_settings['minor_alpha'])
+
+        # ASAXS Cross-Term Subplot: Achsenbeschriftung und Grid
+        if ax_sub is not None:
+            ax_sub.set_xlabel(xlabel, fontsize=self.font_settings.get('labels_size', 12),
+                              weight=label_weight, style=label_style,
+                              fontfamily=self.font_settings.get('labels_font_family',
+                                                                self.font_settings.get('font_family', 'sans-serif')))
+            ax_sub.set_xscale('log')
+            if self.grid_settings['major_enable']:
+                ax_sub.grid(True, which='major',
+                            linestyle=self.grid_settings['major_linestyle'],
+                            linewidth=self.grid_settings['major_linewidth'],
+                            color=self.grid_settings['major_color'],
+                            alpha=self.grid_settings['major_alpha'])
 
         # Achsenlimits
         if not self.axis_limits['auto']:
@@ -1343,6 +1400,67 @@ class ScatterPlotApp(QMainWindow):
 
         return label
 
+    def _render_snr_markers(self, ax, x, y, y_err, dataset, color, plot_info):
+        """Rendert Datenpunkte mit SNR-basierten Qualitätsmarkern.
+
+        Gute Punkte (SNR ≥ Schwellenwert): konfigurierbarer gefüllter Marker.
+        Schlechte Punkte (SNR < Schwellenwert): konfigurierbarer offener Marker, gedimmt.
+        Einstellungen stammen aus den dataset.snr_* Attributen.
+        """
+        threshold = getattr(dataset, 'snr_threshold', 1.0)
+        good_marker = getattr(dataset, 'snr_good_marker', 'o') or 'o'
+        poor_marker = getattr(dataset, 'snr_poor_marker', '^') or '^'
+        poor_alpha = getattr(dataset, 'snr_poor_alpha', 0.3)
+        show_eb = getattr(dataset, 'snr_show_errorbars', True)
+
+        with np.errstate(invalid='ignore', divide='ignore'):
+            snr = np.abs(y) / np.abs(y_err)
+
+        mask_good = (snr >= threshold) & np.isfinite(snr)
+        mask_poor = (snr < threshold) & np.isfinite(snr)
+
+        # Bei log-Skala nur positive y-Werte
+        current_yscale = self.axis_limits.get('yscale') or plot_info.get('yscale', 'log')
+        if current_yscale == 'log':
+            pos = y > 0
+            mask_good &= pos
+            mask_poor &= pos
+
+        marker_s = max(float(dataset.marker_size), 2.0) ** 2 * 3.5
+        label_shown = False
+
+        if np.any(mask_good):
+            ax.scatter(x[mask_good], y[mask_good],
+                       marker=good_marker, s=marker_s, color=color, zorder=3,
+                       label=dataset.display_label)
+            label_shown = True
+
+        if np.any(mask_poor):
+            ax.scatter(x[mask_poor], y[mask_poor],
+                       marker=poor_marker, s=marker_s * 0.85,
+                       facecolors='none', edgecolors=color, alpha=poor_alpha, zorder=3)
+
+        if not label_shown:
+            ax.plot([], [], color=color, marker=good_marker, linestyle='',
+                    markersize=dataset.marker_size, label=dataset.display_label)
+
+        # Optionale Fehlerbalken auf alle sichtbaren Punkte
+        if show_eb:
+            all_vis = mask_good | mask_poor
+            if np.any(all_vis):
+                ax.errorbar(x[all_vis], y[all_vis], yerr=y_err[all_vis],
+                            fmt='none', ecolor=color, elinewidth=0.8,
+                            capsize=2, capthick=0.8, alpha=0.3, zorder=2)
+
+    def _render_cross_term_subplot(self, ax_sub, x, y, y_err, dataset, color):
+        """Rendert den Cross-Term vollständig (inkl. negativer Werte) im linearen Subplot."""
+        plot_style = dataset.get_plot_style()
+        ax_sub.plot(x, y, plot_style, color=color,
+                    linewidth=dataset.line_width, markersize=dataset.marker_size)
+        if y_err is not None and dataset.show_errorbars:
+            ax_sub.fill_between(x, y - y_err, y + y_err,
+                                alpha=dataset.errorbar_alpha, color=color)
+
     def transform_data(self, x, y, plot_type):
         """Transformiert Daten je nach Plot-Typ"""
         if plot_type == 'Porod':
@@ -1392,7 +1510,7 @@ class ScatterPlotApp(QMainWindow):
             Der konvertierte X-Wert im Ziel-Plottyp
         """
         # Plottypen, die q verwenden (keine Transformation der X-Achse)
-        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF'}
+        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS'}
 
         # Zuerst auf q zurückrechnen (Basiseinheit)
         if from_plot_type in q_types:
@@ -2117,6 +2235,14 @@ class ScatterPlotApp(QMainWindow):
             dataset.errorbar_capsize = settings['errorbar_capsize']
             dataset.errorbar_alpha = settings['errorbar_alpha']
             dataset.errorbar_linewidth = settings['errorbar_linewidth']
+            dataset.snr_visualization = settings.get('snr_visualization', False)
+            dataset.snr_threshold = settings.get('snr_threshold', 1.0)
+            dataset.snr_good_marker = settings.get('snr_good_marker', 'o')
+            dataset.snr_poor_marker = settings.get('snr_poor_marker', '^')
+            dataset.snr_poor_alpha = settings.get('snr_poor_alpha', 0.3)
+            dataset.snr_show_errorbars = settings.get('snr_show_errorbars', True)
+            if settings.get('data_term') is not None:
+                dataset.data_term = settings['data_term']
 
             self.update_plot()
             self.logger.info(f"Kurveneinstellungen für '{dataset.name}' aktualisiert")
@@ -2165,6 +2291,14 @@ class ScatterPlotApp(QMainWindow):
                 dataset.errorbar_capsize = settings['errorbar_capsize']
                 dataset.errorbar_alpha = settings['errorbar_alpha']
                 dataset.errorbar_linewidth = settings['errorbar_linewidth']
+                dataset.snr_visualization = settings.get('snr_visualization', False)
+                dataset.snr_threshold = settings.get('snr_threshold', 1.0)
+                dataset.snr_good_marker = settings.get('snr_good_marker', 'o')
+                dataset.snr_poor_marker = settings.get('snr_poor_marker', '^')
+                dataset.snr_poor_alpha = settings.get('snr_poor_alpha', 0.3)
+                dataset.snr_show_errorbars = settings.get('snr_show_errorbars', True)
+                if settings.get('data_term') is not None:
+                    dataset.data_term = settings['data_term']
 
             self.update_plot()
             self.logger.info(f"Gruppeneinstellungen für '{group.name}' aktualisiert ({len(group.datasets)} Kurven)")
@@ -2407,6 +2541,14 @@ class ScatterPlotApp(QMainWindow):
                 self.update_annotations_tree()
 
         self.plot_type = new_plot_type
+
+        # ASAXS Subplot Button sichtbar/unsichtbar
+        if hasattr(self, 'asaxs_subplot_btn'):
+            is_asaxs = new_plot_type == 'ASAXS'
+            self.asaxs_subplot_btn.setVisible(is_asaxs)
+            if not is_asaxs:
+                self.asaxs_subplot_btn.setChecked(False)
+
         self.update_plot()
 
     def change_color_scheme(self):

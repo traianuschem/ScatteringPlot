@@ -11,7 +11,8 @@ Umfassender Dialog zur Bearbeitung aller Kurveneinstellungen:
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
     QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton,
-    QComboBox, QSpinBox, QDoubleSpinBox, QColorDialog, QFrame
+    QComboBox, QSpinBox, QDoubleSpinBox, QColorDialog, QFrame, QWidget,
+    QScrollArea, QSizePolicy
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -267,6 +268,109 @@ class CurveSettingsDialog(QDialog):
         # Initial errorbar settings aktivieren/deaktivieren
         self.toggle_errorbar_settings()
 
+        # === DATENQUALITÄT (SNR-Visualisierung) ===
+        quality_group = QGroupBox("Datenqualität")
+        quality_layout = QVBoxLayout()
+
+        self.snr_viz_check = QCheckBox("SNR-Qualitätsmarker anzeigen")
+        self.snr_viz_check.setChecked(getattr(dataset, 'snr_visualization', False))
+        self.snr_viz_check.setToolTip(
+            "Gute Punkte (SNR ≥ Schwellenwert): gefüllter Marker\n"
+            "Schlechte Punkte (SNR < Schwellenwert): offener Marker, gedimmt\n"
+            "Benötigt Fehlerdaten (3. Spalte) in der Datei."
+        )
+        if not has_errors:
+            self.snr_viz_check.setEnabled(False)
+            self.snr_viz_check.setToolTip("Keine Fehlerdaten vorhanden — SNR-Marker nicht verfügbar.")
+        quality_layout.addWidget(self.snr_viz_check)
+
+        # Untereinstellungen (nur sichtbar wenn SNR aktiv)
+        self.snr_detail_widget = QWidget()
+        snr_detail_layout = QGridLayout(self.snr_detail_widget)
+        snr_detail_layout.setContentsMargins(16, 4, 4, 4)
+
+        marker_styles = self.get_marker_styles()
+        marker_names = list(marker_styles.keys())
+        marker_values = list(marker_styles.values())
+
+        # SNR-Schwellenwert
+        snr_detail_layout.addWidget(QLabel("SNR-Schwellenwert:"), 0, 0)
+        self.snr_threshold_spin = QDoubleSpinBox()
+        self.snr_threshold_spin.setRange(0.1, 20.0)
+        self.snr_threshold_spin.setSingleStep(0.1)
+        self.snr_threshold_spin.setDecimals(1)
+        self.snr_threshold_spin.setValue(getattr(dataset, 'snr_threshold', 1.0))
+        self.snr_threshold_spin.setToolTip("Punkte mit SNR ≥ Schwellenwert gelten als 'gut'")
+        snr_detail_layout.addWidget(self.snr_threshold_spin, 0, 1)
+
+        # Marker gute Punkte
+        snr_detail_layout.addWidget(QLabel("Marker (gut, SNR ≥ thresh):"), 1, 0)
+        self.snr_good_marker_combo = QComboBox()
+        for n, v in marker_styles.items():
+            self.snr_good_marker_combo.addItem(n, v)
+        good_val = getattr(dataset, 'snr_good_marker', 'o')
+        for i, v in enumerate(marker_values):
+            if v == good_val:
+                self.snr_good_marker_combo.setCurrentIndex(i)
+                break
+        snr_detail_layout.addWidget(self.snr_good_marker_combo, 1, 1)
+
+        # Marker schlechte Punkte
+        snr_detail_layout.addWidget(QLabel("Marker (schlecht, SNR < thresh):"), 2, 0)
+        self.snr_poor_marker_combo = QComboBox()
+        for n, v in marker_styles.items():
+            self.snr_poor_marker_combo.addItem(n, v)
+        poor_val = getattr(dataset, 'snr_poor_marker', '^')
+        for i, v in enumerate(marker_values):
+            if v == poor_val:
+                self.snr_poor_marker_combo.setCurrentIndex(i)
+                break
+        snr_detail_layout.addWidget(self.snr_poor_marker_combo, 2, 1)
+
+        # Alpha schlechte Punkte
+        snr_detail_layout.addWidget(QLabel("Transparenz (schlecht):"), 3, 0)
+        self.snr_poor_alpha_spin = QDoubleSpinBox()
+        self.snr_poor_alpha_spin.setRange(0.0, 1.0)
+        self.snr_poor_alpha_spin.setSingleStep(0.05)
+        self.snr_poor_alpha_spin.setDecimals(2)
+        self.snr_poor_alpha_spin.setValue(getattr(dataset, 'snr_poor_alpha', 0.3))
+        snr_detail_layout.addWidget(self.snr_poor_alpha_spin, 3, 1)
+
+        # Fehlerbalken im SNR-Modus
+        snr_detail_layout.addWidget(QLabel("Fehlerbalken anzeigen:"), 4, 0)
+        self.snr_errorbars_check = QCheckBox()
+        self.snr_errorbars_check.setChecked(getattr(dataset, 'snr_show_errorbars', True))
+        self.snr_errorbars_check.setToolTip("Subtile Fehlerbalken auf alle sichtbaren SNR-Punkte")
+        snr_detail_layout.addWidget(self.snr_errorbars_check, 4, 1)
+
+        quality_layout.addWidget(self.snr_detail_widget)
+        quality_group.setLayout(quality_layout)
+        layout.addWidget(quality_group)
+
+        # Sichtbarkeit der SNR-Untereinstellungen steuern
+        self.snr_detail_widget.setVisible(self.snr_viz_check.isChecked())
+        self.snr_viz_check.toggled.connect(self.snr_detail_widget.setVisible)
+
+        # === ASAXS ===
+        asaxs_group = QGroupBox("ASAXS")
+        asaxs_layout = QGridLayout()
+
+        asaxs_layout.addWidget(QLabel("Term-Typ:"), 0, 0)
+        self.asaxs_term_combo = QComboBox()
+        self.asaxs_term_combo.addItem("(keiner)", "")
+        self.asaxs_term_combo.addItem("Normal (I_N)", "normal")
+        self.asaxs_term_combo.addItem("Cross-Term (I_cross)", "cross")
+        self.asaxs_term_combo.addItem("Anomal (I_A)", "anomalous")
+        current_term = getattr(dataset, 'data_term', '')
+        for i in range(self.asaxs_term_combo.count()):
+            if self.asaxs_term_combo.itemData(i) == current_term:
+                self.asaxs_term_combo.setCurrentIndex(i)
+                break
+        asaxs_layout.addWidget(self.asaxs_term_combo, 0, 1)
+
+        asaxs_group.setLayout(asaxs_layout)
+        layout.addWidget(asaxs_group)
+
         # === BUTTONS ===
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -409,4 +513,11 @@ class CurveSettingsDialog(QDialog):
             'errorbar_capsize': self.errorbar_capsize_spin.value(),
             'errorbar_alpha': self.errorbar_alpha_spin.value(),
             'errorbar_linewidth': self.errorbar_linewidth_spin.value(),
+            'snr_visualization': self.snr_viz_check.isChecked(),
+            'snr_threshold': self.snr_threshold_spin.value(),
+            'snr_good_marker': self.snr_good_marker_combo.currentData(),
+            'snr_poor_marker': self.snr_poor_marker_combo.currentData(),
+            'snr_poor_alpha': self.snr_poor_alpha_spin.value(),
+            'snr_show_errorbars': self.snr_errorbars_check.isChecked(),
+            'data_term': self.asaxs_term_combo.currentData(),
         }
