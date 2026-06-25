@@ -644,6 +644,9 @@
       "both": "Hauptplot und Subplot",
       "main": "Nur Hauptplot",
       "sub": "Nur Subplot",
+      "pddf_both": "I(q) und P(r)",
+      "pddf_main": "Nur I(q)",
+      "pddf_sub": "Nur P(r)",
       "tooltip": "Steuert, in welchem Axes-Bereich diese Gruppe dargestellt wird,\nwenn ein Subplot aktiv ist (ASAXS ± Subplot, PDDF)."
     },
 

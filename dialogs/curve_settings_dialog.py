@@ -65,7 +65,7 @@ class CurveSettingsDialog(QDialog):
         }
 
     def __init__(self, parent, dataset, current_color_scheme=None,
-                 color_schemes=None, group=None, preset_mode=False):
+                 color_schemes=None, group=None, preset_mode=False, plot_type=None):
         """
         Args:
             parent: Parent Widget
@@ -75,8 +75,10 @@ class CurveSettingsDialog(QDialog):
             group: Optionales DataGroup-Objekt für den 'Plotbereich'-Abschnitt.
             preset_mode: True = Stil-Vorlagen-Modus (kein Farb-/ASAXS-Abschnitt,
                          Name + Beschreibung editierbar, SNR immer verfügbar).
+            plot_type: Aktueller Plot-Typ (z.B. 'PDDF') für kontextspezifische Labels.
         """
         super().__init__(parent)
+        self.plot_type = plot_type
         self.dataset = dataset
         self.group = group
         self.preset_mode = preset_mode
@@ -389,9 +391,14 @@ class CurveSettingsDialog(QDialog):
 
             subplot_layout.addWidget(QLabel(tr("curve_settings.subplot.show_in")), 0, 0)
             self.subplot_target_combo = QComboBox()
-            self.subplot_target_combo.addItem(tr("curve_settings.subplot.both"), "both")
-            self.subplot_target_combo.addItem(tr("curve_settings.subplot.main"), "main")
-            self.subplot_target_combo.addItem(tr("curve_settings.subplot.sub"), "sub")
+            if plot_type == 'PDDF':
+                self.subplot_target_combo.addItem(tr("curve_settings.subplot.pddf_both"), "both")
+                self.subplot_target_combo.addItem(tr("curve_settings.subplot.pddf_main"), "main")
+                self.subplot_target_combo.addItem(tr("curve_settings.subplot.pddf_sub"),  "sub")
+            else:
+                self.subplot_target_combo.addItem(tr("curve_settings.subplot.both"), "both")
+                self.subplot_target_combo.addItem(tr("curve_settings.subplot.main"), "main")
+                self.subplot_target_combo.addItem(tr("curve_settings.subplot.sub"),  "sub")
             current_target = getattr(self.group, 'subplot_target', 'both')
             for i in range(self.subplot_target_combo.count()):
                 if self.subplot_target_combo.itemData(i) == current_target:

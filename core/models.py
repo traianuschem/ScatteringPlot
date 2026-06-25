@@ -63,6 +63,7 @@ class DataSet:
         self.snr_poor_alpha = 0.3         # Transparenz der schlechten Punkte
         self.snr_show_errorbars = True    # Fehlerbalken im SNR-Modus anzeigen
         self._auto_detect_asaxs_term()
+        self._auto_detect_pddf_type()
         # Cross-term kann negative Intensitäten haben — positiv-Filter deaktivieren
         if self.data_term == 'cross' and self.filter_nonpositive:
             self.filter_nonpositive = False
@@ -83,6 +84,12 @@ class DataSet:
             self.data_term = 'normal'
         elif stem.endswith('_ia') or '_ia_' in stem:
             self.data_term = 'anomalous'
+
+    def _auto_detect_pddf_type(self):
+        """Erkennt P(r)-Daten automatisch aus dem Dateinamen."""
+        stem = self.filepath.stem.lower()
+        pr_patterns = ['_pr', '_p_r', '_pddf', '_pofr', 'pair_dist', 'p(r)']
+        self.is_pr_data = any(p in stem for p in pr_patterns)
 
     def load_data(self, raise_on_error=True):
         """Lädt Daten
@@ -267,6 +274,17 @@ class DataGroup:
         """Datensatz entfernen"""
         if dataset in self.datasets:
             self.datasets.remove(dataset)
+
+    def auto_suggest_pddf_subplot(self):
+        """Setzt subplot_target anhand der Dateinamen — nur wenn noch Default 'both'."""
+        if self.subplot_target != 'both' or not self.datasets:
+            return
+        pr_count = sum(1 for ds in self.datasets if getattr(ds, 'is_pr_data', False))
+        if pr_count == len(self.datasets):
+            self.subplot_target = 'sub'
+        elif pr_count == 0:
+            self.subplot_target = 'main'
+        # Gemischt → bleibt 'both'
 
     def to_dict(self):
         """Serialisierung"""

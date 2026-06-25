@@ -587,6 +587,17 @@ class ScatterPlotApp(QMainWindow):
         self.asaxs_subplot_btn.toggled.connect(self.update_plot)
         options_layout.addWidget(self.asaxs_subplot_btn, 4, 0, 1, 2)
 
+        # PDDF: Flächen-Normierung für P(r)-Subplot (nur sichtbar im PDDF-Modus)
+        self.pddf_norm_btn = QPushButton("P(r) norm.")
+        self.pddf_norm_btn.setCheckable(True)
+        self.pddf_norm_btn.setVisible(False)
+        self.pddf_norm_btn.setToolTip(
+            "P(r)-Kurven auf Fläche 1 normieren (∫P(r)dr = 1)\n"
+            "Ermöglicht direkten Formvergleich bei unterschiedlichen Intensitäten."
+        )
+        self.pddf_norm_btn.toggled.connect(self.update_plot)
+        options_layout.addWidget(self.pddf_norm_btn, 5, 0, 1, 2)
+
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
 
@@ -708,10 +719,13 @@ class ScatterPlotApp(QMainWindow):
             and self.asaxs_subplot_btn.isChecked()
         )
         if self.plot_type == 'PDDF':
-            gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.05, figure=self.fig)
+            gs = GridSpec(2, 1, height_ratios=[1, 1], hspace=0.35, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
-            ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
-            ax_sub.set_ylabel('p(r)')
+            ax_sub = self.fig.add_subplot(gs[1])  # Kein sharex: r-Achse ≠ q-Achse
+            _pddf_norm_active = (getattr(self, 'pddf_norm_btn', None) is not None
+                                 and self.pddf_norm_btn.isChecked())
+            ax_sub.set_ylabel('P(r) (norm.)' if _pddf_norm_active else 'P(r)')
+            ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
             self.ax_pddf = ax_sub  # Rückwärtskompatibilität
         elif asaxs_subplot_active:
             gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
@@ -835,6 +849,17 @@ class ScatterPlotApp(QMainWindow):
                     if y_err_trans is not None:
                         y_err_trans = y_err_trans[pos_mask]
 
+                # PDDF P(r)-Flächen-Normierung für Subplot (originale Werte bleiben für Hauptplot erhalten)
+                y_sub = y
+                y_err_sub = y_err_trans
+                if (render_in_sub and self.plot_type == 'PDDF'
+                        and getattr(self, 'pddf_norm_btn', None) is not None
+                        and self.pddf_norm_btn.isChecked()):
+                    area = np.trapz(y, x)
+                    if area > 0:
+                        y_sub = y / area
+                        y_err_sub = y_err_trans / area if y_err_trans is not None else None
+
                 # Ziel-Achsen für normales Rendering bestimmen
                 plot_style = dataset.get_plot_style()
                 errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
@@ -850,16 +875,20 @@ class ScatterPlotApp(QMainWindow):
                     continue
 
                 for i, target_ax in enumerate(target_axes):
+                    # PDDF: normierte Werte für P(r)-Subplot, Original für Hauptplot
+                    _y = y_sub if target_ax is ax_sub else y
+                    _ye = y_err_sub if target_ax is ax_sub else y_err_trans
+
                     # Legende nur auf erster Achse, um doppelte Einträge zu vermeiden
                     ds_label = dataset.display_label if i == 0 else ''
 
                     # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
-                    if getattr(dataset, 'snr_visualization', False) and y_err_trans is not None and len(x) > 0:
-                        self._render_snr_markers(target_ax, x, y, y_err_trans, dataset, color, plot_info, label=ds_label)
+                    if getattr(dataset, 'snr_visualization', False) and _ye is not None and len(x) > 0:
+                        self._render_snr_markers(target_ax, x, _y, _ye, dataset, color, plot_info, label=ds_label)
                     # Spezialfall: stem plot für XRD-Referenz
                     elif errorbar_style == 'stem':
                         markerline, stemlines, baseline = target_ax.stem(
-                            x, y,
+                            x, _y,
                             linefmt=color,
                             markerfmt=dataset.marker_style if dataset.marker_style else 'o',
                             basefmt=' '
@@ -873,18 +902,18 @@ class ScatterPlotApp(QMainWindow):
                                        markersize=dataset.marker_size, linestyle='',
                                        label=ds_label)
                     # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-                    elif y_err_trans is not None and dataset.show_errorbars:
+                    elif _ye is not None and dataset.show_errorbars:
                         if errorbar_style == 'fill':
                             target_ax.fill_between(
-                                x, y - y_err_trans, y + y_err_trans,
+                                x, _y - _ye, _y + _ye,
                                 alpha=dataset.errorbar_alpha,
                                 color=color
                             )
-                            target_ax.plot(x, y, plot_style, color=color, label=ds_label,
+                            target_ax.plot(x, _y, plot_style, color=color, label=ds_label,
                                            linewidth=dataset.line_width, markersize=dataset.marker_size)
                         else:  # 'bars'
                             target_ax.errorbar(
-                                x, y, yerr=y_err_trans,
+                                x, _y, yerr=_ye,
                                 fmt=plot_style,
                                 color=color,
                                 label=ds_label,
@@ -897,7 +926,7 @@ class ScatterPlotApp(QMainWindow):
                                 capthick=dataset.errorbar_linewidth
                             )
                     else:
-                        target_ax.plot(x, y, plot_style, color=color, label=ds_label,
+                        target_ax.plot(x, _y, plot_style, color=color, label=ds_label,
                                        linewidth=dataset.line_width, markersize=dataset.marker_size)
 
         # v7.0: Auch nicht zugeordnete Datensätze plotten in Tree-Order (ohne Stack-Faktor)
@@ -1117,13 +1146,21 @@ class ScatterPlotApp(QMainWindow):
                             color=self.grid_settings['minor_color'],
                             alpha=self.grid_settings['minor_alpha'])
 
-        # ASAXS Cross-Term Subplot: Achsenbeschriftung und Grid
+        # Subplot-Achsenbeschriftung und Grid
         if ax_sub is not None:
-            ax_sub.set_xlabel(xlabel, fontsize=self.font_settings.get('labels_size', 12),
-                              weight=label_weight, style=label_style,
-                              fontfamily=self.font_settings.get('labels_font_family',
-                                                                self.font_settings.get('font_family', 'sans-serif')))
-            ax_sub.set_xscale('log')
+            font_kwargs = dict(
+                fontsize=self.font_settings.get('labels_size', 12),
+                weight=label_weight, style=label_style,
+                fontfamily=self.font_settings.get('labels_font_family',
+                                                  self.font_settings.get('font_family', 'sans-serif')),
+            )
+            if self.plot_type == 'PDDF':
+                # P(r)-Subplot: unabhängige r-Achse, lin-lin
+                ax_sub.set_xlabel('r / nm', **font_kwargs)
+            else:
+                # ASAXS: geteilte q-Achse, log-Skala
+                ax_sub.set_xlabel(xlabel, **font_kwargs)
+                ax_sub.set_xscale('log')
             if self.grid_settings['major_enable']:
                 ax_sub.grid(True, which='major',
                             linestyle=self.grid_settings['major_linestyle'],
@@ -1317,20 +1354,38 @@ class ScatterPlotApp(QMainWindow):
             self.annotation_texts.append(text_obj)
 
         # Titel rendern (v7.0)
-        if self.title_settings.get('enabled', False) and self.title_settings.get('text'):
+        # Bei aktivem Subplot (PDDF / ASAXS): fig.suptitle() verwenden, damit
+        # tight_layout den Titel nicht abschneidet. Bei Einzelplot: ax.set_title().
+        _has_subplot = ax_sub is not None
+        _title_active = self.title_settings.get('enabled', False) and self.title_settings.get('text')
+        if _title_active:
             title_text = self.title_settings['text']
             title_weight = 'bold' if self.title_settings.get('bold', True) else 'normal'
             title_style = 'italic' if self.title_settings.get('italic', False) else 'normal'
+            title_color = self.title_settings.get('color', '#000000')
+            title_size = self.title_settings.get('size', 14)
 
-            # Titel erstellen
-            title_obj = self.ax_main.set_title(
-                title_text,
-                fontsize=self.title_settings.get('size', 14),
-                fontweight=title_weight,
-                fontstyle=title_style,
-                color=self.title_settings.get('color', '#000000'),
-                loc=self.title_settings.get('position', 'center')
-            )
+            if _has_subplot:
+                # Figur-weiter Titel über beide Subplots
+                title_obj = self.fig.suptitle(
+                    title_text,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontstyle=title_style,
+                    color=title_color,
+                    x={'left': 0.05, 'right': 0.95}.get(
+                        self.title_settings.get('position', 'center'), 0.5),
+                    ha=self.title_settings.get('position', 'center'),
+                )
+            else:
+                title_obj = self.ax_main.set_title(
+                    title_text,
+                    fontsize=title_size,
+                    fontweight=title_weight,
+                    fontstyle=title_style,
+                    color=title_color,
+                    loc=self.title_settings.get('position', 'center'),
+                )
 
             # Hintergrund (falls aktiviert)
             if self.title_settings.get('background_color'):
@@ -1342,12 +1397,23 @@ class ScatterPlotApp(QMainWindow):
                 ))
 
         # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
-        # und stem plots (die manchmal tight_layout stören)
+        # und stem plots (die manchmal tight_layout stören).
+        # rect=[0, 0, 1, 0.93] reserviert 7 % oben für suptitle wenn nötig.
+        # Mit Subplot + Titel: Platz für suptitle; mit Subplot ohne Titel: kleiner Top-Rand
+        if _has_subplot and _title_active:
+            _tl_rect = [0, 0, 1, 0.93]
+        elif _has_subplot:
+            _tl_rect = [0, 0, 1, 0.98]
+        else:
+            _tl_rect = None
         try:
             import warnings
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*tight_layout.*')
-                self.fig.tight_layout()
+                if _tl_rect:
+                    self.fig.tight_layout(rect=_tl_rect)
+                else:
+                    self.fig.tight_layout()
         except ValueError as e:
             # MathText-Parsing-Fehler (z.B. nicht geschlossene Klammern in LaTeX)
             error_msg = str(e)
@@ -1959,6 +2025,15 @@ class ScatterPlotApp(QMainWindow):
         if data and data[0] == 'group':
             edit_group_action = menu.addAction(tr("context_menu.edit_group"))
 
+        # PDDF: Schnell-Toggle Subplot-Ziel
+        pddf_subplot_menu = None
+        pddf_subplot_actions = {}
+        if data and data[0] == 'group' and self.plot_type == 'PDDF':
+            pddf_subplot_menu = menu.addMenu("Subplot")
+            pddf_subplot_actions['main'] = pddf_subplot_menu.addAction("I(q)-Plot")
+            pddf_subplot_actions['sub']  = pddf_subplot_menu.addAction("P(r)-Plot")
+            pddf_subplot_actions['both'] = pddf_subplot_menu.addAction("Beide")
+
         rename_action = menu.addAction(tr("context_menu.rename"))
 
         # Farbpalette für Gruppen (v5.4, v5.7: Erweitert um einheitliche Farbe)
@@ -2099,6 +2174,14 @@ class ScatterPlotApp(QMainWindow):
             for color, color_action in group_quick_color_actions.items():
                 if action == color_action:
                     self.set_group_quick_color(item, color)
+                    break
+        elif pddf_subplot_menu and action in pddf_subplot_actions.values():
+            # PDDF Subplot-Ziel schnell umschalten
+            for target, target_action in pddf_subplot_actions.items():
+                if action == target_action:
+                    data[1].subplot_target = target
+                    self.rebuild_tree()
+                    self.update_plot()
                     break
         elif action == reset_color_action and reset_color_action:
             self.reset_dataset_color(item)
@@ -2302,6 +2385,7 @@ class ScatterPlotApp(QMainWindow):
             current_color_scheme=active_palette_name,
             color_schemes=self.config.color_schemes,
             group=group,
+            plot_type=self.plot_type,
         )
         dialog.setWindowTitle(f"Gruppeneinstellungen für '{group.name}' ({len(group.datasets)} Kurven)")
 
@@ -2523,6 +2607,15 @@ class ScatterPlotApp(QMainWindow):
         """Baut Tree komplett neu auf"""
         self.tree.clear()
 
+        # Spaltenheader je nach Plot-Typ
+        if self.plot_type == 'PDDF':
+            self.tree.headerItem().setText(1, "Subplot")
+            # Auto-Suggest für Gruppen ohne manuell gesetzten Subplot-Target
+            for group in self.groups:
+                group.auto_suggest_pddf_subplot()
+        else:
+            self.tree.headerItem().setText(1, "×")
+
         # "Nicht zugeordnet" Sektion
         self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
         self.unassigned_item.setExpanded(True)
@@ -2535,8 +2628,12 @@ class ScatterPlotApp(QMainWindow):
 
         # Gruppen
         for group in self.groups:
-            factor_display = format_stack_factor(group.stack_factor)
-            group_item = QTreeWidgetItem(self.tree, [group.name, factor_display])
+            if self.plot_type == 'PDDF':
+                target = getattr(group, 'subplot_target', 'both')
+                col2 = {'both': 'I(q)+P(r)', 'main': 'I(q)', 'sub': 'P(r)'}.get(target, '')
+            else:
+                col2 = format_stack_factor(group.stack_factor)
+            group_item = QTreeWidgetItem(self.tree, [group.name, col2])
             group_item.setExpanded(not group.collapsed)
             group_item.setData(0, Qt.UserRole, ('group', group))
 
@@ -2587,6 +2684,13 @@ class ScatterPlotApp(QMainWindow):
             self.asaxs_subplot_btn.setVisible(is_asaxs)
             if not is_asaxs:
                 self.asaxs_subplot_btn.setChecked(False)
+
+        # PDDF Normierungs-Button sichtbar/unsichtbar
+        if hasattr(self, 'pddf_norm_btn'):
+            is_pddf = new_plot_type == 'PDDF'
+            self.pddf_norm_btn.setVisible(is_pddf)
+            if not is_pddf:
+                self.pddf_norm_btn.setChecked(False)
 
         self.update_plot()
 
