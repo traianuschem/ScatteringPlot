@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.3.2
+# ScatterForge Plot v7.4.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.3.2-blue)
+![Version](https://img.shields.io/badge/version-7.4.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -35,6 +35,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 ## 📑 Inhaltsverzeichnis
 
 - [Feature-Übersicht](#-feature-übersicht)
+- [Was ist neu in v7.4](#-was-ist-neu-in-v74)
 - [Was ist neu in v7.3](#-was-ist-neu-in-v73)
 - [Was ist neu in v7.1](#-was-ist-neu-in-v71)
 - [Was ist neu in v7.0](#-was-ist-neu-in-v70)
@@ -61,7 +62,10 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
-| **Plot-Typen** | 9 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, **ASAXS** | ✅ **v7.3.2** |
+| **Plot-Typen** | 10 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, **dlnI/dlnq** | ✅ **v7.4.0** |
+| **dlnI/dlnq-Plot** | Logarithmische Ableitung zur schnellen Identifikation versteckter Features/Schultern, mit einstellbarem Glättungsfenster | ✅ **v7.4.0** |
+| **Flexible Spaltenzuordnung** | X/Y/Fehler-Spalte frei wählbar im Kurven-Editor, auch bei 4+ Spalten pro Datei | ✅ **v7.4.0** |
+| **Gruppen-Sichtbarkeit** | Ganze Gruppen per Checkbox im Baum ein-/ausblenden | ✅ **v7.4.0** |
 | **ASAXS-Analyse** | Separation I_N / I_cross / I_A mit optionalem linearem Subplot für negative Werte | ✅ **v7.3** |
 | **SNR-Qualitätsmarker** | Datenpunkte nach Signal-Rausch-Verhältnis visuell differenzieren (alle Plot-Typen) | ✅ **v7.3** |
 | **Subplot-Routing** | Pro Gruppe wählbar: Hauptplot, Subplot oder beides (ASAXS & PDDF) | ✅ **v7.3** |
@@ -80,6 +84,20 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.4?
+
+**Minor Release v7.4.0** — Flexible Spaltenzuordnung, dlnI/dlnq-Plot, Gruppen-Sichtbarkeit
+
+### Hauptfeatures v7.4
+
+- 🧮 **Flexible Spaltenzuordnung**: Neue Sektion „Datenspalten" im „Kurve bearbeiten"-Dialog erlaubt bei Dateien mit mehr als 2 Spalten die freie Wahl, welche Spalte als X, Y und Fehler verwendet wird — nützlich bei 4-Spalten-Dateien oder abweichender Spaltenreihenfolge. Standardauswahl bleibt abwärtskompatibel zum bisherigen Verhalten
+- 📉 **Neuer Plot-Typ „dlnI/dlnq"**: Stellt die logarithmische Ableitung d ln(I)/d ln(q) gegen q dar, um versteckte Schultern und Features in Streukurven aufzudecken. Einstellbares Savitzky-Golay-Glättungsfenster reduziert Rauschen in realen Messdaten
+- 👁️ **Gruppen-Sichtbarkeit**: Neue Checkbox auf Gruppen-Ebene im Datensatz-Baum blendet komplette Gruppen im Plot ein oder aus — bisher nur für einzelne Kurven möglich
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.4.md](CHANGELOG_v7.4.md)
 
 ---
 
@@ -263,11 +281,33 @@ ScatterForge Plot liest ASCII-Dateien mit Whitespace-getrennten Spalten:
 0.3            723.1       10.5
 ```
 
+**4+ Spalten (v7.4.0):** Dateien mit mehr als 3 Spalten werden vollständig eingelesen.
+Standardmäßig wird bei 4 Spalten `x, y, x_err, y_err` angenommen (x_err wird ignoriert,
+y_err aus Spalte 4 verwendet) — bei abweichendem Aufbau lässt sich die Zuordnung manuell
+korrigieren (siehe unten).
+
 **Hinweise:**
 - Dateierweiterungen: `.dat`, `.txt`, `.csv`
 - Kommentarzeilen beginnen mit `#`
 - Dezimaltrennzeichen: Punkt (`.`)
-- Fehler in 3. Spalte optional
+- Fehler-Spalte optional
+
+#### Spaltenzuordnung anpassen (v7.4.0)
+
+Bei Dateien mit mehr als 2 Spalten kann festgelegt werden, welche Spalte als X, Y und
+Fehler verwendet wird — etwa wenn die Reihenfolge von der Standardannahme abweicht oder
+zusätzliche, nicht benötigte Spalten enthalten sind.
+
+```
+Rechtsklick auf Dataset → "🎨 Kurve bearbeiten..." → Abschnitt "Datenspalten"
+→ X-Spalte, Y-Spalte, Fehler-Spalte ("Keine" möglich) wählen → OK
+```
+
+**Hinweise:**
+- Nur sichtbar bei Dateien mit mehr als 2 Spalten und nur im Einzel-Dataset-Editor
+  (nicht bei Gruppen-Bearbeitung, da das Spaltenlayout dateispezifisch ist)
+- Änderung wird sofort auf den Plot angewendet, ohne die Datei erneut einzulesen
+- Wird in der Session gespeichert
 
 #### Daten importieren
 
@@ -295,7 +335,7 @@ Strg+O → Dateien auswählen
 
 ### 2. Plot-Typ wählen
 
-ScatterForge Plot bietet 9 spezialisierte Plot-Typen für verschiedene Analysen:
+ScatterForge Plot bietet 10 spezialisierte Plot-Typen für verschiedene Analysen:
 
 | Plot-Typ | X-Achse | Y-Achse | Anwendung |
 |----------|---------|---------|-----------|
@@ -308,6 +348,7 @@ ScatterForge Plot bietet 9 spezialisierte Plot-Typen für verschiedene Analysen:
 | **PDDF** | r [nm] | p(r) | Paardistanzverteilungsfunktion |
 | **Azimuthal Profile** | φ [°] | I [a.u.] | Azimutale Intensitätsprofile aus 2D-Daten |
 | **ASAXS** | q [nm⁻¹] | I [cm⁻¹] | Anomale SAXS-Separation (I_N, I_cross, I_A) |
+| **dlnI/dlnq** | q [nm⁻¹] | d ln(I)/d ln(q) | Versteckte Features/Schultern in Streukurven identifizieren |
 
 **Plot-Typ wechseln:**
 ```
@@ -328,6 +369,13 @@ Strg+1 bis Strg+7 (Tastaturkürzel)
 ```
 Ansicht → 2-Theta-Einstellungen...
 → Wellenlänge einstellen (Standard: Cu K-alpha = 0.1524 nm)
+```
+
+**dlnI/dlnq-Spezial-Einstellung (v7.4.0):**
+```
+1. Plot-Typ „dlnI/dlnq" wählen
+2. Glättungsfenster im Options-Panel einstellen (Savitzky-Golay, Standard: 5)
+   → größer = glatter, kann aber feine Features abschwächen
 ```
 
 ---
@@ -414,6 +462,15 @@ Rechtsklick auf Gruppe → "Farbpalette wählen..."
 → Palette auswählen (z.B. "viridis", "plasma", "TUBAF")
 → Datasets in dieser Gruppe nutzen nur diese Palette
 ```
+
+**Gruppe ein-/ausblenden (v7.4.0):**
+```
+Checkbox vor dem Gruppennamen im Baum an-/abwählen
+```
+
+Blendet alle Kurven der Gruppe inkl. Legendeneintrag komplett aus dem Plot aus —
+unabhängig vom Sichtbarkeits-Status der einzelnen Kurven darin. Praktisch, um bei vielen
+Gruppen gezielt einzelne Messreihen temporär aus dem Plot zu nehmen, ohne sie zu löschen.
 
 #### Datasets zwischen Gruppen verschieben
 
@@ -1095,7 +1152,7 @@ Wenn Sie ScatterForge Plot in Ihrer Forschung verwenden, zitieren Sie bitte:
   author = {Richard Neubert},
   title = {ScatterForge Plot: Professional Scattering Data Visualization Tool},
   year = {2026},
-  version = {7.3.2},
+  version = {7.4.0},
   url = {https://github.com/traianuschem/ScatteringPlot},
   note = {Software developed with Claude AI assistance}
 }
@@ -1122,7 +1179,8 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 ## 📚 Weitere Ressourcen
 
-- **CHANGELOG v7.3:** Aktuelle Versionshistorie → [CHANGELOG_v7.3.md](CHANGELOG_v7.3.md)
+- **CHANGELOG v7.4:** Aktuelle Versionshistorie → [CHANGELOG_v7.4.md](CHANGELOG_v7.4.md)
+- **CHANGELOG v7.3:** Ältere Versionen → [CHANGELOG_v7.3.md](CHANGELOG_v7.3.md)
 - **CHANGELOG v7.1:** Ältere Versionen → [CHANGELOG_v7.1.md](CHANGELOG_v7.1.md)
 - **CHANGELOG v7.0:** Frühere Versionen → [CHANGELOG_v7.0.md](CHANGELOG_v7.0.md)
 - **GitHub:** Repository → [traianuschem/ScatteringPlot](https://github.com/traianuschem/ScatteringPlot)
@@ -1132,6 +1190,6 @@ The program code for ScatterForge Plot v7.0+ was written by Claude (Anthropic's 
 
 **Made with ❤️ for the scientific community**
 
-*ScatterForge Plot v7.3.2 - Mai 2026*
+*ScatterForge Plot v7.4.0 - Juli 2026*
 
 ---

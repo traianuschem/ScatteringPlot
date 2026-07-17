@@ -25,6 +25,14 @@ PLOT_TYPES = {
         'xscale': 'linear',
         'yscale': 'linear'
     },
+    'dlnI/dlnq': {
+        'xlabel': 'q / nm⁻¹',
+        # Fraction-Slash (U+2044) statt "/", damit format_axis_label() dies nicht
+        # fälschlich als "Größe / Einheit" interpretiert und zu "... in ..." umbaut.
+        'ylabel': 'd ln(I) ⁄ d ln(q)',
+        'xscale': 'log',
+        'yscale': 'linear'
+    },
     'Guinier': {
         'xlabel': 'q² / nm⁻²',
         'ylabel': 'ln(I)',

@@ -3,7 +3,7 @@
   "_language_code": "de",
 
   "app": {
-    "title": "ScatterForge Plot v7.3.2"
+    "title": "ScatterForge Plot v7.4.0"
   },
 
   "menu": {
@@ -103,6 +103,8 @@
     "stack": "Stack:",
     "color_scheme": "Farbschema:",
     "wavelength": "Wellenlänge (nm):",
+    "dlnidlnq_smooth_window": "Glättungsfenster:",
+    "dlnidlnq_smooth_window_tooltip": "Fenstergröße der Savitzky-Golay-Glättung vor der Ableitung d ln(I)/d ln(q).\nGrößere Werte glätten stärker (weniger Rauschen, aber auch feinere Features können verschwinden).",
     "update_plot": "🔄 Plot aktualisieren"
   },
 
@@ -600,6 +602,17 @@
       "dashdot": "Strich-Punkt (-.)",
       "dotted": "Gepunktet (:)",
       "width": "Linien-Breite:"
+    },
+
+    "columns": {
+      "title": "Datenspalten",
+      "x_column": "X-Spalte:",
+      "y_column": "Y-Spalte:",
+      "error_column": "Fehler-Spalte:",
+      "none": "Keine",
+      "column_label": "Spalte {n} ({value}...)",
+      "info": "Legt fest, welche Spalten der Datendatei als x-, y- und Fehlerwerte verwendet werden. Ändern Sie dies, wenn die Datei mehr als 2 oder 3 Spalten hat und die automatische Zuordnung nicht passt.",
+      "selection_error": "Spaltenzuordnung konnte nicht angewendet werden: {error}"
     },
 
     "error_bars": {

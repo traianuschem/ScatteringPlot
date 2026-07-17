@@ -30,6 +30,7 @@ import sys
 from pathlib import Path
 import json
 import numpy as np
+from scipy.signal import savgol_filter
 
 # Qt6 imports
 from PySide6.QtWidgets import (
@@ -37,7 +38,7 @@ from PySide6.QtWidgets import (
     QSplitter, QTreeWidget, QTreeWidgetItem, QPushButton, QLabel,
     QCheckBox, QComboBox, QLineEdit, QFileDialog, QMessageBox,
     QInputDialog, QDialog, QDialogButtonBox, QGroupBox, QGridLayout,
-    QMenu, QDoubleSpinBox
+    QMenu, QDoubleSpinBox, QSpinBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QColor, QPalette, QShortcut, QKeySequence
@@ -598,6 +599,19 @@ class ScatterPlotApp(QMainWindow):
         self.pddf_norm_btn.toggled.connect(self.update_plot)
         options_layout.addWidget(self.pddf_norm_btn, 5, 0, 1, 2)
 
+        # dlnI/dlnq: Glättungsfenster für die Ableitung (nur sichtbar im dlnI/dlnq-Modus)
+        self.dlnidlnq_smooth_label = QLabel(tr("options.dlnidlnq_smooth_window"))
+        self.dlnidlnq_smooth_label.setVisible(False)
+        options_layout.addWidget(self.dlnidlnq_smooth_label, 6, 0)
+        self.dlnidlnq_smooth_spin = QSpinBox()
+        self.dlnidlnq_smooth_spin.setRange(3, 51)
+        self.dlnidlnq_smooth_spin.setSingleStep(2)
+        self.dlnidlnq_smooth_spin.setValue(5)
+        self.dlnidlnq_smooth_spin.setToolTip(tr("options.dlnidlnq_smooth_window_tooltip"))
+        self.dlnidlnq_smooth_spin.setVisible(False)
+        self.dlnidlnq_smooth_spin.valueChanged.connect(self._on_dlnidlnq_smooth_changed)
+        options_layout.addWidget(self.dlnidlnq_smooth_spin, 6, 1)
+
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
 
@@ -824,8 +838,10 @@ class ScatterPlotApp(QMainWindow):
                 y = y * stack_factor
 
                 # Fehler vorberechnen (wird für SNR und Cross-Term-Subplot benötigt)
+                # dlnI/dlnq: Fehlerfortpflanzung durch Glättung + Ableitung ist nicht
+                # trivial abzuleiten, daher werden hier keine Fehlerbalken angezeigt.
                 y_err_trans = None
-                if y_err_data is not None:
+                if y_err_data is not None and self.plot_type != 'dlnI/dlnq':
                     y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
                     y_err_trans = y_err_trans * stack_factor
 
@@ -978,8 +994,10 @@ class ScatterPlotApp(QMainWindow):
             x, y = self.transform_data(x_data, y_data, self.plot_type)
 
             # Fehler vorberechnen
+            # dlnI/dlnq: Fehlerfortpflanzung durch Glättung + Ableitung ist nicht
+            # trivial abzuleiten, daher werden hier keine Fehlerbalken angezeigt.
             y_err_trans = None
-            if y_err_data is not None:
+            if y_err_data is not None and self.plot_type != 'dlnI/dlnq':
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
 
             # ASAXS Cross-Term: in Subplot rendern, im Haupt-Plot nur positive Werte
@@ -1563,6 +1581,37 @@ class ScatterPlotApp(QMainWindow):
             return x, y * (x ** 2)
         elif plot_type == 'Guinier':
             return x ** 2, np.log(y)
+        elif plot_type == 'dlnI/dlnq':
+            # Logarithmische Ableitung d(ln I)/d(ln q) zur Identifikation
+            # versteckter Features (Schultern) in Streukurven.
+            pos_mask = (x > 0) & (y > 0)
+            x_pos = x[pos_mask]
+            y_pos = y[pos_mask]
+            if len(x_pos) < 2:
+                return np.array([]), np.array([])
+
+            log_x = np.log(x_pos)
+            log_y = np.log(y_pos)
+
+            window_widget = getattr(self, 'dlnidlnq_smooth_spin', None)
+            window = window_widget.value() if window_widget is not None else 5
+            if window % 2 == 0:
+                window -= 1
+            # Größtes gültiges (ungerades) Fenster, das nicht mehr Punkte
+            # verlangt als vorhanden sind
+            max_window = len(log_y) if len(log_y) % 2 == 1 else len(log_y) - 1
+            window = min(window, max_window)
+
+            if window >= 3:
+                log_y = savgol_filter(log_y, window_length=window, polyorder=2)
+            else:
+                self.logger.warning(
+                    "dlnI/dlnq: Zu wenige Datenpunkte für Glättung, "
+                    "verwende ungeglättete Ableitung"
+                )
+
+            dlnI_dlnq = np.gradient(log_y, log_x)
+            return x_pos, dlnI_dlnq
         elif plot_type == 'Bragg Spacing':
             # d = 2*pi/q (q in nm^-1, d in nm)
             d = 2 * np.pi / x
@@ -1604,7 +1653,7 @@ class ScatterPlotApp(QMainWindow):
             Der konvertierte X-Wert im Ziel-Plottyp
         """
         # Plottypen, die q verwenden (keine Transformation der X-Achse)
-        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS'}
+        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS', 'dlnI/dlnq'}
 
         # Zuerst auf q zurückrechnen (Basiseinheit)
         if from_plot_type in q_types:
@@ -1708,6 +1757,8 @@ class ScatterPlotApp(QMainWindow):
             factor_display = format_stack_factor(stack_factor)
             group_item = QTreeWidgetItem(self.tree, [name, factor_display])
             group_item.setExpanded(True)
+            group_item.setFlags(group_item.flags() | Qt.ItemIsUserCheckable)
+            group_item.setCheckState(0, Qt.Checked if group.visible else Qt.Unchecked)
             group_item.setData(0, Qt.UserRole, ('group', group))
 
             QMessageBox.information(self, tr("messages.success"), tr("messages.group_created", name=name))
@@ -1992,6 +2043,12 @@ class ScatterPlotApp(QMainWindow):
             dataset = data[1]
             # Checkbox-Status mit show_in_legend synchronisieren
             dataset.show_in_legend = (item.checkState(0) == Qt.Checked)
+            self.update_plot()
+        elif data and data[0] == 'group':
+            group = data[1]
+            # Checkbox-Status mit group.visible synchronisieren (blendet die
+            # gesamte Gruppe im Plot ein/aus, unabhängig von den einzelnen Kurven)
+            group.visible = (item.checkState(0) == Qt.Checked)
             self.update_plot()
 
     def show_context_menu(self, position):
@@ -2355,6 +2412,19 @@ class ScatterPlotApp(QMainWindow):
             if settings.get('data_term') is not None:
                 dataset.data_term = settings['data_term']
 
+            if 'col_x' in settings:
+                new_mapping = (settings['col_x'], settings['col_y'], settings['col_err'])
+                old_mapping = (dataset.col_x, dataset.col_y, dataset.col_err)
+                if new_mapping != old_mapping:
+                    try:
+                        dataset.set_column_mapping(*new_mapping)
+                    except ValueError as e:
+                        QMessageBox.warning(
+                            self,
+                            tr("messages.error"),
+                            tr("curve_settings.columns.selection_error", error=str(e))
+                        )
+
             self.update_plot()
             self.logger.info(f"Kurveneinstellungen für '{dataset.name}' aktualisiert")
 
@@ -2635,6 +2705,8 @@ class ScatterPlotApp(QMainWindow):
                 col2 = format_stack_factor(group.stack_factor)
             group_item = QTreeWidgetItem(self.tree, [group.name, col2])
             group_item.setExpanded(not group.collapsed)
+            group_item.setFlags(group_item.flags() | Qt.ItemIsUserCheckable)
+            group_item.setCheckState(0, Qt.Checked if group.visible else Qt.Unchecked)
             group_item.setData(0, Qt.UserRole, ('group', group))
 
             for dataset in group.datasets:
@@ -2692,6 +2764,20 @@ class ScatterPlotApp(QMainWindow):
             if not is_pddf:
                 self.pddf_norm_btn.setChecked(False)
 
+        # dlnI/dlnq: Glättungsfenster sichtbar/unsichtbar
+        if hasattr(self, 'dlnidlnq_smooth_spin'):
+            is_dlnidlnq = new_plot_type == 'dlnI/dlnq'
+            self.dlnidlnq_smooth_label.setVisible(is_dlnidlnq)
+            self.dlnidlnq_smooth_spin.setVisible(is_dlnidlnq)
+
+        self.update_plot()
+
+    def _on_dlnidlnq_smooth_changed(self, value):
+        """Erzwingt eine ungerade Fenstergröße für die Savitzky-Golay-Glättung"""
+        if value % 2 == 0:
+            self.dlnidlnq_smooth_spin.blockSignals(True)
+            self.dlnidlnq_smooth_spin.setValue(value + 1)
+            self.dlnidlnq_smooth_spin.blockSignals(False)
         self.update_plot()
 
     def change_color_scheme(self):
@@ -3508,6 +3594,8 @@ class ScatterPlotApp(QMainWindow):
                     factor_display = format_stack_factor(group.stack_factor)
                     group_item = QTreeWidgetItem(self.tree, [group.name, factor_display])
                     group_item.setExpanded(not group.collapsed)
+                    group_item.setFlags(group_item.flags() | Qt.ItemIsUserCheckable)
+                    group_item.setCheckState(0, Qt.Checked if group.visible else Qt.Unchecked)
                     group_item.setData(0, Qt.UserRole, ('group', group))
 
                     for dataset in group.datasets:

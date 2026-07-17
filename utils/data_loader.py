@@ -82,24 +82,15 @@ def skip_header_lines(filepath):
     return skip_lines
 
 
-def load_scattering_data(filepath, filter_nonpositive=True):
+def load_raw_data(filepath):
     """
-    Lädt Streudaten aus verschiedenen ASCII-Formaten
-
-    Erwartet Spalten:
-    - 2 Spalten: x, y
-    - 3 Spalten: x, y, y_err
-    - 4 Spalten: x, y, x_err, y_err (x_err wird ignoriert)
+    Lädt die Rohdaten einer Datei (alle Spalten, keine Spaltenauswahl).
 
     Args:
         filepath: Pfad zur Datendatei
-        filter_nonpositive: Wenn True (Standard), werden Zeilen mit x ≤ 0 oder y ≤ 0
-            entfernt (sinnvoll für log-log SAXS-Plots, aber NICHT für azimutale Profile
-            mit negativen φ-Werten oder negativen Intensitäten nach Korrekturen).
 
     Returns:
-        numpy array mit shape (n, 2) oder (n, 3)
-        Spalten: x, y, [y_err]
+        numpy array mit shape (n, m), m = Anzahl Spalten in der Datei (m >= 2)
 
     Raises:
         ValueError: Wenn die Datei nicht gelesen werden kann
@@ -130,23 +121,9 @@ def load_scattering_data(filepath, filter_nonpositive=True):
         if data.shape[1] < 2:
             raise ValueError(f"Datei hat zu wenige Spalten (erwartet mindestens 2): {filepath}")
 
-        # Wenn mehr als 3 Spalten, nehme nur x, y, y_err
-        if data.shape[1] == 4:
-            # Annahme: x, y, x_err, y_err -> nehme x, y, y_err
-            data = data[:, [0, 1, 3]]
-        elif data.shape[1] > 4:
-            # Nehme nur die ersten 3 Spalten
-            data = data[:, :3]
-
         # Entferne NaN und Inf Werte (immer)
         mask = np.isfinite(data).all(axis=1)
         data = data[mask]
-
-        # Entferne x ≤ 0 und y ≤ 0 nur für log-kompatible Plots (z.B. SAXS q/I).
-        # Für azimutale Profile (φ ∈ [−180°, 180°]) oder lineare Plots NICHT anwenden.
-        if filter_nonpositive:
-            mask = (data[:, 0] > 0) & (data[:, 1] > 0)
-            data = data[mask]
 
         if len(data) == 0:
             raise ValueError(f"Keine gültigen Datenpunkte in Datei: {filepath}")
@@ -155,6 +132,98 @@ def load_scattering_data(filepath, filter_nonpositive=True):
 
     except Exception as e:
         raise ValueError(f"Fehler beim Laden der Datei {filepath}: {str(e)}")
+
+
+def default_column_mapping(n_cols):
+    """
+    Bestimmt die Standard-Spaltenzuordnung (x, y, error) basierend auf der Spaltenanzahl.
+
+    - 2 Spalten: x, y (keine Fehler)
+    - 3 Spalten: x, y, y_err
+    - >=4 Spalten: x, y, x_err, y_err, ... -> x, y, y_err (Spalte 4, x_err wird ignoriert)
+
+    Args:
+        n_cols: Anzahl Spalten in den Rohdaten
+
+    Returns:
+        Tuple (col_x, col_y, col_err) mit col_err ggf. None
+    """
+    if n_cols <= 2:
+        return 0, 1, None
+    elif n_cols == 3:
+        return 0, 1, 2
+    else:
+        return 0, 1, 3
+
+
+def select_columns(raw_data, col_x=0, col_y=1, col_err=None, filter_nonpositive=True):
+    """
+    Wählt x/y/error-Spalten aus Rohdaten aus und filtert bei Bedarf nicht-positive Werte.
+
+    Args:
+        raw_data: numpy array mit allen Spalten (siehe load_raw_data)
+        col_x: Spaltenindex für x
+        col_y: Spaltenindex für y
+        col_err: Spaltenindex für den Fehler, oder None für keine Fehlerspalte
+        filter_nonpositive: Wenn True, werden Zeilen mit x <= 0 oder y <= 0 entfernt
+
+    Returns:
+        numpy array mit shape (n, 2) oder (n, 3): x, y, [y_err]
+
+    Raises:
+        ValueError: Wenn nach Auswahl/Filterung keine Datenpunkte übrig bleiben
+    """
+    n_cols = raw_data.shape[1]
+
+    # Ungültige Spaltenindizes (z.B. Datei mit weniger Spalten neu geladen) -> Standard
+    if col_x is None or col_y is None or col_x >= n_cols or col_y >= n_cols:
+        col_x, col_y, col_err = default_column_mapping(n_cols)
+    if col_err is not None and col_err >= n_cols:
+        col_err = None
+
+    cols = [col_x, col_y] + ([col_err] if col_err is not None else [])
+    data = raw_data[:, cols]
+
+    # Entferne x <= 0 und y <= 0 nur für log-kompatible Plots (z.B. SAXS q/I).
+    # Für azimutale Profile (φ ∈ [−180°, 180°]) oder lineare Plots NICHT anwenden.
+    if filter_nonpositive:
+        mask = (data[:, 0] > 0) & (data[:, 1] > 0)
+        data = data[mask]
+
+    if len(data) == 0:
+        raise ValueError("Keine gültigen Datenpunkte nach Spaltenauswahl/Filterung")
+
+    return data
+
+
+def load_scattering_data(filepath, filter_nonpositive=True, col_x=0, col_y=1, col_err=None):
+    """
+    Lädt Streudaten aus verschiedenen ASCII-Formaten
+
+    Erwartet Spalten (Standardzuordnung, siehe default_column_mapping):
+    - 2 Spalten: x, y
+    - 3 Spalten: x, y, y_err
+    - 4 Spalten: x, y, x_err, y_err (x_err wird ignoriert)
+
+    Args:
+        filepath: Pfad zur Datendatei
+        filter_nonpositive: Wenn True (Standard), werden Zeilen mit x ≤ 0 oder y ≤ 0
+            entfernt (sinnvoll für log-log SAXS-Plots, aber NICHT für azimutale Profile
+            mit negativen φ-Werten oder negativen Intensitäten nach Korrekturen).
+        col_x, col_y, col_err: Optionale explizite Spaltenzuordnung. Ohne Angabe wird
+            die Standardzuordnung gemäß Spaltenanzahl verwendet.
+
+    Returns:
+        numpy array mit shape (n, 2) oder (n, 3)
+        Spalten: x, y, [y_err]
+
+    Raises:
+        ValueError: Wenn die Datei nicht gelesen werden kann
+    """
+    raw_data = load_raw_data(filepath)
+    if col_err is None and (col_x, col_y) == (0, 1):
+        col_x, col_y, col_err = default_column_mapping(raw_data.shape[1])
+    return select_columns(raw_data, col_x, col_y, col_err, filter_nonpositive)
 
 
 def create_example_data(output_dir="."):

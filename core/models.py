@@ -10,7 +10,7 @@ This module contains the core data models:
 from pathlib import Path
 import logging
 import numpy as np
-from utils.data_loader import load_scattering_data
+from utils.data_loader import load_raw_data, default_column_mapping, select_columns
 from utils.user_config import get_user_config
 
 
@@ -26,6 +26,13 @@ class DataSet:
         self.y = None
         self.y_err = None
         self.data_loaded = False  # Flag für erfolgreiches Laden
+
+        # Spaltenauswahl: Rohdaten + x/y/error-Spaltenzuordnung
+        self.raw_data = None
+        self.col_x = None
+        self.col_y = None
+        self.col_err = None
+        self._columns_configured = False
         # Wenn False, werden x≤0/y≤0-Werte beim Laden NICHT gefiltert.
         # Notwendig für azimutale Profile (φ < 0) und andere lineare Daten.
         self.filter_nonpositive = filter_nonpositive
@@ -99,14 +106,10 @@ class DataSet:
         """
         logger = logging.getLogger(__name__)
         try:
-            self.data = load_scattering_data(
-                self.filepath,
-                filter_nonpositive=getattr(self, 'filter_nonpositive', True)
-            )
-            self.x = self.data[:, 0]
-            self.y = self.data[:, 1]
-            if self.data.shape[1] > 2:
-                self.y_err = self.data[:, 2]
+            self.raw_data = load_raw_data(self.filepath)
+            if not self._columns_configured:
+                self.col_x, self.col_y, self.col_err = default_column_mapping(self.raw_data.shape[1])
+            self._apply_column_selection()
             self.data_loaded = True
         except Exception as e:
             error_msg = f"Fehler beim Laden von {self.filepath}: {e}"
@@ -115,6 +118,33 @@ class DataSet:
             else:
                 logger.warning(error_msg)
                 self.data_loaded = False
+
+    def _apply_column_selection(self):
+        """Wendet die aktuelle Spaltenzuordnung auf self.raw_data an."""
+        self.data = select_columns(
+            self.raw_data, self.col_x, self.col_y, self.col_err,
+            filter_nonpositive=getattr(self, 'filter_nonpositive', True)
+        )
+        self.x = self.data[:, 0]
+        self.y = self.data[:, 1]
+        self.y_err = self.data[:, 2] if self.data.shape[1] > 2 else None
+
+    def set_column_mapping(self, col_x, col_y, col_err):
+        """Setzt die x/y/error-Spaltenzuordnung neu und wendet sie auf die
+        bereits geladenen Rohdaten an (kein erneutes Einlesen der Datei).
+
+        Raises:
+            ValueError: Wenn nach Auswahl/Filterung keine Datenpunkte übrig bleiben
+        """
+        old_x, old_y, old_err = self.col_x, self.col_y, self.col_err
+        self.col_x, self.col_y, self.col_err = col_x, col_y, col_err
+        try:
+            self._apply_column_selection()
+            self._columns_configured = True
+        except ValueError:
+            self.col_x, self.col_y, self.col_err = old_x, old_y, old_err
+            self._apply_column_selection()
+            raise
 
     def apply_auto_style(self):
         """Wendet automatisch erkannten Stil an"""
@@ -207,6 +237,10 @@ class DataSet:
             'snr_poor_marker': self.snr_poor_marker,
             'snr_poor_alpha': self.snr_poor_alpha,
             'snr_show_errorbars': self.snr_show_errorbars,
+            'col_x': self.col_x,
+            'col_y': self.col_y,
+            'col_err': self.col_err,
+            'columns_configured': self._columns_configured,
         }
 
     @classmethod
@@ -241,6 +275,10 @@ class DataSet:
         ds.snr_poor_marker = data.get('snr_poor_marker', '^')
         ds.snr_poor_alpha = data.get('snr_poor_alpha', 0.3)
         ds.snr_show_errorbars = data.get('snr_show_errorbars', True)
+        ds._columns_configured = data.get('columns_configured', False)
+        ds.col_x = data.get('col_x')
+        ds.col_y = data.get('col_y')
+        ds.col_err = data.get('col_err')
 
         # Versuche Daten zu laden, aber ignoriere Fehler (z.B. fehlende Dateien)
         ds.load_data(raise_on_error=False)

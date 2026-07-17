@@ -3,7 +3,7 @@
   "_language_code": "en",
 
   "app": {
-    "title": "ScatterForge Plot v7.3.2"
+    "title": "ScatterForge Plot v7.4.0"
   },
 
   "menu": {
@@ -103,6 +103,8 @@
     "stack": "Stack:",
     "color_scheme": "Color Scheme:",
     "wavelength": "Wavelength (nm):",
+    "dlnidlnq_smooth_window": "Smoothing Window:",
+    "dlnidlnq_smooth_window_tooltip": "Window size of the Savitzky-Golay smoothing applied before computing d ln(I)/d ln(q).\nLarger values smooth more (less noise, but finer features may disappear).",
     "update_plot": "🔄 Update Plot"
   },
 
@@ -600,6 +602,17 @@
       "dashdot": "Dash-Dot (-.)",
       "dotted": "Dotted (:)",
       "width": "Line Width:"
+    },
+
+    "columns": {
+      "title": "Data Columns",
+      "x_column": "X Column:",
+      "y_column": "Y Column:",
+      "error_column": "Error Column:",
+      "none": "None",
+      "column_label": "Column {n} ({value}...)",
+      "info": "Assigns which columns of the data file are used as x, y and error values. Change this if the file has more than 2 or 3 columns and the automatic assignment is wrong.",
+      "selection_error": "Column selection could not be applied: {error}"
     },
 
     "error_bars": {

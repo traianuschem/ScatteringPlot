@@ -233,6 +233,63 @@ class CurveSettingsDialog(QDialog):
         line_group.setLayout(line_layout)
         layout.addWidget(line_group)
 
+        # ── DATENSPALTEN (nur Einzel-Dataset, Dateien mit >2 Spalten) ──────
+        raw_data = getattr(dataset, 'raw_data', None)
+        show_columns = (not preset_mode and group is None
+                        and raw_data is not None and raw_data.shape[1] > 2)
+        if show_columns:
+            from utils.data_loader import default_column_mapping
+
+            n_cols = raw_data.shape[1]
+            default_x, default_y, default_err = default_column_mapping(n_cols)
+            cur_x = getattr(dataset, 'col_x', None)
+            cur_y = getattr(dataset, 'col_y', None)
+            cur_err = getattr(dataset, 'col_err', None)
+            if cur_x is None or cur_y is None:
+                cur_x, cur_y, cur_err = default_x, default_y, default_err
+
+            def _column_label(idx):
+                preview = raw_data[0, idx] if len(raw_data) > 0 else 0.0
+                return tr("curve_settings.columns.column_label", n=idx + 1, value=f"{preview:.4g}")
+
+            columns_group = QGroupBox(tr("curve_settings.columns.title"))
+            columns_layout = QGridLayout()
+
+            columns_layout.addWidget(QLabel(tr("curve_settings.columns.x_column")), 0, 0)
+            self.col_x_combo = QComboBox()
+            for i in range(n_cols):
+                self.col_x_combo.addItem(_column_label(i), i)
+            self.col_x_combo.setCurrentIndex(cur_x)
+            columns_layout.addWidget(self.col_x_combo, 0, 1)
+
+            columns_layout.addWidget(QLabel(tr("curve_settings.columns.y_column")), 1, 0)
+            self.col_y_combo = QComboBox()
+            for i in range(n_cols):
+                self.col_y_combo.addItem(_column_label(i), i)
+            self.col_y_combo.setCurrentIndex(cur_y)
+            columns_layout.addWidget(self.col_y_combo, 1, 1)
+
+            columns_layout.addWidget(QLabel(tr("curve_settings.columns.error_column")), 2, 0)
+            self.col_err_combo = QComboBox()
+            self.col_err_combo.addItem(tr("curve_settings.columns.none"), None)
+            for i in range(n_cols):
+                self.col_err_combo.addItem(_column_label(i), i)
+            err_index = 0 if cur_err is None else cur_err + 1
+            self.col_err_combo.setCurrentIndex(err_index)
+            columns_layout.addWidget(self.col_err_combo, 2, 1)
+
+            info_label = QLabel(tr("curve_settings.columns.info"))
+            info_label.setWordWrap(True)
+            info_label.setStyleSheet("color: #888; font-style: italic;")
+            columns_layout.addWidget(info_label, 3, 0, 1, 2)
+
+            columns_group.setLayout(columns_layout)
+            layout.addWidget(columns_group)
+        else:
+            self.col_x_combo = None
+            self.col_y_combo = None
+            self.col_err_combo = None
+
         # ── FEHLERBALKEN ──────────────────────────────────────────────────
         has_errors = preset_mode or (getattr(dataset, 'y_err', None) is not None)
 
@@ -608,5 +665,9 @@ class CurveSettingsDialog(QDialog):
                 self.subplot_target_combo.currentData()
                 if self.subplot_target_combo is not None else None
             )
+            if self.col_x_combo is not None:
+                result['col_x'] = self.col_x_combo.currentData()
+                result['col_y'] = self.col_y_combo.currentData()
+                result['col_err'] = self.col_err_combo.currentData()
 
         return result
