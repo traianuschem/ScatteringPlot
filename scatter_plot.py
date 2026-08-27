@@ -164,7 +164,8 @@ class ScatterPlotApp(QMainWindow):
         # Plot-Einstellungen
         self.plot_type = 'Log-Log'
         self.stack_mode = True
-        self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True, 'yscale': None}
+        self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True, 'yscale': None,
+                             'symlog_decades': 4, 'symlog_linscale': 1.0}
         self.wavelength = 0.1524  # Standardwellenlänge: Cu K-alpha in nm
 
         # Erweiterte Einstellungen (Version 5.1)
@@ -761,6 +762,12 @@ class ScatterPlotApp(QMainWindow):
         # Plotten
         plot_info = PLOT_TYPES[self.plot_type]
 
+        # Y-Skala: Plot-Typ-Standard, aber überschreibbar via Achsen-Dialog.
+        # Wird schon vor dem Daten-Loop benötigt, da bei symlog (im Gegensatz zu log)
+        # auch negative ASAXS-Cross-Term-Werte im Hauptplot gezeigt werden dürfen.
+        effective_yscale = self.axis_limits.get('yscale') or plot_info.get('yscale', 'log')
+        main_symlog_abs_vals = []  # sammelt |y| für die linthresh-Bestimmung bei symlog
+
         # v7.0: Verwende Tree-Order statt self.groups
         # Gruppen plotten in Tree-Reihenfolge
         for group, datasets_in_order in ordered_groups:
@@ -847,23 +854,38 @@ class ScatterPlotApp(QMainWindow):
 
                 # Subplot-Routing basierend auf group.subplot_target
                 _subplot_target = getattr(group, 'subplot_target', 'both')
-                render_in_main = _subplot_target in ('main', 'both') or ax_sub is None
-                render_in_sub = _subplot_target in ('sub', 'both') and ax_sub is not None
+                if self.plot_type == 'PDDF' and ax_sub is not None:
+                    # PDDF-Gruppen können gemischt sein (I(q)-Daten + Fit + P(r)).
+                    # Explizite 'main'/'sub'-Wahl erzwingt weiterhin die gesamte Gruppe
+                    # auf eine Achse; 'both' (Default, auch bei gemischten Gruppen)
+                    # routet jeden Datensatz einzeln anhand is_pr_data.
+                    if _subplot_target == 'main':
+                        render_in_main, render_in_sub = True, False
+                    elif _subplot_target == 'sub':
+                        render_in_main, render_in_sub = False, True
+                    else:
+                        is_pr = getattr(dataset, 'is_pr_data', False)
+                        render_in_main, render_in_sub = not is_pr, is_pr
+                else:
+                    render_in_main = _subplot_target in ('main', 'both') or ax_sub is None
+                    render_in_sub = _subplot_target in ('sub', 'both') and ax_sub is not None
 
-                # ASAXS Cross-Term: in Subplot rendern (alle Werte inkl. negativ),
-                # im Haupt-Plot nur positive Werte zeigen
+                # ASAXS Cross-Term: in Subplot rendern (alle Werte inkl. negativ).
+                # Im Haupt-Plot: bei symlog-Skala auch negative Werte zeigen,
+                # bei log-Skala nur positive Werte (log kann keine Negativwerte darstellen).
                 if getattr(dataset, 'data_term', '') == 'cross':
                     if render_in_sub:
                         self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
                     if not render_in_main:
                         continue
-                    pos_mask = y > 0
-                    if not np.any(pos_mask):
-                        continue
-                    x = x[pos_mask]
-                    y = y[pos_mask]
-                    if y_err_trans is not None:
-                        y_err_trans = y_err_trans[pos_mask]
+                    if effective_yscale != 'symlog':
+                        pos_mask = y > 0
+                        if not np.any(pos_mask):
+                            continue
+                        x = x[pos_mask]
+                        y = y[pos_mask]
+                        if y_err_trans is not None:
+                            y_err_trans = y_err_trans[pos_mask]
 
                 # PDDF P(r)-Flächen-Normierung für Subplot (originale Werte bleiben für Hauptplot erhalten)
                 y_sub = y
@@ -894,6 +916,12 @@ class ScatterPlotApp(QMainWindow):
                     # PDDF: normierte Werte für P(r)-Subplot, Original für Hauptplot
                     _y = y_sub if target_ax is ax_sub else y
                     _ye = y_err_sub if target_ax is ax_sub else y_err_trans
+
+                    # Werte für die linthresh-Bestimmung der symlog-Skala sammeln
+                    if effective_yscale == 'symlog' and target_ax is self.ax_main:
+                        _nz = _y[_y != 0]
+                        if _nz.size:
+                            main_symlog_abs_vals.append(np.abs(_nz))
 
                     # Legende nur auf erster Achse, um doppelte Einträge zu vermeiden
                     ds_label = dataset.display_label if i == 0 else ''
@@ -1000,16 +1028,24 @@ class ScatterPlotApp(QMainWindow):
             if y_err_data is not None and self.plot_type != 'dlnI/dlnq':
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
 
-            # ASAXS Cross-Term: in Subplot rendern, im Haupt-Plot nur positive Werte
+            # ASAXS Cross-Term: in Subplot rendern; im Haupt-Plot bei log-Skala nur
+            # positive Werte zeigen (symlog erlaubt auch negative Werte, s.o.)
             if ax_sub is not None and getattr(dataset, 'data_term', '') == 'cross':
                 self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
-                pos_mask = y > 0
-                if not np.any(pos_mask):
-                    continue
-                x = x[pos_mask]
-                y = y[pos_mask]
-                if y_err_trans is not None:
-                    y_err_trans = y_err_trans[pos_mask]
+                if effective_yscale != 'symlog':
+                    pos_mask = y > 0
+                    if not np.any(pos_mask):
+                        continue
+                    x = x[pos_mask]
+                    y = y[pos_mask]
+                    if y_err_trans is not None:
+                        y_err_trans = y_err_trans[pos_mask]
+
+            # Werte für die linthresh-Bestimmung der symlog-Skala sammeln
+            if effective_yscale == 'symlog':
+                nonzero = y[y != 0]
+                if nonzero.size:
+                    main_symlog_abs_vals.append(np.abs(nonzero))
 
             # Plotten
             plot_style = dataset.get_plot_style()
@@ -1096,9 +1132,16 @@ class ScatterPlotApp(QMainWindow):
                                                                  self.font_settings.get('font_family', 'sans-serif')))
         self.ax_main.set_xscale(plot_info['xscale'])
 
-        # Y-Skala: Plot-Typ-Standard, aber überschreibbar via Achsen-Dialog
-        yscale_override = self.axis_limits.get('yscale')
-        self.ax_main.set_yscale(yscale_override if yscale_override else plot_info['yscale'])
+        # Y-Skala anwenden (effective_yscale wurde bereits vor dem Daten-Loop bestimmt)
+        if effective_yscale == 'symlog':
+            linthresh = self._compute_symlog_linthresh(
+                main_symlog_abs_vals,
+                decades=self.axis_limits.get('symlog_decades', 4)
+            )
+            linscale = self.axis_limits.get('symlog_linscale') or 1.0
+            self.ax_main.set_yscale('symlog', linthresh=linthresh, linscale=linscale)
+        else:
+            self.ax_main.set_yscale(effective_yscale)
 
         # X-Limits: Plot-Typ-spezifische Defaults (z. B. Azimutalprofil → −180 … 180)
         if self.axis_limits.get('auto', True) and 'xlim' in plot_info:
@@ -1572,6 +1615,26 @@ class ScatterPlotApp(QMainWindow):
         if y_err is not None and dataset.show_errorbars:
             ax_sub.fill_between(x, y - y_err, y + y_err,
                                 alpha=dataset.errorbar_alpha, color=color)
+
+    def _compute_symlog_linthresh(self, abs_val_arrays, decades=4):
+        """Bestimmt linthresh für die symlog-Skala aus der Anzahl gewünschter Dekaden.
+
+        `decades` gibt an, über wie viele Zehnerpotenzen unterhalb des größten
+        angezeigten |y|-Werts noch logarithmisch skaliert wird, bevor die Skala
+        in den linearen Bereich um Null übergeht. Ein kleinerer Wert komprimiert
+        den Plot (weniger Dekaden bis Null), ein größerer Wert dehnt ihn.
+        Statt vom kleinsten Datenwert auszugehen (der z. B. bei verrauschten
+        ASAXS-Cross-Term-Daten nahe Null liegen und den Plot unnötig
+        auseinanderziehen kann), wird vom größten Wert abwärts gerechnet.
+        """
+        decades = max(1, int(decades))
+        if abs_val_arrays:
+            combined = np.concatenate(abs_val_arrays)
+            combined = combined[np.isfinite(combined) & (combined > 0)]
+            if combined.size:
+                max_val = np.max(combined)
+                return float(10 ** (np.floor(np.log10(max_val)) - decades))
+        return 1e-3
 
     def transform_data(self, x, y, plot_type):
         """Transformiert Daten je nach Plot-Typ"""
@@ -3630,8 +3693,10 @@ class ScatterPlotApp(QMainWindow):
                 self.axis_limits = session.get('axis_limits', {'xmin': None, 'xmax': None,
                                                                'ymin': None, 'ymax': None, 'auto': True,
                                                                'yscale': None})
-                # Ensure 'yscale' key exists in loaded sessions (backward compat)
+                # Ensure keys exist in loaded sessions (backward compat)
                 self.axis_limits.setdefault('yscale', None)
+                self.axis_limits.setdefault('symlog_decades', 4)
+                self.axis_limits.setdefault('symlog_linscale', 1.0)
 
                 # Version 6.2: Wellenlänge für 2-Theta Plot
                 if 'wavelength' in session:

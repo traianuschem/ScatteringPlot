@@ -7,7 +7,7 @@ This dialog allows users to configure axis labels and titles.
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox,
     QLabel, QLineEdit, QDialogButtonBox, QCheckBox, QPushButton, QMessageBox, QHBoxLayout,
-    QSpinBox, QFontComboBox, QComboBox
+    QSpinBox, QDoubleSpinBox, QFontComboBox, QComboBox
 )
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 from i18n import tr
@@ -134,20 +134,44 @@ class AxesSettingsDialog(QDialog):
         self.yscale_combo.addItem(tr("axes.limits.y_scale_auto"), userData=None)
         self.yscale_combo.addItem(tr("axes.limits.y_scale_linear"), userData='linear')
         self.yscale_combo.addItem(tr("axes.limits.y_scale_log"), userData='log')
+        self.yscale_combo.addItem(tr("axes.limits.y_scale_symlog"), userData='symlog')
         # Pre-select from axis_limits
         yscale_val = axis_limits.get('yscale', None)
         if yscale_val == 'linear':
             self.yscale_combo.setCurrentIndex(1)
         elif yscale_val == 'log':
             self.yscale_combo.setCurrentIndex(2)
+        elif yscale_val == 'symlog':
+            self.yscale_combo.setCurrentIndex(3)
         else:
             self.yscale_combo.setCurrentIndex(0)
         limits_layout.addWidget(self.yscale_combo, 6, 1)
 
+        # Symlog-Feinsteuerung (nur relevant und sichtbar, wenn Y-Skala = Symlog)
+        self.symlog_decades_label = QLabel(tr("axes.limits.symlog_decades"))
+        limits_layout.addWidget(self.symlog_decades_label, 7, 0)
+        self.symlog_decades_spin = QSpinBox()
+        self.symlog_decades_spin.setRange(1, 15)
+        self.symlog_decades_spin.setValue(axis_limits.get('symlog_decades', 4) or 4)
+        self.symlog_decades_spin.setToolTip(tr("axes.limits.symlog_decades_tooltip"))
+        limits_layout.addWidget(self.symlog_decades_spin, 7, 1)
+
+        self.symlog_linscale_label = QLabel(tr("axes.limits.symlog_linscale"))
+        limits_layout.addWidget(self.symlog_linscale_label, 8, 0)
+        self.symlog_linscale_spin = QDoubleSpinBox()
+        self.symlog_linscale_spin.setRange(0.1, 10.0)
+        self.symlog_linscale_spin.setSingleStep(0.1)
+        self.symlog_linscale_spin.setValue(axis_limits.get('symlog_linscale', 1.0) or 1.0)
+        self.symlog_linscale_spin.setToolTip(tr("axes.limits.symlog_linscale_tooltip"))
+        limits_layout.addWidget(self.symlog_linscale_spin, 8, 1)
+
+        self.yscale_combo.currentIndexChanged.connect(self._update_symlog_controls_visibility)
+        self._update_symlog_controls_visibility()
+
         # Reset Limits Button
         reset_limits_btn = QPushButton(tr("axes.limits.reset"))
         reset_limits_btn.clicked.connect(self.reset_limits)
-        limits_layout.addWidget(reset_limits_btn, 7, 0, 1, 2)
+        limits_layout.addWidget(reset_limits_btn, 9, 0, 1, 2)
 
         limits_group.setLayout(limits_layout)
         layout.addWidget(limits_group)
@@ -250,6 +274,16 @@ class AxesSettingsDialog(QDialog):
         self.ymax_edit.clear()
         self.auto_checkbox.setChecked(True)
         self.yscale_combo.setCurrentIndex(0)
+        self.symlog_decades_spin.setValue(4)
+        self.symlog_linscale_spin.setValue(1.0)
+
+    def _update_symlog_controls_visibility(self):
+        """Zeigt die Symlog-Feinsteuerung nur, wenn Symlog als Y-Skala gewählt ist"""
+        is_symlog = self.yscale_combo.currentData() == 'symlog'
+        self.symlog_decades_label.setVisible(is_symlog)
+        self.symlog_decades_spin.setVisible(is_symlog)
+        self.symlog_linscale_label.setVisible(is_symlog)
+        self.symlog_linscale_spin.setVisible(is_symlog)
 
     def get_labels(self):
         """Gibt die Achsenbeschriftungen zurück"""
@@ -285,7 +319,9 @@ class AxesSettingsDialog(QDialog):
             'ymin': ymin,
             'ymax': ymax,
             'auto': self.auto_checkbox.isChecked(),
-            'yscale': self.yscale_combo.currentData()
+            'yscale': self.yscale_combo.currentData(),
+            'symlog_decades': self.symlog_decades_spin.value(),
+            'symlog_linscale': self.symlog_linscale_spin.value()
         }
 
     def get_font_settings(self):

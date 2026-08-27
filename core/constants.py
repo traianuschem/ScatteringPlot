@@ -68,6 +68,6 @@ PLOT_TYPES = {
         'xlabel': 'q / nm⁻¹',
         'ylabel': 'I / cm⁻¹',
         'xscale': 'log',
-        'yscale': 'log',
+        'yscale': 'symlog',
     }
 }

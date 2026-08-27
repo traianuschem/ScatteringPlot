@@ -74,6 +74,9 @@ class DataSet:
         # Cross-term kann negative Intensitäten haben — positiv-Filter deaktivieren
         if self.data_term == 'cross' and self.filter_nonpositive:
             self.filter_nonpositive = False
+        # P(r)-Daten: r beginnt bei 0, P(r) kann im Tail leicht negativ werden — Filter aus
+        if self.is_pr_data and self.filter_nonpositive:
+            self.filter_nonpositive = False
 
         if not skip_load:
             self.load_data()

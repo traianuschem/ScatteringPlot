@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.4.0
+# ScatterForge Plot v7.5.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.4.0-blue)
+![Version](https://img.shields.io/badge/version-7.5.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -35,6 +35,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 ## 📑 Inhaltsverzeichnis
 
 - [Feature-Übersicht](#-feature-übersicht)
+- [Was ist neu in v7.5](#-was-ist-neu-in-v75)
 - [Was ist neu in v7.4](#-was-ist-neu-in-v74)
 - [Was ist neu in v7.3](#-was-ist-neu-in-v73)
 - [Was ist neu in v7.1](#-was-ist-neu-in-v71)
@@ -63,6 +64,8 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
 | **Plot-Typen** | 10 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, **dlnI/dlnq** | ✅ **v7.4.0** |
+| **Symlog-Skala (ASAXS)** | Y-Achse zeigt negative Cross-Term-Werte jetzt auch im Hauptplot, mit einstellbaren Dekaden/Nullbereich | ✅ **v7.5.0** |
+| **PDDF-Subplot-Routing** | Gemischte Gruppen (I(q)-Daten + Fit + P(r), z. B. GIFT/GNOM-Export) werden pro Datensatz korrekt der richtigen Achse zugeordnet | ✅ **v7.5.0** |
 | **dlnI/dlnq-Plot** | Logarithmische Ableitung zur schnellen Identifikation versteckter Features/Schultern, mit einstellbarem Glättungsfenster | ✅ **v7.4.0** |
 | **Flexible Spaltenzuordnung** | X/Y/Fehler-Spalte frei wählbar im Kurven-Editor, auch bei 4+ Spalten pro Datei | ✅ **v7.4.0** |
 | **Gruppen-Sichtbarkeit** | Ganze Gruppen per Checkbox im Baum ein-/ausblenden | ✅ **v7.4.0** |
@@ -84,6 +87,20 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.5?
+
+**Minor Release v7.5.0** — ASAXS Symlog-Skala, PDDF-Subplot-Routing-Fixes
+
+### Hauptfeatures v7.5
+
+- 📈 **Symlog-Skala für ASAXS**: Der ASAXS-Hauptplot zeigt negative Cross-Term-Werte jetzt auch bei log-artiger Skalierung, statt sie zu verwerfen. Feinsteuerung über „Dekaden bis Null" und „Größe des linearen Bereichs" im Achsen-Dialog
+- 🩹 **PDDF-Subplot-Routing korrigiert**: Gemischte Gruppen (Rohdaten + Fit im q-Raum zusammen mit P(r) im r-Raum, typisch für GIFT/GNOM-Exporte aus SASview) werden jetzt pro Datensatz der richtigen Achse zugeordnet, statt fälschlich auf beiden Achsen dupliziert zu werden
+- 🩹 **P(r)-Datenfilterung korrigiert**: Der r=0-Startpunkt und leicht negative P(r)-Werte im Tail-Bereich (normales GIFT/GNOM-Verhalten) werden nicht mehr fälschlich aus dem Plot entfernt
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.5.md](CHANGELOG_v7.5.md)
 
 ---
 

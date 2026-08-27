@@ -303,6 +303,11 @@
       "y_scale_auto": "Auto (plot type default)",
       "y_scale_linear": "Linear",
       "y_scale_log": "Logarithmic",
+      "y_scale_symlog": "Symlog (linear near zero, log elsewhere)",
+      "symlog_decades": "Symlog: decades to zero",
+      "symlog_decades_tooltip": "Number of decades below the largest displayed value that are still shown logarithmically before the scale switches to the linear zero region. Lower = more compressed plot, higher = more stretched.",
+      "symlog_linscale": "Symlog: linear zone size",
+      "symlog_linscale_tooltip": "Relative height of the linear zero region compared to one log decade. Lower = thinner zero band, higher = wider zero band.",
       "reset": "Reset Limits"
     },
 

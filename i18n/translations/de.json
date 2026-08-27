@@ -303,7 +303,12 @@
       "y_scale": "Y-Achsen-Skala:",
       "y_scale_auto": "Auto (Plottyp-Standard)",
       "y_scale_linear": "Linear",
-      "y_scale_log": "Logarithmisch"
+      "y_scale_log": "Logarithmisch",
+      "y_scale_symlog": "Symlog (nahe Null linear, sonst logarithmisch)",
+      "symlog_decades": "Symlog: Dekaden bis Null",
+      "symlog_decades_tooltip": "Anzahl der Zehnerpotenzen unterhalb des größten angezeigten Werts, die noch logarithmisch dargestellt werden, bevor die Skala in den linearen Bereich um Null übergeht. Kleiner = gestauchterer Plot, größer = stärker auseinandergezogener Plot.",
+      "symlog_linscale": "Symlog: Größe des linearen Bereichs",
+      "symlog_linscale_tooltip": "Relative Höhe des linearen Nullbereichs im Vergleich zu einer log-Dekade. Kleiner = schmalerer Nullbereich, größer = breiterer Nullbereich."
     },
 
     "font_labels": {
