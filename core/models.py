@@ -35,6 +35,11 @@ class DataSet:
         self._columns_configured = False
         # Wenn False, werden x≤0/y≤0-Werte beim Laden NICHT gefiltert.
         # Notwendig für azimutale Profile (φ < 0) und andere lineare Daten.
+        # _base_filter_nonpositive ist der vom Aufrufer gewünschte Ausgangswert;
+        # set_pddf_role() UND-verknüpft ihn mit der Cross-Term-/P(r)-Ausnahme, sodass
+        # ein explizites filter_nonpositive=False (z.B. Azimutalprofile) nie durch die
+        # Rollen-Erkennung überschrieben wird.
+        self._base_filter_nonpositive = filter_nonpositive
         self.filter_nonpositive = filter_nonpositive
 
         # Stil
@@ -71,12 +76,9 @@ class DataSet:
         self.snr_show_errorbars = True    # Fehlerbalken im SNR-Modus anzeigen
         self._auto_detect_asaxs_term()
         self._auto_detect_pddf_type()
-        # Cross-term kann negative Intensitäten haben — positiv-Filter deaktivieren
-        if self.data_term == 'cross' and self.filter_nonpositive:
-            self.filter_nonpositive = False
-        # P(r)-Daten: r beginnt bei 0, P(r) kann im Tail leicht negativ werden — Filter aus
-        if self.is_pr_data and self.filter_nonpositive:
-            self.filter_nonpositive = False
+        # Manuelle Rollen-Übersteuerung ('', 'data', 'fit', 'pofr') — siehe set_pddf_role().
+        # Wendet u.a. die Cross-Term-/P(r)-Nicht-Positiv-Filterausnahme an.
+        self.set_pddf_role('')
 
         if not skip_load:
             self.load_data()
@@ -100,6 +102,46 @@ class DataSet:
         stem = self.filepath.stem.lower()
         pr_patterns = ['_pr', '_p_r', '_pddf', '_pofr', 'pair_dist', 'p(r)']
         self.is_pr_data = any(p in stem for p in pr_patterns)
+
+    def is_pofr(self):
+        """P(r)-Klassifikation für die PDDF-Subplot-Zuordnung.
+
+        Die manuelle Rollen-Übersteuerung (`pddf_role`, gesetzt via `set_pddf_role()`)
+        hat Vorrang vor der automatischen Dateinamen-Erkennung (`is_pr_data`), damit
+        falsch erkannte Dateien korrigiert werden können.
+        """
+        if self.pddf_role == 'pofr':
+            return True
+        if self.pddf_role in ('data', 'fit'):
+            return False
+        return self.is_pr_data
+
+    def is_fit_curve(self):
+        """Bestimmt, ob der Datensatz als Linie (statt Marker) gerendert werden soll.
+
+        Manuelle Rolle hat Vorrang vor der Dateinamen-Heuristik ('fit' im Namen).
+        """
+        if self.pddf_role == 'fit':
+            return True
+        if self.pddf_role in ('data', 'pofr'):
+            return False
+        return 'fit' in self.name.lower()
+
+    def set_pddf_role(self, role):
+        """Setzt die manuelle PDDF-Rollen-Zuordnung ('', 'data', 'fit', 'pofr') neu.
+
+        '' bedeutet Auto-Erkennung aus dem Dateinamen (Standard). Wendet die davon
+        abhängige Nicht-Positiv-Filterung sofort auf bereits geladene Rohdaten an:
+        P(r)-Daten (r=0-Startpunkt, ggf. negative Werte im Tail) und der ASAXS-
+        Cross-Term (kann negative Intensitäten haben) dürfen nicht x/y>0-gefiltert
+        werden.
+        """
+        self.pddf_role = role
+        new_filter = self._base_filter_nonpositive and not (self.is_pofr() or self.data_term == 'cross')
+        if new_filter != self.filter_nonpositive:
+            self.filter_nonpositive = new_filter
+            if self.raw_data is not None:
+                self._apply_column_selection()
 
     def load_data(self, raise_on_error=True):
         """Lädt Daten
@@ -204,7 +246,7 @@ class DataSet:
         marker = self.marker_style if self.marker_style else ''
         if not line and not marker:
             # Auto: Fit=Linie, sonst Marker
-            if 'fit' in self.name.lower():
+            if self.is_fit_curve():
                 return '-'
             return 'o'
         return line + marker
@@ -232,8 +274,9 @@ class DataSet:
             'x_max': self.x_max,
             'y_min': self.y_min,
             'y_max': self.y_max,
-            'filter_nonpositive': self.filter_nonpositive,
+            'filter_nonpositive': self._base_filter_nonpositive,
             'data_term': self.data_term,
+            'pddf_role': self.pddf_role,
             'snr_visualization': self.snr_visualization,
             'snr_threshold': self.snr_threshold,
             'snr_good_marker': self.snr_good_marker,
@@ -272,6 +315,7 @@ class DataSet:
         ds.y_max = data.get('y_max')
         if 'data_term' in data:
             ds.data_term = data['data_term']
+        ds.set_pddf_role(data.get('pddf_role', ''))
         ds.snr_visualization = data.get('snr_visualization', False)
         ds.snr_threshold = data.get('snr_threshold', 1.0)
         ds.snr_good_marker = data.get('snr_good_marker', 'o')
@@ -320,7 +364,7 @@ class DataGroup:
         """Setzt subplot_target anhand der Dateinamen — nur wenn noch Default 'both'."""
         if self.subplot_target != 'both' or not self.datasets:
             return
-        pr_count = sum(1 for ds in self.datasets if getattr(ds, 'is_pr_data', False))
+        pr_count = sum(1 for ds in self.datasets if ds.is_pofr())
         if pr_count == len(self.datasets):
             self.subplot_target = 'sub'
         elif pr_count == 0:

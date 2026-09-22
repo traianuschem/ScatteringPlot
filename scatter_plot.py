@@ -32,6 +32,10 @@ import json
 import numpy as np
 from scipy.signal import savgol_filter
 
+# numpy 2.0 renamed trapz() to trapezoid() and removed the old name; numpy <1.24
+# only has trapz(). This shim keeps requirements.txt's numpy>=1.20.0 working either way.
+np_trapezoid = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
+
 # Qt6 imports
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -104,6 +108,35 @@ def format_stack_factor(factor):
 
     # Fallback: normale Darstellung
     return f"$(\\times {factor:.1f})$"
+
+
+def _looks_pddf_related(ds):
+    """Erkennt P(r)-Kurven sowie ihre q-Raum-Fit-Kurven ("..._fit-PDDF" o.ä.)."""
+    if ds.is_pofr():
+        return True
+    return 'pddf' in ds.filepath.stem.lower() and ds.is_fit_curve()
+
+
+def split_pddf_bundle(datasets):
+    """Trennt eine Dataset-Auswahl in eine gemeinsame PDDF-Gruppe und den Rest.
+
+    Alle P(r)-Datensätze sowie ihre PDDF-Fit-Kurven (Dateiname enthält "pddf", z.B.
+    "..._fit-PDDF") werden zusammen in EINE Gruppe gebündelt — auch über mehrere
+    Proben hinweg, falls die Auswahl mehrere GIFT/GNOM-Ergebnisse enthält. Die
+    zugehörige Rohdaten-Datei (z.B. "..._IA.dat") hat i.d.R. keinen im Dateinamen
+    erkennbaren Bezug zu den PDDF-Exportdateien (frei gewählter GIFT/GNOM-
+    Exportname) und kann daher nicht zuverlässig automatisch zugeordnet werden —
+    sie muss weiterhin manuell in die entstandene Gruppe gezogen werden.
+
+    Returns:
+        (pddf_bundle, remaining): Liste der zu bündelnden Datasets (Auswahl-Reihenfolge),
+        Liste der übrigen Datasets.
+    """
+    bundle = [ds for ds in datasets if _looks_pddf_related(ds)]
+    if not bundle:
+        return [], list(datasets)
+    remaining = [ds for ds in datasets if ds not in bundle]
+    return bundle, remaining
 
 
 class DataTreeWidget(QTreeWidget):
@@ -858,13 +891,14 @@ class ScatterPlotApp(QMainWindow):
                     # PDDF-Gruppen können gemischt sein (I(q)-Daten + Fit + P(r)).
                     # Explizite 'main'/'sub'-Wahl erzwingt weiterhin die gesamte Gruppe
                     # auf eine Achse; 'both' (Default, auch bei gemischten Gruppen)
-                    # routet jeden Datensatz einzeln anhand is_pr_data.
+                    # routet jeden Datensatz einzeln anhand is_pofr() (Auto-Erkennung
+                    # oder manuelle Rollen-Übersteuerung, siehe DataSet.set_pddf_role).
                     if _subplot_target == 'main':
                         render_in_main, render_in_sub = True, False
                     elif _subplot_target == 'sub':
                         render_in_main, render_in_sub = False, True
                     else:
-                        is_pr = getattr(dataset, 'is_pr_data', False)
+                        is_pr = dataset.is_pofr()
                         render_in_main, render_in_sub = not is_pr, is_pr
                 else:
                     render_in_main = _subplot_target in ('main', 'both') or ax_sub is None
@@ -893,7 +927,7 @@ class ScatterPlotApp(QMainWindow):
                 if (render_in_sub and self.plot_type == 'PDDF'
                         and getattr(self, 'pddf_norm_btn', None) is not None
                         and self.pddf_norm_btn.isChecked()):
-                    area = np.trapz(y, x)
+                    area = np_trapezoid(y, x)
                     if area > 0:
                         y_sub = y / area
                         y_err_sub = y_err_trans / area if y_err_trans is not None else None
@@ -1278,7 +1312,7 @@ class ScatterPlotApp(QMainWindow):
 
                             # Wenn kein expliziter Stil, dann aus plot_style ableiten
                             if not dataset.marker_style and not dataset.line_style:
-                                if 'fit' in dataset.name.lower():
+                                if dataset.is_fit_curve():
                                     linestyle = '-'
                                     marker = ''
                                 else:
@@ -1310,7 +1344,7 @@ class ScatterPlotApp(QMainWindow):
 
                     # Wenn kein expliziter Stil, dann aus plot_style ableiten
                     if not dataset.marker_style and not dataset.line_style:
-                        if 'fit' in dataset.name.lower():
+                        if dataset.is_fit_curve():
                             linestyle = '-'
                             marker = ''
                         else:
@@ -1830,9 +1864,12 @@ class ScatterPlotApp(QMainWindow):
 
     def auto_group_by_magnitude(self):
         """
-        Automatische Gruppierung (v5.4)
+        Automatische Gruppierung (v5.4, PDDF-Bündelung)
 
-        Erstellt für jedes ausgewählte Dataset eine eigene Gruppe mit automatischen
+        PDDF-Datensätze (P(r) sowie ihre q-Raum-Geschwister Rohdaten/Fit, erkannt am
+        gemeinsamen Dateinamen-Präfix) werden zusammen in EINE Gruppe gebündelt, damit
+        die PDDF-Subplot-Zuordnung (Haupt-/Subplot pro Datensatz) funktioniert. Alle
+        übrigen Datasets erhalten weiterhin je eine eigene Gruppe mit automatischen
         Stack-Faktoren (10^0, 10^1, 10^2, ...) für optimale Trennung im Log-Log-Plot.
         """
         self.logger.info("Starte Auto-Gruppierung...")
@@ -1862,9 +1899,34 @@ class ScatterPlotApp(QMainWindow):
 
         self.logger.info(f"Auto-Gruppierung: {len(selected_datasets)} Datasets ausgewählt")
 
-        # Für jedes Dataset eine eigene Gruppe erstellen
         created_groups = []
-        for idx, dataset in enumerate(selected_datasets):
+
+        # PDDF-Datensätze (P(r) + q-Raum-Geschwister) in EINE gemeinsame Gruppe bündeln
+        pddf_bundle, remaining_datasets = split_pddf_bundle(selected_datasets)
+        if pddf_bundle:
+            existing_names = {g.name for g in self.groups}
+            base_name = tr("messages.auto_pddf_group_name")
+            group_name = base_name
+            suffix = 2
+            while group_name in existing_names:
+                group_name = f"{base_name} ({suffix})"
+                suffix += 1
+
+            group = DataGroup(group_name, 1.0)
+            for dataset in pddf_bundle:
+                group.add_dataset(dataset)
+                if dataset in self.unassigned_datasets:
+                    self.unassigned_datasets.remove(dataset)
+            group.display_label = group_name
+            self.groups.append(group)
+            created_groups.append((group_name, 1.0))
+            self.logger.debug(
+                f"  PDDF-Gruppe '{group_name}' erstellt ({len(pddf_bundle)} Datasets: "
+                f"{', '.join(ds.name for ds in pddf_bundle)})"
+            )
+
+        # Für jedes übrige Dataset eine eigene Gruppe erstellen
+        for idx, dataset in enumerate(remaining_datasets):
             # Gruppen-Name = Dataset-Name
             group_name = dataset.name
 
@@ -2474,6 +2536,8 @@ class ScatterPlotApp(QMainWindow):
             dataset.snr_show_errorbars = settings.get('snr_show_errorbars', True)
             if settings.get('data_term') is not None:
                 dataset.data_term = settings['data_term']
+            if settings.get('pddf_role') is not None:
+                dataset.set_pddf_role(settings['pddf_role'])
 
             if 'col_x' in settings:
                 new_mapping = (settings['col_x'], settings['col_y'], settings['col_err'])

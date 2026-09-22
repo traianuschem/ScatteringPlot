@@ -146,6 +146,7 @@
     "error": "Error",
     "group_created": "Group '{name}' created",
     "auto_group_success": "Auto-Grouping successful",
+    "auto_pddf_group_name": "PDDF group",
     "invalid_input": "Invalid Input",
     "select_datasets": "Please select datasets",
     "select_datasets_from_unassigned": "Please select datasets from the 'Unassigned' list.",
@@ -675,6 +676,16 @@
       "normal": "Normal (I_N)",
       "cross": "Cross-Term (I_cross)",
       "anomalous": "Anomalous (I_A)"
+    },
+
+    "pddf_role": {
+      "title": "PDDF Role",
+      "role": "Role:",
+      "auto": "Automatic (from filename)",
+      "data": "I(q) Data",
+      "fit": "I(q) Fit",
+      "pofr": "P(r)",
+      "tooltip": "Overrides the automatic filename detection (is_pr_data / \"fit\" in name).\nCorrects misclassified files and determines whether this curve is drawn on the\nI(q) main plot or the P(r) subplot in PDDF plots."
     }
   },
 

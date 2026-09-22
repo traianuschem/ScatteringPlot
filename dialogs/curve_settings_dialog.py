@@ -492,6 +492,33 @@ class CurveSettingsDialog(QDialog):
         else:
             self.asaxs_term_combo = None
 
+        # ── PDDF-ROLLE (nur Einzel-Dataset, nicht bei Gruppen-/Preset-Bearbeitung) ──
+        # Manuelle Übersteuerung der Dateinamen-Auto-Erkennung (is_pr_data / 'fit' im
+        # Namen) — pro Gruppe würde dieselbe Rolle auf ALLE Kurven angewendet, daher
+        # nur im Einzel-Kurven-Editor verfügbar.
+        if not preset_mode and self.group is None:
+            pddf_role_group = QGroupBox(tr("curve_settings.pddf_role.title"))
+            pddf_role_layout = QGridLayout()
+
+            pddf_role_layout.addWidget(QLabel(tr("curve_settings.pddf_role.role")), 0, 0)
+            self.pddf_role_combo = QComboBox()
+            self.pddf_role_combo.addItem(tr("curve_settings.pddf_role.auto"), "")
+            self.pddf_role_combo.addItem(tr("curve_settings.pddf_role.data"), "data")
+            self.pddf_role_combo.addItem(tr("curve_settings.pddf_role.fit"), "fit")
+            self.pddf_role_combo.addItem(tr("curve_settings.pddf_role.pofr"), "pofr")
+            current_role = getattr(dataset, 'pddf_role', '')
+            for i in range(self.pddf_role_combo.count()):
+                if self.pddf_role_combo.itemData(i) == current_role:
+                    self.pddf_role_combo.setCurrentIndex(i)
+                    break
+            self.pddf_role_combo.setToolTip(tr("curve_settings.pddf_role.tooltip"))
+            pddf_role_layout.addWidget(self.pddf_role_combo, 0, 1)
+
+            pddf_role_group.setLayout(pddf_role_layout)
+            layout.addWidget(pddf_role_group)
+        else:
+            self.pddf_role_combo = None
+
         # ── BUTTONS ───────────────────────────────────────────────────────
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._on_accept)
@@ -664,6 +691,10 @@ class CurveSettingsDialog(QDialog):
             result['subplot_target'] = (
                 self.subplot_target_combo.currentData()
                 if self.subplot_target_combo is not None else None
+            )
+            result['pddf_role'] = (
+                self.pddf_role_combo.currentData()
+                if self.pddf_role_combo is not None else None
             )
             if self.col_x_combo is not None:
                 result['col_x'] = self.col_x_combo.currentData()

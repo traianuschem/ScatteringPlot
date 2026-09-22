@@ -146,6 +146,7 @@
     "error": "Fehler",
     "group_created": "Gruppe '{name}' erstellt",
     "auto_group_success": "Auto-Gruppierung erfolgreich",
+    "auto_pddf_group_name": "PDDF-Gruppe",
     "invalid_input": "Ungültige Eingabe",
     "select_datasets": "Bitte wählen Sie Datensätze aus",
     "select_datasets_from_unassigned": "Bitte wählen Sie Datasets aus der 'Nicht zugeordnet'-Liste aus.",
@@ -675,6 +676,16 @@
       "normal": "Normal (I_N)",
       "cross": "Cross-Term (I_cross)",
       "anomalous": "Anomal (I_A)"
+    },
+
+    "pddf_role": {
+      "title": "PDDF-Rolle",
+      "role": "Rolle:",
+      "auto": "Automatisch (aus Dateiname)",
+      "data": "I(q)-Daten",
+      "fit": "I(q)-Fit",
+      "pofr": "P(r)",
+      "tooltip": "Übersteuert die automatische Dateinamen-Erkennung (is_pr_data / \"fit\" im Namen).\nKorrigiert falsch erkannte Dateien und bestimmt, ob diese Kurve im PDDF-Plot\nauf dem I(q)-Hauptplot oder dem P(r)-Subplot gezeichnet wird."
     }
   },
 
