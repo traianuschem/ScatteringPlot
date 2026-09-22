@@ -69,5 +69,11 @@ PLOT_TYPES = {
         'ylabel': 'I / cm⁻¹',
         'xscale': 'log',
         'yscale': 'symlog',
+    },
+    'Significance': {
+        'xlabel': 'q / nm⁻¹',
+        'ylabel': 'I / a.u.',
+        'xscale': 'log',
+        'yscale': 'log',
     }
 }

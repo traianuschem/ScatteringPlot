@@ -105,6 +105,10 @@
     "wavelength": "Wellenlänge (nm):",
     "dlnidlnq_smooth_window": "Glättungsfenster:",
     "dlnidlnq_smooth_window_tooltip": "Fenstergröße der Savitzky-Golay-Glättung vor der Ableitung d ln(I)/d ln(q).\nGrößere Werte glätten stärker (weniger Rauschen, aber auch feinere Features können verschwinden).",
+    "significance_window": "Signifikanz-Fenster:",
+    "significance_window_tooltip": "Fenstergröße (Punkte) der gleitenden Median-Glättung der Signifikanzkurve |I(q)/σ(q)| im Subplot.\nGrößere Werte glätten stärker gegen einzelne Ausreißer-Rauschspitzen.",
+    "significance_thresholds": "σ-Schwellen:",
+    "significance_thresholds_tooltip": "Kommagetrennte Liste der σ-Schwellenwerte, die als gestrichelte Referenzlinien im Signifikanz-Subplot markiert werden (z. B. \"3,2,1\").",
     "update_plot": "🔄 Plot aktualisieren"
   },
 

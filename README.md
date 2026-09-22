@@ -63,7 +63,8 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
-| **Plot-Typen** | 10 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, **dlnI/dlnq** | ✅ **v7.4.0** |
+| **Plot-Typen** | 11 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, dlnI/dlnq, **Significance** | ✅ **v7.6.0** |
+| **Significance-Plot** | Subplot mit punktweiser Signifikanz \|I(q)/σ(q)\| (roh + median-geglättet) und einstellbaren σ-Schwellenlinien, um den vertrauenswürdigen q-Bereich einer Kurve abzulesen | ✅ **v7.6.0** |
 | **Symlog-Skala (ASAXS)** | Y-Achse zeigt negative Cross-Term-Werte jetzt auch im Hauptplot, mit einstellbaren Dekaden/Nullbereich | ✅ **v7.5.0** |
 | **PDDF-Subplot-Routing** | Gemischte Gruppen (I(q)-Daten + Fit + P(r), z. B. GIFT/GNOM-Export) werden pro Datensatz korrekt der richtigen Achse zugeordnet | ✅ **v7.5.0** |
 | **dlnI/dlnq-Plot** | Logarithmische Ableitung zur schnellen Identifikation versteckter Features/Schultern, mit einstellbarem Glättungsfenster | ✅ **v7.4.0** |
@@ -87,6 +88,20 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.6?
+
+**Minor Release v7.6.0** — Neuer Plot-Typ „Significance" (Signifikanz-Subplot)
+
+### Hauptfeatures v7.6
+
+- 📊 **Neuer Plot-Typ „Significance"**: Zeigt neben den I(q)-Daten (Hauptplot mit Fehlerband) einen Subplot mit der punktweisen Signifikanz |I(q)/σ(q)| — dünn als Rohkurve, dick als gleitender Median geglättet (robust gegen einzelne Ausreißer). So lässt sich direkt ablesen, bis zu welchem q-Wert eine Kurve noch statistisch belastbar ist
+- 📏 **Einstellbare σ-Schwellenlinien**: Gestrichelte Referenzlinien (Standard 3σ/2σ/1σ) im Subplot, Schwellenwerte und Glättungsfenster frei einstellbar im Options-Panel
+- 🎯 **Subplot-Routing berücksichtigt**: Gruppen mit `subplot_target = "nur Hauptplot"` werden aus dem Signifikanz-Subplot ausgeblendet, analog zum bestehenden ASAXS/PDDF-Mechanismus
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.6.md](CHANGELOG_v7.6.md)
 
 ---
 
@@ -352,7 +367,7 @@ Strg+O → Dateien auswählen
 
 ### 2. Plot-Typ wählen
 
-ScatterForge Plot bietet 10 spezialisierte Plot-Typen für verschiedene Analysen:
+ScatterForge Plot bietet 11 spezialisierte Plot-Typen für verschiedene Analysen:
 
 | Plot-Typ | X-Achse | Y-Achse | Anwendung |
 |----------|---------|---------|-----------|
@@ -366,6 +381,7 @@ ScatterForge Plot bietet 10 spezialisierte Plot-Typen für verschiedene Analysen
 | **Azimuthal Profile** | φ [°] | I [a.u.] | Azimutale Intensitätsprofile aus 2D-Daten |
 | **ASAXS** | q [nm⁻¹] | I [cm⁻¹] | Anomale SAXS-Separation (I_N, I_cross, I_A) |
 | **dlnI/dlnq** | q [nm⁻¹] | d ln(I)/d ln(q) | Versteckte Features/Schultern in Streukurven identifizieren |
+| **Significance** | q [nm⁻¹] | I [a.u.] | Hauptplot wie Log-Log; Subplot zeigt |I(q)/σ(q)| zur Beurteilung des vertrauenswürdigen q-Bereichs |
 
 **Plot-Typ wechseln:**
 ```
@@ -393,6 +409,16 @@ Ansicht → 2-Theta-Einstellungen...
 1. Plot-Typ „dlnI/dlnq" wählen
 2. Glättungsfenster im Options-Panel einstellen (Savitzky-Golay, Standard: 5)
    → größer = glatter, kann aber feine Features abschwächen
+```
+
+**Significance-Spezial-Einstellung (v7.6.0):**
+```
+1. Plot-Typ „Significance" wählen
+2. Hauptplot zeigt I(q) + Fehlerband wie gewohnt; Subplot zeigt |I(q)/σ(q)|
+   → dünn: Rohdaten, dick: gleitender Median (Ausreißer-robust)
+3. Im Options-Panel einstellbar:
+   - Signifikanz-Fenster (Punkte, ungerade, Standard: 9)
+   - σ-Schwellen (kommagetrennt, Standard: „3,2,1") → gestrichelte Linien im Subplot
 ```
 
 ---

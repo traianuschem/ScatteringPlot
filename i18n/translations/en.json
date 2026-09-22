@@ -105,6 +105,10 @@
     "wavelength": "Wavelength (nm):",
     "dlnidlnq_smooth_window": "Smoothing Window:",
     "dlnidlnq_smooth_window_tooltip": "Window size of the Savitzky-Golay smoothing applied before computing d ln(I)/d ln(q).\nLarger values smooth more (less noise, but finer features may disappear).",
+    "significance_window": "Significance Window:",
+    "significance_window_tooltip": "Window size (points) of the rolling-median smoothing applied to the significance curve |I(q)/σ(q)| in the subplot.\nLarger values smooth more strongly against single noise-spike outliers.",
+    "significance_thresholds": "σ Thresholds:",
+    "significance_thresholds_tooltip": "Comma-separated list of σ threshold values shown as dashed reference lines in the significance subplot (e.g. \"3,2,1\").",
     "update_plot": "🔄 Update Plot"
   },
 

@@ -646,6 +646,30 @@ class ScatterPlotApp(QMainWindow):
         self.dlnidlnq_smooth_spin.valueChanged.connect(self._on_dlnidlnq_smooth_changed)
         options_layout.addWidget(self.dlnidlnq_smooth_spin, 6, 1)
 
+        # Significance: Glättungsfenster für die Median-Kurve (nur sichtbar im Significance-Modus)
+        self.significance_window_label = QLabel(tr("options.significance_window"))
+        self.significance_window_label.setVisible(False)
+        options_layout.addWidget(self.significance_window_label, 7, 0)
+        self.significance_window_spin = QSpinBox()
+        self.significance_window_spin.setRange(3, 51)
+        self.significance_window_spin.setSingleStep(2)
+        self.significance_window_spin.setValue(9)
+        self.significance_window_spin.setToolTip(tr("options.significance_window_tooltip"))
+        self.significance_window_spin.setVisible(False)
+        self.significance_window_spin.valueChanged.connect(self._on_significance_window_changed)
+        options_layout.addWidget(self.significance_window_spin, 7, 1)
+
+        # Significance: σ-Schwellenwerte für die gestrichelten Referenzlinien im Subplot
+        self.significance_thresholds_label = QLabel(tr("options.significance_thresholds"))
+        self.significance_thresholds_label.setVisible(False)
+        options_layout.addWidget(self.significance_thresholds_label, 8, 0)
+        self.significance_thresholds_edit = QLineEdit()
+        self.significance_thresholds_edit.setText("3,2,1")
+        self.significance_thresholds_edit.setToolTip(tr("options.significance_thresholds_tooltip"))
+        self.significance_thresholds_edit.setVisible(False)
+        self.significance_thresholds_edit.editingFinished.connect(self.update_plot)
+        options_layout.addWidget(self.significance_thresholds_edit, 8, 1)
+
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
 
@@ -782,6 +806,16 @@ class ScatterPlotApp(QMainWindow):
             ax_sub.set_ylabel('$I_{cross}$ / cm⁻¹')
             ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
             self.ax_pddf = ax_sub
+        elif self.plot_type == 'Significance':
+            gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
+            self.ax_main = self.fig.add_subplot(gs[0])
+            ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
+            ax_sub.set_ylabel('|I(q)| / σ(q)')
+            for level in self._get_significance_thresholds():
+                ax_sub.axhline(level, color='gray', lw=0.8, ls='--', zorder=0)
+                ax_sub.text(0.01, level, f'{level:g}σ', transform=ax_sub.get_yaxis_transform(),
+                            fontsize=8, color='gray', va='bottom', ha='left')
+            self.ax_pddf = None
         else:
             self.ax_main = self.fig.add_subplot(111)
             self.ax_pddf = None
@@ -904,6 +938,12 @@ class ScatterPlotApp(QMainWindow):
                     render_in_main = _subplot_target in ('main', 'both') or ax_sub is None
                     render_in_sub = _subplot_target in ('sub', 'both') and ax_sub is not None
 
+                # Significance: Signifikanzkurve |I/σ| zusätzlich zum normalen
+                # Hauptplot-Rendering in den Subplot zeichnen (kein Ersatz dafür).
+                is_significance = self.plot_type == 'Significance'
+                if is_significance and ax_sub is not None and render_in_sub:
+                    self._render_significance_subplot(ax_sub, x, y, y_err_trans, dataset, color)
+
                 # ASAXS Cross-Term: in Subplot rendern (alle Werte inkl. negativ).
                 # Im Haupt-Plot: bei symlog-Skala auch negative Werte zeigen,
                 # bei log-Skala nur positive Werte (log kann keine Negativwerte darstellen).
@@ -940,7 +980,7 @@ class ScatterPlotApp(QMainWindow):
                 target_axes = []
                 if render_in_main:
                     target_axes.append(self.ax_main)
-                if render_in_sub and not is_cross:
+                if render_in_sub and not is_cross and not is_significance:
                     target_axes.append(ax_sub)
 
                 if not target_axes:
@@ -1061,6 +1101,10 @@ class ScatterPlotApp(QMainWindow):
             y_err_trans = None
             if y_err_data is not None and self.plot_type != 'dlnI/dlnq':
                 y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
+
+            # Significance: Signifikanzkurve |I/σ| zusätzlich im Subplot zeichnen
+            if ax_sub is not None and self.plot_type == 'Significance':
+                self._render_significance_subplot(ax_sub, x, y, y_err_trans, dataset, color)
 
             # ASAXS Cross-Term: in Subplot rendern; im Haupt-Plot bei log-Skala nur
             # positive Werte zeigen (symlog erlaubt auch negative Werte, s.o.)
@@ -1650,6 +1694,50 @@ class ScatterPlotApp(QMainWindow):
             ax_sub.fill_between(x, y - y_err, y + y_err,
                                 alpha=dataset.errorbar_alpha, color=color)
 
+    def _get_significance_thresholds(self):
+        """Parst die σ-Schwellenwerte aus dem Options-Eingabefeld (Fallback: 3,2,1)."""
+        default = [3.0, 2.0, 1.0]
+        widget = getattr(self, 'significance_thresholds_edit', None)
+        if widget is None:
+            return default
+        values = []
+        for token in widget.text().split(','):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                values.append(float(token))
+            except ValueError:
+                continue
+        return values if values else default
+
+    def _render_significance_subplot(self, ax_sub, x, y, y_err, dataset, color):
+        """Rendert die punktweise Signifikanz |I(q)/σ(q)| im Subplot:
+        dünn = Rohdaten, dick = über ein gleitendes Median-Fenster geglättet
+        (robust gegen einzelne Ausreißer-Rauschspitzen)."""
+        if y_err is None or len(x) == 0:
+            return
+        with np.errstate(invalid='ignore', divide='ignore'):
+            significance = np.abs(y) / np.abs(y_err)
+        significance[~np.isfinite(significance)] = np.nan
+        ax_sub.plot(x, significance, '-', color=color,
+                    linewidth=max(dataset.line_width * 0.6, 0.5), alpha=0.4)
+        window_widget = getattr(self, 'significance_window_spin', None)
+        window = window_widget.value() if window_widget is not None else 9
+        smoothed = self._rolling_median(significance, window)
+        ax_sub.plot(x, smoothed, '-', color=color, linewidth=dataset.line_width * 1.8)
+
+    @staticmethod
+    def _rolling_median(arr, window):
+        """Zentrierter gleitender Median über `window` Punkte (Fenster an den Rändern verkleinert)."""
+        n = len(arr)
+        half = window // 2
+        out = np.empty(n)
+        for i in range(n):
+            lo, hi = max(0, i - half), min(n, i + half + 1)
+            out[i] = np.nanmedian(arr[lo:hi])
+        return out
+
     def _compute_symlog_linthresh(self, abs_val_arrays, decades=4):
         """Bestimmt linthresh für die symlog-Skala aus der Anzahl gewünschter Dekaden.
 
@@ -1750,7 +1838,7 @@ class ScatterPlotApp(QMainWindow):
             Der konvertierte X-Wert im Ziel-Plottyp
         """
         # Plottypen, die q verwenden (keine Transformation der X-Achse)
-        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS', 'dlnI/dlnq'}
+        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS', 'dlnI/dlnq', 'Significance'}
 
         # Zuerst auf q zurückrechnen (Basiseinheit)
         if from_plot_type in q_types:
@@ -2897,6 +2985,14 @@ class ScatterPlotApp(QMainWindow):
             self.dlnidlnq_smooth_label.setVisible(is_dlnidlnq)
             self.dlnidlnq_smooth_spin.setVisible(is_dlnidlnq)
 
+        # Significance: Fenster- und Schwellen-Felder sichtbar/unsichtbar
+        if hasattr(self, 'significance_window_spin'):
+            is_significance = new_plot_type == 'Significance'
+            self.significance_window_label.setVisible(is_significance)
+            self.significance_window_spin.setVisible(is_significance)
+            self.significance_thresholds_label.setVisible(is_significance)
+            self.significance_thresholds_edit.setVisible(is_significance)
+
         self.update_plot()
 
     def _on_dlnidlnq_smooth_changed(self, value):
@@ -2905,6 +3001,14 @@ class ScatterPlotApp(QMainWindow):
             self.dlnidlnq_smooth_spin.blockSignals(True)
             self.dlnidlnq_smooth_spin.setValue(value + 1)
             self.dlnidlnq_smooth_spin.blockSignals(False)
+        self.update_plot()
+
+    def _on_significance_window_changed(self, value):
+        """Erzwingt eine ungerade Fenstergröße für die gleitende Median-Glättung"""
+        if value % 2 == 0:
+            self.significance_window_spin.blockSignals(True)
+            self.significance_window_spin.setValue(value + 1)
+            self.significance_window_spin.blockSignals(False)
         self.update_plot()
 
     def change_color_scheme(self):
