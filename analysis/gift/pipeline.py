@@ -1,7 +1,7 @@
 """
 Gesamtablauf einer IFT-Analyse mit lückenloser Provenance:
 
-    q-Bereich wählen → σ prüfen/schätzen → IFT → Diagnose → Export (+ Sidecar)
+    q-Bereich wählen → σ prüfen/schätzen → IFT/GIFT → Diagnose → [DREAM] → Export (+ Sidecar)
 
 GUI-frei; der Dialog ruft `run_ift_analysis()` und `export_ift_results()` auf.
 """
@@ -21,6 +21,7 @@ from .diagnostics import diagnose_gift
 from .gift import GIFTSettings, GIFTResult, run_gift
 from .structure_factors import get_model
 from .provenance import ProvenanceRecord, default_agent, compute_sha256
+from .uncertainty import UncertaintySettings, UncertaintyResult, run_uncertainty, QUANTILES
 from ..significance import select_q_range, QRANGE_FULL
 
 RESULT_SUBDIR = 'GIFT'
@@ -55,11 +56,16 @@ class IFTAnalysis:
     sigma_relative: Optional[float] = None
     source_file: Optional[Path] = None
     gift: Optional[GIFTResult] = None
+    uncertainty: Optional[UncertaintyResult] = None       # DREAM (auf Knopfdruck)
     extras: Dict[str, Any] = field(default_factory=dict)
 
     @property
+    def all_flags(self) -> List[Flag]:
+        return self.flags + (self.uncertainty.flags if self.uncertainty is not None else [])
+
+    @property
     def worst_level(self):
-        return worst_level(self.flags)
+        return worst_level(self.all_flags)
 
 
 def _software_version():
@@ -217,6 +223,63 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
                        source_file=source_file, gift=gift)
 
 
+def run_uncertainty_analysis(analysis: IFTAnalysis, settings: UncertaintySettings,
+                             progress=None) -> UncertaintyResult:
+    """DREAM-Analyse (Plan §2.3) einer fertigen IFT/GIFT-Analyse; das Ergebnis hängt danach
+    an `analysis.uncertainty` und wird mit exportiert."""
+    result = run_uncertainty(analysis, settings, progress=progress)
+    analysis.uncertainty = result
+    return result
+
+
+def _add_uncertainty_provenance(rec: ProvenanceRecord, u: UncertaintyResult):
+    ds = u.settings.dream
+    rec.add_activity(
+        "Latin-Hypercube-Screening der Posterior-Landschaft", "screening",
+        parameters={'n': int(len(u.screening.log_p)), 'seed_entropy': u.screening.seed_entropy,
+                    'prior': u.space.to_dict()},
+        results_summary=u.screening.summary(u.names))
+    rec.add_activity(
+        "DREAM(ZS): Posterior der Parameter (ter Braak & Vrugt 2008; marginale Likelihood "
+        "nach Hansen 2000)", "dream",
+        parameters={**u.settings.to_dict(), 'prior': u.space.to_dict(),
+                    'likelihood': 'marginal (spline coefficients integrated out analytically)',
+                    'model': u.model_key, 'fixed_values': u.fixed_values,
+                    'n_workers_used': u.n_workers},
+        results_summary=u.results_summary())
+    rec.set_reproducibility(
+        dream_seed=int(ds.seed), dream_rng="numpy.random.default_rng(seed) (PCG64)",
+        screening_seed_entropy=u.screening.seed_entropy,
+        prediction_seed_entropy=[int(ds.seed), 2],
+        dream_chunk=int(u.settings.chunk), dream_n_workers=int(u.n_workers),
+        dream_note="Ketten bitgleich für jede Worker-Zahl ≥ 1 (feste Blockgröße, einfädiges "
+                   "BLAS im Pool); 0 Worker = Hauptprozess (Diagnose, nicht bitgleich).")
+
+
+def _save_uncertainty(u: UncertaintyResult, paths, analysis, rec):
+    d = u.dream
+    b = u.bands
+    np.savez_compressed(
+        paths['dream'], names=np.array(u.names), labels=np.array([u.labels[n] for n in u.names]),
+        lower=u.space.lower, upper=u.space.upper, chains=d.chains, log_p=d.log_p,
+        accepted=d.accepted, burn_in=d.burn_in, r_hat=d.r_hat,
+        r_hat_history=np.array([[g, *r] for g, r in d.r_hat_history]),
+        screening_samples=u.screening.samples, screening_log_p=u.screening.log_p,
+        quantiles=np.array(QUANTILES), r=b['r'], q=b['q'], pr_band=b['pr'],
+        i_fit_band=b['i_fit'], pq_band=b['pq'], sq_band=b['sq'],
+        rg_samples=u.rg_samples, i0_samples=u.i0_samples,
+        record_id=np.array(rec.record_id))
+    rec.add_output('dream_chains', paths['dream'].name, paths['dream'],
+                   extra_fields={'format': 'numpy npz'})
+    pr = b['pr']
+    np.savetxt(paths['pr_band'], np.column_stack([b['r'], pr[2], pr[0], pr[1], pr[3], pr[4]]),
+               fmt='%.8e', delimiter='\t', comments='', encoding='utf-8',
+               header=_header(analysis, f"p(r)-Posterior-Band (DREAM, {b['n_draws']} Ziehungen)",
+                              ['r / nm', 'median', 'q2.5', 'q16', 'q84', 'q97.5']))
+    rec.add_output('pr_band', paths['pr_band'].name, paths['pr_band'],
+                   extra_fields={'columns': ['r_nm', 'median', 'q2.5', 'q16', 'q84', 'q97.5']})
+
+
 # ---------------------------------------------------------------------------
 # Export
 # ---------------------------------------------------------------------------
@@ -237,7 +300,8 @@ def _header(analysis: IFTAnalysis, title: str, columns: List[str]) -> str:
         f"# Rg = {s.rg:.6g} +- {s.rg_err:.3g} nm, I(0) = {s.i0:.6g} +- {s.i0_err:.3g}, "
         f"MD = {s.md:.4g}",
         *([_gift_header_line(analysis)] if analysis.gift is not None else []),
-        f"# Flags: " + ", ".join(f"{f.code}={f.level}" for f in analysis.flags),
+        *([_dream_header_line(analysis)] if analysis.uncertainty is not None else []),
+        f"# Flags: " + ", ".join(f"{f.code}={f.level}" for f in analysis.all_flags),
         "# " + "\t".join(columns),
     ]
     return "\n".join(lines)
@@ -248,6 +312,15 @@ def _gift_header_line(analysis: IFTAnalysis) -> str:
     params = ", ".join(f"{k} = {v:.6g} +- {g.param_errors.get(k, float('nan')):.3g}"
                        for k, v in g.params.items())
     return f"# GIFT: S(q) = {g.model_key}; {params}; MD ohne S(q) = {g.md_without_sq:.4g}"
+
+
+def _dream_header_line(analysis: IFTAnalysis) -> str:
+    u = analysis.uncertainty
+    parts = [f"{n} = {u.summary[n]['median']:.6g} [{u.summary[n]['q2.5']:.4g}, "
+             f"{u.summary[n]['q97.5']:.4g}]" for n in u.names]
+    return ("# DREAM (Median [95 %]): " + "; ".join(parts)
+            + f"; Rg = {u.rg['median']:.6g} [{u.rg['q2.5']:.4g}, {u.rg['q97.5']:.4g}] nm; "
+            f"R-hat max = {float(np.max(u.dream.r_hat)):.3f}")
 
 
 def result_paths(source_file, out_dir=None) -> Dict[str, Path]:
@@ -261,6 +334,8 @@ def result_paths(source_file, out_dir=None) -> Dict[str, Path]:
         'data': out_dir / f"{stem}_GIFT_data.dat",
         'sq': out_dir / f"{stem}_GIFT_Sq.dat",
         'pq': out_dir / f"{stem}_GIFT_Pq.dat",
+        'dream': out_dir / f"{stem}_GIFT_dream.npz",
+        'pr_band': out_dir / f"{stem}_GIFT_pr_band.dat",
         'prov': out_dir / f"{stem}_GIFT_prov.json",
         'prov_w3c': out_dir / f"{stem}_GIFT.prov-w3c.json",
     }
@@ -284,6 +359,9 @@ def export_ift_results(analysis: IFTAnalysis, out_dir=None, source_file=None,
     rec = copy.deepcopy(analysis.record)
     analysis.extras['exported_record'] = rec
 
+    if analysis.uncertainty is not None:
+        _add_uncertainty_provenance(rec, analysis.uncertainty)
+        rec.set_flags(analysis.all_flags)
     rec.add_activity("Export", "export",
                      parameters={'out_dir': paths['pr'].parent, 'write_w3c': write_w3c})
 
@@ -332,6 +410,9 @@ def export_ift_results(analysis: IFTAnalysis, out_dir=None, source_file=None,
         rec.add_output('form_factor', paths['pq'].name, paths['pq'],
                        extra_fields={'columns': ['q_nm-1', 'P_q', 'sigma_P_q']})
         written.update({'sq': paths['sq'], 'pq': paths['pq']})
+    if analysis.uncertainty is not None:
+        _save_uncertainty(analysis.uncertainty, paths, analysis, rec)
+        written.update({'dream': paths['dream'], 'pr_band': paths['pr_band']})
     if write_w3c:
         rec.export_prov_json_to_file(paths['prov_w3c'])
         rec.add_output('provenance_prov_json', paths['prov_w3c'].name, paths['prov_w3c'])

@@ -415,7 +415,7 @@ Werkzeuge beide lesen können):
 
 ## 10. Umsetzungsstand
 
-### Phase 1 — umgesetzt (Branch `feature/gift` in ScatteringPlot, noch nicht committet)
+### Phase 1 — umgesetzt (Branch `feature/gift` in ScatteringPlot, Commit `0378727`)
 | Datei | Inhalt |
 |---|---|
 | `analysis/significance.py` | \|I/σ\|, gleitender Median (vektorisiert, identisch zur alten Schleife), σ-Abschneidekriterium, `select_q_range()` (voll / nσ / manuell) |
@@ -463,7 +463,7 @@ Glatters bessere Werte ließen sich mit keiner der getesteten Regeln reproduzier
 vermutlich unterscheiden sich λ-Normierung bzw. Basis im Original-Programm ITP. Die
 DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen quantifizieren.
 
-### Phase 2 — umgesetzt (ScatterForge Plot v7.8.0, Branch `feature/gift`, noch nicht committet)
+### Phase 2 — umgesetzt (ScatterForge Plot v7.8.0, Branch `feature/gift`, Commit `0378727`)
 - `dialogs/gift_dialog.py`: nicht-modaler Dialog. Die IFT rechnet synchron mit
   entprellter Live-Vorschau (~ms); ein `QThread` folgt erst mit GIFT/DREAM.
 - Menü „Analyse → P(r) berechnen (IFT/GIFT)…“ (`Strg+Umschalt+G`, da `Strg+G` schon
@@ -494,7 +494,7 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
   - σ-Modus „relativ annehmen“ für Simulationen
   - Regressionstest `TestLargeSphereSimulation`
 
-### Phase 3a — umgesetzt (ScatterForge Plot v7.9.0, Branch `feature/gift`)
+### Phase 3a — umgesetzt (ScatterForge Plot v7.9.0, Branch `feature/gift`, Commit `11c432e`)
 - `structure_factors.py`: HS-PY über die direkte Korrelationsfunktion (GL-Quadratur für
   x ≤ 1, geschlossene Form darüber), S_ave mit 21 Gauss-Hermite-Knoten; vektorisiert
   (K × M) als Vorbereitung für Phase 3c/3d.
@@ -523,7 +523,7 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
   ε_r = 71.08.
 - Beide Kurven liegen als Fixtures in `ScatteringPlot/tests/analysis/data/`.
 
-### Phase 3b — umgesetzt (ScatterForge Plot v7.10.0, Branch `feature/gift`, noch nicht committet)
+### Phase 3b — umgesetzt (ScatterForge Plot v7.10.0, Branch `feature/gift`, Commit `5c84037`)
 - `rmsa.py`: zeilengetreue Portierung von sasmodels `hayter_msa.c` (BSD-3, Hinweis in Datei
   und `THIRD_PARTY_NOTICES.md`). Grund: Der OCR-Anhang von [HP81] mit den
   Quartik-Koeffizienten ist unlesbar; sasmodels ist die direkte Übertragung von Hayters
@@ -539,7 +539,7 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
 - Phase 3c reduziert sich damit auf die Parallelisierung (Mehrfachstarts, Screening,
   Dmax-Scan) und die vektorisierte Batch-Likelihood für DREAM.
 
-### Phase 3c — umgesetzt (ScatterForge Plot v7.11.0, Branch `feature/gift`, noch nicht committet)
+### Phase 3c — umgesetzt (ScatterForge Plot v7.11.0, Branch `feature/gift`, Commit `d7dd9a4`)
 - `parallel.py`: persistenter spawn-Pool. Beim Anlegen wird `__main__` ausgeblendet
   (Worker ohne PySide6/Test-Runner), BLAS einfädig, Fortschritt per Queue, Abbruch per
   Event.
@@ -554,3 +554,36 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
   (Bindung an Aufgaben statt Worker) und bleiben mit den Sidecars aus v7.10 kompatibel.
 - Screening, Dmax-Scan und Messserien nutzen den Pool ab Phase 3d bzw. 4.
 
+### Phase 3d — umgesetzt (ScatterForge Plot v7.12.0, Branch `feature/gift`, noch nicht committet)
+- `likelihood.py`: marginale Likelihood nach [Hansen 2000] mit analytisch
+  herausintegrierten Spline-Koeffizienten; geprüft gegen die direkte Gauß-Marginale
+  (< 10⁻⁶). Dmax-Variation über die skalierte Tabelle g_ν(q·Dmax) wie in §5 geplant
+  (Hermite-Interpolation, Fehler 2·10⁻⁹). Untergrund wie in der IFT herausprojiziert.
+- `dream.py`: DREAM(ZS) in numpy (≈ 300 Zeilen). Test 9 (Gauß, bimodal, Banane) erfüllt.
+- **Abweichung von §2.3 (Konvergenzregel):** Statt „R̂ < 1.1 über die zweite Hälfte“ gibt
+  es zwei Phasen: Einlauf mit Adaption bis R̂ < Ziel, danach Sampling ohne Adaption bis
+  R̂ < Ziel über die Zustände *nach* dem Einlauf und ≥ 5000 Zustände. Beim Übergang werden
+  die Priorpunkte aus dem Archiv Z entfernt. Grund: Mit der einfachen Regel meldete
+  ein GIFT-Lauf zu früh Konvergenz (eine Kette im Dmax-Ausläufer; 95 %-Grenze 28.9 statt
+  20.4 nm im Referenzlauf mit 120 000 Auswertungen), und die weit gestreuten Priorpunkte
+  im Archiv hielten die Akzeptanz bei 6 %.
+- `screening.py`/`uncertainty.py`: LHS-Screening (100·d Punkte) → Archiv/Startpunkte
+  (beste Punkte + BSSA-Optimum) → DREAM → Posterior-Prädiktion (400 Ziehungen, c ~ N(ĉ,
+  (B+λK)⁻¹)) mit Bändern für p(r), I(q), P(q), S(q) und Verteilungen von Rg, I(0).
+  Zufallszahlen: DREAM `default_rng(seed)`, Screening/Prädiktion `SeedSequence([seed, 1/2])`.
+- Parallelität: Auswertungen je Generation im Pool, Blockgröße fest 2 → bitgleich für
+  jede Worker-Zahl ≥ 1. **Befund:** Bei HS (0.3 ms pro Auswertung) bringt der Pool nur
+  ≈ 1.3×, weil der Prozesswechsel pro Generation ähnlich viel kostet; der Gewinn kommt
+  erst mit teuren S(q)-Modellen (Phase 5). Die Priorität lag daher auf der statistischen
+  Effizienz (siehe Konvergenzregel).
+- Flags aus §2.3 umgesetzt (`dream_*`); „Posterior ≈ Prior“ als σ_post/σ_prior > 0.8,
+  „Rand“ als > 10 % Masse in den äußeren 2 %, Multimodalität per 1D-KDE; zusätzlich
+  `dream_reference` (BSSA-Optimum bzw. gewähltes λ/Dmax außerhalb 95 %).
+- Dialog: Gruppe „Unsicherheit (DREAM)“ und Tab „Unsicherheit“ (Übersicht, Corner-Plot,
+  Ketten, Bänder); „Einstellungen aus Sidecar“ wiederholt DREAM automatisch (bitgleich).
+- Nicht umgesetzt (bewusst): der optionale Vergleich zweier q-Schnitte (§2.0, „DREAM“)
+  als eigene Funktion; er lässt sich mit zwei Läufen und den Sidecars durchführen.
+- Validierung an der SasView-RMSA-Kurve: Sollwerte im 95-%-Intervall, bei freiem φ das
+  Korrelations-Flag φ–R_HS (+0.95), φ–z (−0.93) wie in [F00] beschrieben; Dmax-Posterior
+  27.86 nm (Kugeldurchmesser 28 nm).
+- Tests: 97 (16 neu), ≈ 66 s.

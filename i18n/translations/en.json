@@ -1071,7 +1071,50 @@
     "seed": "Seed",
     "seed_tooltip": "Random seed of the BSSA search (reproducible, documented in the sidecar)",
     "workers": "Processes",
-    "workers_tooltip": "Parallel processes for the BSSA multi-starts. The result does not depend on the number (bit-identical). 0 = compute in the main process (diagnostics, not bit-identical to pool results).",
+    "workers_tooltip": "Parallel processes for the BSSA multi-starts and DREAM. The result does not depend on the number (bit-identical). 0 = compute in the main process (diagnostics, not bit-identical to pool results).",
+    "tab_uncertainty": "Uncertainty",
+    "group_dream": "Uncertainty (DREAM)",
+    "dream_hint": "MCMC analysis (DREAM(ZS)) of the finished calculation: the spline coefficients are integrated out analytically (Hansen 2000); the selected S(q) parameters, log λ and Dmax are sampled. Result: intervals, correlations and posterior bands.",
+    "dream_col_sample": "sample",
+    "dream_gauss_tooltip": "Optional Gaussian prior μ ± σ (e.g. φ from the sample preparation). σ = – → uniform between the bounds.",
+    "dream_prior_defaults": "Default bounds",
+    "dream_prior_defaults_tooltip": "Reset the prior bounds: S(q) as the BSSA search range, log λ = optimum ± 4 decades, Dmax = 0.75 … 1.5 × Dmax.",
+    "dream_dmax_limit": "π/q_min as upper bound for Dmax",
+    "dream_dmax_limit_tooltip": "The Dmax prior ends at π/q_min. Unchecked, exceeding it is only reported as a flag.",
+    "dream_scale_sigma": "Scale σ by √MD",
+    "dream_scale_sigma_tooltip": "Scales the errors so that MD = 1 at the optimum (for clearly over- or underestimated error bars). Reported as a flag and in the sidecar.",
+    "dream_chains": "Chains",
+    "dream_chains_tooltip": "Number of DREAM chains (evaluations per generation).",
+    "dream_budget": "Budget",
+    "dream_budget_tooltip": "Maximum number of likelihood evaluations. The run stops earlier once R̂ < target and enough samples are available.",
+    "dream_rhat_tooltip": "Convergence criterion: Gelman-Rubin R̂ of all parameters below this value.",
+    "dream_run": "Determine uncertainty",
+    "dream_run_tooltip": "Runs screening, DREAM and posterior prediction for the current calculation (background, cancellable).",
+    "dream_nothing": "No quantity selected for sampling.",
+    "dream_starting": "Starting DREAM …",
+    "dream_screening": "Screening the posterior landscape ({n} points) …",
+    "dream_predict": "Posterior prediction (bands) …",
+    "dream_running": "DREAM: {n} evaluations, generation {gen}, max. R̂ = {rhat}, acceptance {acc} %",
+    "dream_stale": "DREAM result discarded: the calculation has changed in the meantime.",
+    "dream_done": "DREAM converged: {n} evaluations in {t} s (max. R̂ = {rhat}).",
+    "dream_done_not_converged": "DREAM not converged after {n} evaluations ({t} s, max. R̂ = {rhat}) — increase the budget.",
+    "dream_cancelled": "DREAM cancelled.",
+    "dream_reproduced": "DREAM repeated. Posterior median (sidecar → new):\n{lines}",
+    "dream_median_95": "median [95 %]",
+    "dream_not_run": "No uncertainty analysis yet — run “Determine uncertainty”.",
+    "dream_info": "<b>{evals}</b> evaluations, {gens} generations × {chains} chains; burn-in {burn} generations, {samples} posterior states; acceptance {acc} %, max. R̂ = {rhat}; {t} s with {workers} processes.<br><b>Rg</b> = {rg} nm, <b>I(0)</b> = {i0} (median [95 %])",
+    "dream_col_param": "Parameter",
+    "dream_col_reference": "Optimum",
+    "dream_col_median": "Median",
+    "dream_tab_overview": "Overview",
+    "dream_tab_corner": "Corner plot",
+    "dream_tab_traces": "Chains",
+    "dream_tab_bands": "Bands",
+    "dream_corner_legend": "— median · · 95 % – – optimum (BSSA/IFT)",
+    "dream_generation": "Generation",
+    "dream_trace_title": "DREAM chains (grey: burn-in, discarded)",
+    "dream_median": "Posterior median",
+    "dream_point_estimate": "Point estimate (IFT/GIFT)",
     "apparent_hint": "S_ave parameters are apparent model parameters; the actual result is p(r) or P(q) (Weyerich et al. 1999).",
     "run_gift": "Run GIFT",
     "cancel": "Cancel",
@@ -1147,6 +1190,38 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "dream_convergence": {
+        "ok": "DREAM converged (max. R̂ = {rhat}, {evals} evaluations).",
+        "not_converged": "DREAM not converged: R̂ ≥ {target} for {names} after {evals} evaluations — increase the budget; the intervals are preliminary.",
+        "no_burn_in": "DREAM did not finish the burn-in (R̂ ≥ {target} for {names} after {evals} evaluations) — increase the budget or narrow the prior bounds."
+      },
+      "dream_identifiability": {
+        "unidentifiable": "Not identifiable: {names} — the posterior is hardly narrower than the prior; the data do not determine these quantities."
+      },
+      "dream_boundary": {
+        "at_bound": "Posterior mass at a prior bound ({names}) — widen the bounds; otherwise the interval is truncated."
+      },
+      "dream_correlation": {
+        "strong": "Strongly correlated parameters: {pairs} — only combinations are well determined (e.g. z ↔ R_HS ↔ φ for charged systems)."
+      },
+      "dream_multimodal": {
+        "multimodal": "Several separate posterior modes: {names} — median and intervals describe the distribution only partially (check the corner plot)."
+      },
+      "dream_reference": {
+        "outside": "BSSA optimum outside the 95 % interval ({names}) — the main posterior mode and the MD minimum disagree.",
+        "hyper": "The data prefer other values than chosen ({names}; chosen → posterior median)."
+      },
+      "dream_dmax_qmin": {
+        "ok": "Dmax posterior entirely below π/q_min = {limit} nm.",
+        "tail": "The upper part of the Dmax posterior (97.5 %: {q97} nm) extends beyond π/q_min = {limit} nm.",
+        "exceeded": "Dmax posterior (median {median} nm) exceeds π/q_min = {limit} nm — information at small q is missing."
+      },
+      "dream_sigma": {
+        "scaled": "σ was scaled by √MD = {factor} (adapted to the observed scatter)."
+      },
+      "dream_acceptance": {
+        "low": "Low acceptance rate ({rate} %) — chains mix slowly; check the result with more evaluations."
+      },
       "gift_multistart": {
         "ok": "All {n} BSSA runs find the same minimum.",
         "partial": "Best minimum found in {hits} of {n} BSSA runs (secondary minima present).",

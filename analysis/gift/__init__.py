@@ -8,7 +8,9 @@ IFT/GIFT-Modul (GUI-frei).
   Portierung aus sasmodels (BSD-3, siehe rmsa.py), BSSA-Mehrfachstart (0.3)
 - Prozess-Pool für parallele BSSA-Starts (bitgleich unabhängig von der Worker-Zahl),
   vektorisierte Batch-Likelihood (0.4)
-DREAM folgt (siehe GIFT/PLAN.md).
+- Statistische Absicherung: marginale Likelihood (Hansen 2000), LHS-Screening und
+  DREAM(ZS) über S(q)-Parameter, log λ und Dmax; Posterior-Bänder (0.5)
+Dmax-Scan und Messserien folgen (siehe docs/GIFT/PLAN.md).
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

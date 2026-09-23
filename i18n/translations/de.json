@@ -1071,7 +1071,50 @@
     "seed": "Seed",
     "seed_tooltip": "Startwert des Zufallszahlengenerators der BSSA-Suche (reproduzierbar, im Sidecar dokumentiert)",
     "workers": "Prozesse",
-    "workers_tooltip": "Parallele Prozesse für die BSSA-Mehrfachstarts. Das Ergebnis ist von der Anzahl unabhängig (bitgleich). 0 = im Hauptprozess rechnen (Diagnose, nicht bitgleich zu den Pool-Ergebnissen).",
+    "workers_tooltip": "Parallele Prozesse für die BSSA-Mehrfachstarts und DREAM. Das Ergebnis ist von der Anzahl unabhängig (bitgleich). 0 = im Hauptprozess rechnen (Diagnose, nicht bitgleich zu den Pool-Ergebnissen).",
+    "tab_uncertainty": "Unsicherheit",
+    "group_dream": "Unsicherheit (DREAM)",
+    "dream_hint": "MCMC-Analyse (DREAM(ZS)) der fertigen Rechnung: Die Spline-Koeffizienten sind analytisch herausintegriert (Hansen 2000); abgetastet werden die gewählten S(q)-Parameter, log λ und Dmax. Ergebnis: Intervalle, Korrelationen und Posterior-Bänder.",
+    "dream_col_sample": "abtasten",
+    "dream_gauss_tooltip": "Optionale gaußsche Priorverteilung μ ± σ (z. B. φ aus der Einwaage). σ = – → gleichverteilt zwischen den Grenzen.",
+    "dream_prior_defaults": "Standardgrenzen",
+    "dream_prior_defaults_tooltip": "Priorgrenzen neu setzen: S(q) wie der BSSA-Suchbereich, log λ = Optimum ± 4 Dekaden, Dmax = 0.75 … 1.5 × Dmax.",
+    "dream_dmax_limit": "π/q_min als Obergrenze für Dmax",
+    "dream_dmax_limit_tooltip": "Die Dmax-Priorverteilung endet bei π/q_min. Ohne Haken wird ein Überschreiten nur als Flag gemeldet.",
+    "dream_scale_sigma": "σ mit √MD skalieren",
+    "dream_scale_sigma_tooltip": "Skaliert die Fehler so, dass MD am Optimum = 1 wird (bei offensichtlich über- oder unterschätzten Fehlerbalken). Wird als Flag und im Sidecar vermerkt.",
+    "dream_chains": "Ketten",
+    "dream_chains_tooltip": "Anzahl der DREAM-Ketten (Auswertungen je Generation).",
+    "dream_budget": "Budget",
+    "dream_budget_tooltip": "Maximale Zahl der Likelihood-Auswertungen. Der Lauf endet früher, sobald R̂ < Ziel und genug Stichproben vorliegen.",
+    "dream_rhat_tooltip": "Konvergenzkriterium: Gelman-Rubin R̂ aller Parameter unter diesem Wert.",
+    "dream_run": "Unsicherheit bestimmen",
+    "dream_run_tooltip": "Startet Screening, DREAM und Posterior-Prädiktion für die aktuelle Rechnung (Hintergrund, abbrechbar).",
+    "dream_nothing": "Keine Größe zum Abtasten ausgewählt.",
+    "dream_starting": "DREAM wird gestartet …",
+    "dream_screening": "Screening der Posterior-Landschaft ({n} Punkte) …",
+    "dream_predict": "Posterior-Prädiktion (Bänder) …",
+    "dream_running": "DREAM: {n} Auswertungen, Generation {gen}, max. R̂ = {rhat}, Akzeptanz {acc} %",
+    "dream_stale": "DREAM-Ergebnis verworfen: Die Rechnung wurde inzwischen geändert.",
+    "dream_done": "DREAM konvergiert: {n} Auswertungen in {t} s (max. R̂ = {rhat}).",
+    "dream_done_not_converged": "DREAM nach {n} Auswertungen ({t} s) nicht konvergiert (max. R̂ = {rhat}) — Budget erhöhen.",
+    "dream_cancelled": "DREAM abgebrochen.",
+    "dream_reproduced": "DREAM wiederholt. Posterior-Median (Sidecar → neu):\n{lines}",
+    "dream_median_95": "Median [95 %]",
+    "dream_not_run": "Noch keine Unsicherheitsanalyse — „Unsicherheit bestimmen“ starten.",
+    "dream_info": "<b>{evals}</b> Auswertungen, {gens} Generationen × {chains} Ketten; Einlauf {burn} Generationen, {samples} Posterior-Zustände; Akzeptanz {acc} %, max. R̂ = {rhat}; {t} s mit {workers} Prozessen.<br><b>Rg</b> = {rg} nm, <b>I(0)</b> = {i0} (Median [95 %])",
+    "dream_col_param": "Parameter",
+    "dream_col_reference": "Optimum",
+    "dream_col_median": "Median",
+    "dream_tab_overview": "Übersicht",
+    "dream_tab_corner": "Corner-Plot",
+    "dream_tab_traces": "Ketten",
+    "dream_tab_bands": "Bänder",
+    "dream_corner_legend": "— Median · · 95 % – – Optimum (BSSA/IFT)",
+    "dream_generation": "Generation",
+    "dream_trace_title": "DREAM-Ketten (grau: Einlauf, verworfen)",
+    "dream_median": "Posterior-Median",
+    "dream_point_estimate": "Punktschätzung (IFT/GIFT)",
     "apparent_hint": "S_ave-Parameter sind scheinbare Modellparameter; das eigentliche Ergebnis ist p(r) bzw. P(q) (Weyerich et al. 1999).",
     "run_gift": "GIFT starten",
     "cancel": "Abbrechen",
@@ -1147,6 +1190,38 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "dream_convergence": {
+        "ok": "DREAM konvergiert (max. R̂ = {rhat}, {evals} Auswertungen).",
+        "not_converged": "DREAM nicht konvergiert: R̂ ≥ {target} für {names} nach {evals} Auswertungen — Budget erhöhen; die Intervalle sind nur vorläufig.",
+        "no_burn_in": "DREAM hat die Einlaufphase nicht abgeschlossen (R̂ ≥ {target} für {names} nach {evals} Auswertungen) — Budget erhöhen oder Priorgrenzen einengen."
+      },
+      "dream_identifiability": {
+        "unidentifiable": "Nicht bestimmbar: {names} — die Posterior-Verteilung ist kaum schmaler als die Priorverteilung; die Daten legen diese Größen nicht fest."
+      },
+      "dream_boundary": {
+        "at_bound": "Posterior-Masse an einer Priorgrenze ({names}) — Grenzen erweitern; das Intervall ist sonst abgeschnitten."
+      },
+      "dream_correlation": {
+        "strong": "Stark korrelierte Parameter: {pairs} — nur Kombinationen sind gut bestimmt (z. B. z ↔ R_HS ↔ φ bei geladenen Systemen)."
+      },
+      "dream_multimodal": {
+        "multimodal": "Mehrere getrennte Modi im Posterior: {names} — Median und Intervalle beschreiben die Verteilung nur eingeschränkt (Corner-Plot prüfen)."
+      },
+      "dream_reference": {
+        "outside": "BSSA-Optimum außerhalb des 95-%-Intervalls ({names}) — Hauptmodus des Posteriors und MD-Minimum stimmen nicht überein.",
+        "hyper": "Die Daten bevorzugen andere Werte als gewählt ({names}; gewählt → Posterior-Median)."
+      },
+      "dream_dmax_qmin": {
+        "ok": "Dmax-Posterior vollständig unter π/q_min = {limit} nm.",
+        "tail": "Der obere Teil des Dmax-Posteriors (97.5 %: {q97} nm) reicht über π/q_min = {limit} nm.",
+        "exceeded": "Dmax-Posterior (Median {median} nm) liegt über π/q_min = {limit} nm — Information bei kleinen q fehlt."
+      },
+      "dream_sigma": {
+        "scaled": "σ wurde mit √MD = {factor} skaliert (Anpassung an die beobachtete Streuung)."
+      },
+      "dream_acceptance": {
+        "low": "Niedrige Akzeptanzrate ({rate} %) — Ketten mischen langsam; Ergebnis mit mehr Auswertungen prüfen."
+      },
       "gift_multistart": {
         "ok": "Alle {n} BSSA-Läufe finden dasselbe Minimum.",
         "partial": "Bestes Minimum in {hits} von {n} BSSA-Läufen gefunden (Nebenminima vorhanden).",

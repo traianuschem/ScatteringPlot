@@ -14,7 +14,8 @@ GIFT/ neben der Datendatei und meldet die Dateien an das Hauptfenster
 (Signal `results_applied`), das daraus eine PDDF-Gruppe anlegt.
 
 Die IFT ist schnell (Millisekunden) und läuft synchron mit entprellter
-Live-Vorschau. GIFT/DREAM (spätere Phasen) laufen im Hintergrund-Thread.
+Live-Vorschau. GIFT (BSSA) und die DREAM-Unsicherheitsanalyse (v7.12, auf Knopfdruck)
+laufen im Hintergrund-Thread.
 """
 
 import os
@@ -28,7 +29,8 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox, QFormLayout, QLabel,
     QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, QTabWidget, QWidget,
     QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QMessageBox,
-    QFileDialog, QScrollArea, QSizePolicy, QFrame, QGridLayout,
+    QFileDialog, QScrollArea, QSizePolicy, QFrame, QGridLayout, QTableWidget,
+    QTableWidgetItem, QHeaderView, QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QThread
 from PySide6.QtGui import QColor, QBrush
@@ -52,6 +54,9 @@ from analysis.gift.structure_factors import MODELS, get_model
 from analysis.gift.gift import GIFTSettings
 from analysis.gift.bssa import BSSASettings, BSSACancelled
 from analysis.gift.parallel import default_workers
+from analysis.gift.uncertainty import (UncertaintySettings, run_uncertainty, DreamCancelled,
+                                       LOG_LAMBDA, DMAX)
+from analysis.gift.dream import DreamSettings
 
 _MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py', 'rmsa')
 
@@ -103,6 +108,44 @@ class _GiftWorker(QThread):
             self.failed.emit(str(e))
             return
         self.done.emit(analysis)
+
+
+class _DreamWorker(QThread):
+    """Führt die DREAM-Unsicherheitsanalyse im Hintergrund aus."""
+
+    progress = Signal(str, int, int, float, float)  # Phase, Auswertungen, Generation, R̂, Akz.
+    done = Signal(object, object)                  # (IFTAnalysis, UncertaintyResult)
+    failed = Signal(str)
+
+    CANCELLED = '__cancelled__'
+
+    def __init__(self, analysis, settings, parent=None):
+        super().__init__(parent)
+        self.analysis = analysis
+        self.settings = settings
+        self._cancel = False
+        self._last = 0.0
+
+    def cancel(self):
+        self._cancel = True
+
+    def _callback(self, phase, n, gen, rhat, acc):
+        now = time.perf_counter()
+        if phase != 'dream' or now - self._last > 0.2:      # GUI nicht überfluten
+            self._last = now
+            self.progress.emit(phase, int(n), int(gen), float(rhat), float(acc))
+        return not self._cancel
+
+    def run(self):
+        try:
+            result = run_uncertainty(self.analysis, self.settings, progress=self._callback)
+        except DreamCancelled:
+            self.failed.emit(self.CANCELLED)
+            return
+        except (ValueError, np.linalg.LinAlgError) as e:
+            self.failed.emit(str(e))
+            return
+        self.done.emit(self.analysis, result)
 
 
 class GiftDialog(QDialog):
@@ -351,6 +394,69 @@ class GiftDialog(QDialog):
         v.addWidget(self.gift_status)
         lv.addWidget(g_sq)
 
+        # Unsicherheit (DREAM)
+        g_dream = QGroupBox(tr('gift.group_dream'))
+        v = QVBoxLayout(g_dream)
+        hint = QLabel(tr('gift.dream_hint'))
+        hint.setWordWrap(True)
+        hint.setStyleSheet('font-style: italic;')
+        v.addWidget(hint)
+        self.prior_grid_w = QWidget()
+        self.prior_grid = QGridLayout(self.prior_grid_w)
+        self.prior_grid.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(self.prior_grid_w)
+        row = QHBoxLayout()
+        self.prior_default_btn = QPushButton(tr('gift.dream_prior_defaults'))
+        self.prior_default_btn.setToolTip(tr('gift.dream_prior_defaults_tooltip'))
+        self.prior_default_btn.clicked.connect(lambda: self._set_prior_defaults(force=True))
+        row.addWidget(self.prior_default_btn)
+        row.addStretch()
+        v.addLayout(row)
+        self.dream_dmax_limit_check = QCheckBox(tr('gift.dream_dmax_limit'))
+        self.dream_dmax_limit_check.setToolTip(tr('gift.dream_dmax_limit_tooltip'))
+        self.dream_dmax_limit_check.toggled.connect(lambda _: self._set_prior_defaults(
+            force=True, only=(DMAX,)))
+        v.addWidget(self.dream_dmax_limit_check)
+        self.dream_scale_sigma_check = QCheckBox(tr('gift.dream_scale_sigma'))
+        self.dream_scale_sigma_check.setToolTip(tr('gift.dream_scale_sigma_tooltip'))
+        v.addWidget(self.dream_scale_sigma_check)
+        grid = QGridLayout()
+        self.dream_chains_spin = QSpinBox()
+        self.dream_chains_spin.setRange(3, 64)
+        self.dream_chains_spin.setValue(DreamSettings.n_chains)
+        self.dream_chains_spin.setToolTip(tr('gift.dream_chains_tooltip'))
+        self.dream_budget_spin = QSpinBox()
+        self.dream_budget_spin.setRange(2000, 2_000_000)
+        self.dream_budget_spin.setSingleStep(10000)
+        self.dream_budget_spin.setValue(DreamSettings.max_evals)
+        self.dream_budget_spin.setToolTip(tr('gift.dream_budget_tooltip'))
+        self.dream_rhat_spin = QDoubleSpinBox()
+        self.dream_rhat_spin.setRange(1.01, 1.5)
+        self.dream_rhat_spin.setDecimals(2)
+        self.dream_rhat_spin.setSingleStep(0.01)
+        self.dream_rhat_spin.setValue(DreamSettings.r_hat_target)
+        self.dream_rhat_spin.setToolTip(tr('gift.dream_rhat_tooltip'))
+        self.dream_seed_spin = QSpinBox()
+        self.dream_seed_spin.setRange(0, 2 ** 31 - 1)
+        self.dream_seed_spin.setValue(DreamSettings.seed)
+        for i, (label, w) in enumerate(((tr('gift.dream_chains'), self.dream_chains_spin),
+                                        (tr('gift.dream_budget'), self.dream_budget_spin),
+                                        ('R̂ <', self.dream_rhat_spin),
+                                        (tr('gift.seed'), self.dream_seed_spin))):
+            grid.addWidget(QLabel(label + ':'), i // 2, 2 * (i % 2))
+            grid.addWidget(w, i // 2, 2 * (i % 2) + 1)
+        v.addLayout(grid)
+        self.dream_btn = QPushButton(tr('gift.dream_run'))
+        self.dream_btn.setToolTip(tr('gift.dream_run_tooltip'))
+        self.dream_btn.clicked.connect(self._start_dream)
+        v.addWidget(self.dream_btn)
+        self.dream_status = QLabel()
+        self.dream_status.setWordWrap(True)
+        v.addWidget(self.dream_status)
+        lv.addWidget(g_dream)
+        self.prior_widgets = {}
+        self._prior_edited = False
+
         # Ausgabe
         g_out = QGroupBox(tr('gift.group_output'))
         f = QVBoxLayout(g_out)
@@ -382,12 +488,36 @@ class GiftDialog(QDialog):
         rv = QVBoxLayout(right)
         rv.setContentsMargins(0, 0, 0, 0)
         self.tabs = QTabWidget()
-        self.fig_iq, self.canvas_iq = self._add_plot_tab(tr('gift.tab_iq'))
+        # I(q) mit Residuen: GridSpec mit festen Rändern (tight_layout ist damit inkompatibel)
+        self.fig_iq, self.canvas_iq = self._add_plot_tab(tr('gift.tab_iq'), layout=False)
         self.fig_pr, self.canvas_pr = self._add_plot_tab(tr('gift.tab_pr'))
         self.fig_sq, self.canvas_sq = self._add_plot_tab(tr('gift.tab_sq'))
         self.fig_lam, self.canvas_lam = self._add_plot_tab(tr('gift.tab_lambda'))
         self.fig_sig, self.canvas_sig = self._add_plot_tab(tr('gift.tab_significance'))
         self.fig_bssa, self.canvas_bssa = self._add_plot_tab(tr('gift.tab_bssa'))
+        # Unsicherheit (DREAM): Übersicht, Corner-Plot, Ketten, Posterior-Bänder
+        self.unc_tabs = QTabWidget()
+        ov = QWidget()
+        ovl = QVBoxLayout(ov)
+        self.unc_info = QLabel()
+        self.unc_info.setWordWrap(True)
+        self.unc_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        ovl.addWidget(self.unc_info)
+        self.unc_table = QTableWidget(0, 7)
+        self.unc_table.setHorizontalHeaderLabels(
+            [tr('gift.dream_col_param'), tr('gift.dream_col_reference'), tr('gift.dream_col_median'),
+             '68 %', '95 %', 'R̂', 'MAP'])
+        self.unc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.unc_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        ovl.addWidget(self.unc_table, 1)
+        self.unc_tabs.addTab(ov, tr('gift.dream_tab_overview'))
+        self.fig_corner, self.canvas_corner = self._add_plot_tab(tr('gift.dream_tab_corner'),
+                                                                 self.unc_tabs, layout=False)
+        self.fig_trace, self.canvas_trace = self._add_plot_tab(tr('gift.dream_tab_traces'),
+                                                               self.unc_tabs)
+        self.fig_band, self.canvas_band = self._add_plot_tab(tr('gift.dream_tab_bands'),
+                                                             self.unc_tabs)
+        self.tabs.addTab(self.unc_tabs, tr('gift.tab_uncertainty'))
         prov_w = QWidget()
         pv = QVBoxLayout(prov_w)
         self.record_label = QLabel()
@@ -466,15 +596,15 @@ class GiftDialog(QDialog):
         s.setSingleStep(0.001)
         return s
 
-    def _add_plot_tab(self, title):
+    def _add_plot_tab(self, title, tabs=None, layout=True):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
-        fig = Figure(figsize=(7, 5), tight_layout=True)
+        fig = Figure(figsize=(7, 5), layout='tight' if layout else 'none')
         canvas = FigureCanvasQTAgg(fig)
         v.addWidget(NavigationToolbar2QT(canvas, w))
         v.addWidget(canvas)
-        self.tabs.addTab(w, title)
+        (tabs or self.tabs).addTab(w, title)
         return fig, canvas
 
     # ------------------------------------------------------------------
@@ -645,6 +775,10 @@ class GiftDialog(QDialog):
     def compute(self):
         """IFT (synchron, Millisekunden) oder GIFT (Hintergrund-Thread) starten."""
         self._timer.stop()
+        if self._worker is not None:
+            # Während GIFT/DREAM läuft, bleibt die Analyse unverändert (Ergebnis gehört dazu)
+            self._dirty = True
+            return
         if self._model_key() != 'none':
             self._start_gift()
             return
@@ -669,6 +803,9 @@ class GiftDialog(QDialog):
         self.qrange_info.setText(tr('gift.qrange_info', n=sel.n_selected, total=sel.n_total,
                                     q_min=f"{sel.q_min:.4g}", q_max=f"{sel.q_max:.4g}"))
         self._update_dmax_info()
+        self._set_prior_defaults()
+        if self.analysis.uncertainty is None:
+            self.dream_status.setText('')
         self._show_results()
         self._plot_all()
         self._show_provenance()
@@ -705,11 +842,21 @@ class GiftDialog(QDialog):
                             f"βU(σ) = {info['contact_potential_kT']:.3g} kT")
                 if info.get('rescale_s', 1.0) < 0.999:
                     rows.append(f"σ'/σ = {1.0 / info['rescale_s']:.3g} ({tr('gift.rmsa_rescaled')})")
+        if a.uncertainty is not None:
+            u = a.uncertainty
+            rows.append(f"<b>DREAM</b> ({tr('gift.dream_median_95')})")
+            for n in u.names:
+                sm = u.summary[n]
+                unit = f" {u.units[n]}" if u.units[n] else ''
+                rows.append(f"&nbsp;&nbsp;{u.labels[n]} = {sm['median']:.4g} "
+                            f"[{sm['q2.5']:.4g}, {sm['q97.5']:.4g}]{unit}")
+            rows.append(f"&nbsp;&nbsp;Rg = {u.rg['median']:.4g} [{u.rg['q2.5']:.4g}, "
+                        f"{u.rg['q97.5']:.4g}] nm")
         self.result_label.setText("<br>".join(rows))
 
         self.flag_list.clear()
         order = {LEVEL_WARNING: 0, LEVEL_INFO: 1, LEVEL_OK: 2}
-        for flag in sorted(a.flags, key=lambda f: order[f.level]):
+        for flag in sorted(a.all_flags, key=lambda f: order[f.level]):
             symbol, color = _LEVEL_STYLE[flag.level]
             item = QListWidgetItem(f"{symbol}  {flag_text(flag)}")
             item.setForeground(QBrush(QColor(color)))
@@ -727,6 +874,7 @@ class GiftDialog(QDialog):
         key = self._model_key()
         model = get_model(key)
         self._rebuild_param_grid()
+        self._rebuild_prior_grid()
         self.param_grid_w.setVisible(bool(model.params))
         self.from_ift_btn.setVisible(bool(model.params))
         self.seed_spin.setEnabled(bool(model.params))
@@ -772,6 +920,7 @@ class GiftDialog(QDialog):
             for w in (widgets['start'], widgets['lower'], widgets['upper']):
                 w.valueChanged.connect(self._schedule)
             fixed.toggled.connect(self._schedule)
+            fixed.toggled.connect(lambda _: self._set_prior_defaults())
 
     def _set_param(self, spec, start):
         """Setzt Startwert und Standard-Suchgrenzen eines Parameters."""
@@ -823,6 +972,8 @@ class GiftDialog(QDialog):
         self.apply_btn.setEnabled(not busy and self.analysis is not None)
         self.cancel_btn.setEnabled(busy)
         self.model_combo.setEnabled(not busy)
+        self.dream_btn.setEnabled(not busy)
+        self.prior_default_btn.setEnabled(not busy)
 
     def _start_gift(self):
         if self._worker is not None:
@@ -854,12 +1005,16 @@ class GiftDialog(QDialog):
                                     t=f"{dt:.1f}", cycles=len(analysis.gift.lambda_history) - 1))
         self._show_analysis()
         pending = getattr(self, '_pending_reproduction', None)
+        self._pending_reproduction = None
         if pending is not None:
-            self._pending_reproduction = None
             self._report_reproduction(pending)
+        # _start_dream braucht einen freien Worker-Slot: nach Ende des GIFT-Threads starten
+        if getattr(self, '_pending_dream', None) is not None:
+            QTimer.singleShot(0, self._start_pending_dream_when_idle)
 
     def _on_gift_failed(self, message):
         self._pending_reproduction = None
+        self._pending_dream = None
         if message == _GiftWorker.CANCELLED:
             self.gift_status.setText(tr('gift.gift_cancelled'))
         else:
@@ -868,6 +1023,8 @@ class GiftDialog(QDialog):
     def _on_worker_finished(self):
         self._worker = None
         self._set_busy(False)
+        if self._dirty and self._model_key() == 'none' and self.live_check.isChecked():
+            self._timer.start()          # während der Rechnung geänderte Einstellungen
 
     def _cancel_gift(self):
         if self._worker is not None:
@@ -880,6 +1037,215 @@ class GiftDialog(QDialog):
         super().closeEvent(event)
 
     # ------------------------------------------------------------------
+    # Unsicherheit (DREAM)
+    # ------------------------------------------------------------------
+
+    def _prior_rows(self):
+        model = get_model(self._model_key())
+        rows = [(p.name, p.label, p.unit, p.lower, p.upper, p.decimals) for p in model.params]
+        rows.append((LOG_LAMBDA, 'log₁₀ λ_rel', '', -14.0, 4.0, 2))
+        rows.append((DMAX, 'Dmax', 'nm', 0.1, 1e5, 2))
+        return rows
+
+    def _rebuild_prior_grid(self):
+        while self.prior_grid.count():
+            item = self.prior_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.prior_widgets = {}
+        for col, text in enumerate(('', tr('gift.dream_col_sample'), tr('gift.param_lower'),
+                                    tr('gift.param_upper'), 'μ', 'σ')):
+            self.prior_grid.addWidget(QLabel(f"<i>{text}</i>"), 0, col)
+        for row, (name, label, unit, lo, hi, dec) in enumerate(self._prior_rows(), start=1):
+            self.prior_grid.addWidget(QLabel(label + (f" / {unit}" if unit else '')), row, 0)
+            w = {'use': QCheckBox()}
+            self.prior_grid.addWidget(w['use'], row, 1)
+            for col, key in enumerate(('lower', 'upper', 'mu', 'sd'), start=2):
+                spin = QDoubleSpinBox()
+                spin.setDecimals(dec)
+                spin.setRange(0.0 if key == 'sd' else lo, (hi - lo) if key == 'sd' else hi)
+                spin.setSingleStep(10 ** -max(dec - 1, 0))
+                if key == 'sd':
+                    spin.setSpecialValueText('–')
+                if key in ('mu', 'sd'):
+                    spin.setToolTip(tr('gift.dream_gauss_tooltip'))
+                self.prior_grid.addWidget(spin, row, col)
+                w[key] = spin
+            self.prior_widgets[name] = w
+        self._prior_edited = False
+        self._set_prior_defaults(force=True)
+        for w in self.prior_widgets.values():
+            w['use'].toggled.connect(self._on_prior_edited)
+            for key in ('lower', 'upper', 'mu', 'sd'):
+                w[key].valueChanged.connect(self._on_prior_edited)
+
+    def _on_prior_edited(self, *_):
+        if not getattr(self, '_prior_updating', False):
+            self._prior_edited = True
+
+    def _prior_defaults(self):
+        """Standard-Priorgrenzen und Referenzwerte (wie uncertainty.build_space)."""
+        a = self.analysis
+        out = {}
+        g = a.gift if a is not None else None
+        for name, _l, _u, _lo, _hi, _d in self._prior_rows():
+            if name == LOG_LAMBDA:
+                c = np.log10(a.solution.lam_rel) if a is not None else self.lam_spin.value()
+                out[name] = (max(c - 4.0, -14.0), min(c + 4.0, 4.0), c, True)
+            elif name == DMAX:
+                d0 = a.solution.settings.dmax if a is not None else self.dmax_spin.value()
+                lo, hi = 0.75 * d0, 1.5 * d0
+                if self.dream_dmax_limit_check.isChecked():
+                    q_min = a.selection.q_min if a is not None else self._effective_qmin()
+                    hi = min(hi, np.pi / q_min)
+                    lo = min(lo, 0.5 * hi)
+                out[name] = (lo, hi, d0, True)
+            else:
+                pw = self.param_widgets.get(name)
+                free = pw is not None and not pw['fixed'].isChecked()
+                if g is not None and g.model_key == self._model_key():
+                    out[name] = (g.lower[name], g.upper[name], g.params[name], free)
+                elif pw is not None:
+                    out[name] = (pw['lower'].value(), pw['upper'].value(), pw['start'].value(),
+                                 free)
+        return out
+
+    def _set_prior_defaults(self, force=False, only=None):
+        if not self.prior_widgets or (self._prior_edited and not force):
+            return
+        self._prior_updating = True
+        try:
+            for name, (lo, hi, ref, use) in self._prior_defaults().items():
+                if only and name not in only:
+                    continue
+                w = self.prior_widgets[name]
+                w['lower'].setValue(lo)
+                w['upper'].setValue(hi)
+                if force or w['sd'].value() == 0:
+                    w['mu'].setValue(ref)
+                    w['sd'].setValue(0.0)
+                if only is None:
+                    w['use'].setChecked(use)
+        finally:
+            self._prior_updating = False
+        if force and only is None:
+            self._prior_edited = False
+
+    def _uncertainty_settings(self):
+        use = [n for n, w in self.prior_widgets.items() if w['use'].isChecked()]
+        return UncertaintySettings(
+            sample_params=[n for n in use if n not in (LOG_LAMBDA, DMAX)],
+            sample_lambda=LOG_LAMBDA in use, sample_dmax=DMAX in use,
+            lower={n: self.prior_widgets[n]['lower'].value() for n in use},
+            upper={n: self.prior_widgets[n]['upper'].value() for n in use},
+            gaussian={n: (self.prior_widgets[n]['mu'].value(), self.prior_widgets[n]['sd'].value())
+                      for n in use if self.prior_widgets[n]['sd'].value() > 0},
+            dmax_limit_upper=self.dream_dmax_limit_check.isChecked(),
+            scale_sigma=self.dream_scale_sigma_check.isChecked(),
+            dream=DreamSettings(n_chains=self.dream_chains_spin.value(),
+                                max_evals=self.dream_budget_spin.value(),
+                                seed=self.dream_seed_spin.value(),
+                                r_hat_target=self.dream_rhat_spin.value()),
+            n_workers=self.workers_spin.value())
+
+    def _apply_uncertainty_settings(self, params):
+        """Stellt DREAM-Einstellungen aus einem Sidecar wieder her (Aktivität 'dream')."""
+        us = UncertaintySettings.from_dict(params)
+        prior = params.get('prior', {})
+        names = prior.get('names', [])
+        self._prior_updating = True
+        try:
+            self.dream_dmax_limit_check.setChecked(us.dmax_limit_upper)
+            self.dream_scale_sigma_check.setChecked(us.scale_sigma)
+            self.dream_chains_spin.setValue(us.dream.n_chains)
+            self.dream_budget_spin.setValue(us.dream.max_evals)
+            self.dream_rhat_spin.setValue(us.dream.r_hat_target)
+            self.dream_seed_spin.setValue(us.dream.seed)
+            for n, w in self.prior_widgets.items():
+                w['use'].setChecked(n in names)
+                if n in names:
+                    k = names.index(n)
+                    w['lower'].setValue(float(prior['lower'][k]))
+                    w['upper'].setValue(float(prior['upper'][k]))
+                mu, sd = us.gaussian.get(n, (w['mu'].value(), 0.0))
+                w['mu'].setValue(float(mu))
+                w['sd'].setValue(float(sd))
+        finally:
+            self._prior_updating = False
+        self._prior_edited = True
+
+    def _start_dream(self, _checked=False, compare=None):
+        if self._worker is not None:
+            return
+        if self._model_key() == 'none':
+            if self._dirty or self.analysis is None:
+                self.compute()
+        elif self.analysis is None or self.analysis.gift is None or self._dirty:
+            QMessageBox.information(self, tr('gift.dream_run'), tr('gift.need_compute'))
+            return
+        if self.analysis is None:
+            return
+        settings = self._uncertainty_settings()
+        if not (settings.sample_params or settings.sample_lambda or settings.sample_dmax):
+            QMessageBox.information(self, tr('gift.dream_run'), tr('gift.dream_nothing'))
+            return
+        self._dream_compare = compare
+        self._worker = _DreamWorker(self.analysis, settings, self)
+        self._worker.progress.connect(self._on_dream_progress)
+        self._worker.done.connect(self._on_dream_done)
+        self._worker.failed.connect(self._on_dream_failed)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._t_start = time.perf_counter()
+        self._set_busy(True)
+        self.dream_status.setText(tr('gift.dream_starting'))
+        self._worker.start()
+
+    def _on_dream_progress(self, phase, n, gen, rhat, acc):
+        if phase == 'screening':
+            self.dream_status.setText(tr('gift.dream_screening', n=n))
+        elif phase == 'predict':
+            self.dream_status.setText(tr('gift.dream_predict'))
+        else:
+            self.dream_status.setText(tr('gift.dream_running', n=n, gen=gen,
+                                         rhat='–' if not np.isfinite(rhat) else f"{rhat:.3f}",
+                                         acc=f"{100 * acc:.0f}"))
+
+    def _on_dream_done(self, analysis, result):
+        if analysis is not self.analysis:
+            self.dream_status.setText(tr('gift.dream_stale'))
+            return
+        analysis.uncertainty = result
+        d = result.dream
+        key = 'gift.dream_done' if d.converged else 'gift.dream_done_not_converged'
+        self.dream_status.setText(tr(key, n=d.n_evals, t=f"{time.perf_counter() - self._t_start:.1f}",
+                                     rhat=f"{float(np.max(d.r_hat)):.3f}"))
+        self._show_results()
+        self._plot_uncertainty()
+        self.tabs.setCurrentWidget(self.unc_tabs)
+        compare = getattr(self, '_dream_compare', None)
+        self._dream_compare = None
+        if compare:
+            self._report_dream_reproduction(compare, result)
+
+    def _on_dream_failed(self, message):
+        self._dream_compare = None
+        if message == _DreamWorker.CANCELLED:
+            self.dream_status.setText(tr('gift.dream_cancelled'))
+        else:
+            self.dream_status.setText(
+                f"<span style='color:#c62828'>{tr('gift.error')}: {message}</span>")
+
+    def _report_dream_reproduction(self, old, result):
+        lines = []
+        for n in result.names:
+            o = old.get(n, {}).get('median')
+            new = result.summary[n]['median']
+            if o is not None:
+                lines.append(f"{result.labels[n]}: {o:.5g} → {new:.5g}")
+        QMessageBox.information(self, tr('gift.load_sidecar'),
+                                tr('gift.dream_reproduced', lines="\n".join(lines) or '–'))
+
+    # ------------------------------------------------------------------
     # Plots
     # ------------------------------------------------------------------
 
@@ -890,6 +1256,7 @@ class GiftDialog(QDialog):
         self._plot_lambda()
         self._plot_significance()
         self._plot_bssa()
+        self._plot_uncertainty()
 
     def _no_gift_text(self, fig, canvas):
         fig.clear()
@@ -960,6 +1327,174 @@ class GiftDialog(QDialog):
         ax2.legend(fontsize=8)
         self.canvas_bssa.draw_idle()
 
+    def _plot_uncertainty(self):
+        u = self.analysis.uncertainty if self.analysis is not None else None
+        figs = ((self.fig_corner, self.canvas_corner), (self.fig_trace, self.canvas_trace),
+                (self.fig_band, self.canvas_band))
+        if u is None:
+            self.unc_info.setText(tr('gift.dream_not_run'))
+            self.unc_table.setRowCount(0)
+            for fig, canvas in figs:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    fig.clear()
+                ax = fig.add_subplot(111)
+                ax.text(0.5, 0.5, tr('gift.dream_not_run'), ha='center', va='center',
+                        transform=ax.transAxes, wrap=True)
+                ax.set_axis_off()
+                canvas.draw_idle()
+            return
+        self._show_uncertainty_table(u)
+        self._plot_corner(u)
+        self._plot_traces(u)
+        self._plot_bands(u)
+
+    def _axis_label(self, u, n):
+        return u.labels[n] + (f" / {u.units[n]}" if u.units[n] else '')
+
+    def _show_uncertainty_table(self, u):
+        d = u.dream
+        self.unc_info.setText(tr(
+            'gift.dream_info', evals=d.n_evals, gens=d.n_generations, chains=d.chains.shape[1],
+            burn=d.burn_in, samples=(d.n_generations + 1 - d.burn_in) * d.chains.shape[1],
+            acc=f"{100 * d.acceptance_rate:.0f}", rhat=f"{float(np.max(d.r_hat)):.3f}",
+            t=f"{u.runtime_s:.1f}", rg=f"{u.rg['median']:.4g} [{u.rg['q2.5']:.4g}, "
+                                      f"{u.rg['q97.5']:.4g}]",
+            i0=f"{u.i0['median']:.4g} [{u.i0['q2.5']:.4g}, {u.i0['q97.5']:.4g}]",
+            workers=u.n_workers))
+        self.unc_table.setRowCount(len(u.names))
+        for i, n in enumerate(u.names):
+            sm = u.summary[n]
+            rh = float(d.r_hat[i])
+            cells = [self._axis_label(u, n), f"{sm['reference']:.5g}", f"{sm['median']:.5g}",
+                     f"{sm['q16']:.4g} … {sm['q84']:.4g}", f"{sm['q2.5']:.4g} … {sm['q97.5']:.4g}",
+                     f"{rh:.3f}", f"{sm['map']:.5g}"]
+            for j, text in enumerate(cells):
+                item = QTableWidgetItem(text)
+                if j == 5 and not rh < d.settings.r_hat_target:
+                    item.setForeground(QBrush(QColor(_LEVEL_STYLE[LEVEL_WARNING][1])))
+                if j == 1 and not sm['q2.5'] <= sm['reference'] <= sm['q97.5']:
+                    item.setForeground(QBrush(QColor(_LEVEL_STYLE[LEVEL_INFO][1])))
+                self.unc_table.setItem(i, j, item)
+
+    def _plot_corner(self, u):
+        fig = self.fig_corner
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            fig.clear()
+        x, _ = u.dream.posterior()
+        if len(x) > 6000:
+            x = x[np.linspace(0, len(x) - 1, 6000).astype(int)]
+        names = u.names
+        d = len(names)
+        axes = fig.subplots(d, d, squeeze=False)
+        fig.subplots_adjust(left=0.1, right=0.98, bottom=0.1, top=0.97, wspace=0.08, hspace=0.08)
+        for i in range(d):
+            for j in range(d):
+                ax = axes[i][j]
+                if j > i:
+                    ax.set_visible(False)
+                    continue
+                if i == j:
+                    ax.hist(x[:, i], bins=40, color=_CLR_DATA, alpha=0.75)
+                    sm = u.summary[names[i]]
+                    for q_ in (sm['q2.5'], sm['q97.5']):
+                        ax.axvline(q_, color='k', ls=':', lw=0.8)
+                    ax.axvline(sm['median'], color='k', lw=1.0)
+                    ax.axvline(sm['reference'], color=_CLR_FIT, ls='--', lw=1.0)
+                    ax.set_yticks([])
+                else:
+                    ax.hist2d(x[:, j], x[:, i], bins=40, cmap='Blues')
+                    ax.plot(u.summary[names[j]]['reference'], u.summary[names[i]]['reference'],
+                            'x', color=_CLR_FIT, ms=7, mew=1.5)
+                    if j > 0:
+                        ax.tick_params(labelleft=False)
+                if i < d - 1:
+                    ax.tick_params(labelbottom=False)
+                else:
+                    ax.set_xlabel(self._axis_label(u, names[j]), fontsize=8)
+                if j == 0 and i > 0:
+                    ax.set_ylabel(self._axis_label(u, names[i]), fontsize=8)
+                ax.tick_params(labelsize=7)
+                for label in ax.get_xticklabels():
+                    label.set_rotation(45)
+        fig.text(0.98, 0.97, tr('gift.dream_corner_legend'), ha='right', va='top', fontsize=8)
+        self.canvas_corner.draw_idle()
+
+    def _plot_traces(self, u):
+        fig = self.fig_trace
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            fig.clear()
+        d = u.dream
+        g = np.arange(d.chains.shape[0])
+        n = len(u.names)
+        axes = fig.subplots(n + 1, 1, sharex=True, squeeze=False)[:, 0]
+        lp = np.where(np.isfinite(d.log_p), d.log_p, np.nan)
+        axes[0].plot(g, lp, lw=0.5)
+        post = lp[d.burn_in:]
+        if np.isfinite(post).any():
+            lo_ = np.nanpercentile(post, 0.5)
+            hi_ = np.nanmax(post)
+            axes[0].set_ylim(lo_ - 0.5 * (hi_ - lo_ + 1), hi_ + 0.1 * (hi_ - lo_ + 1))
+        axes[0].set_ylabel('log p', fontsize=8)
+        for k, name in enumerate(u.names):
+            ax = axes[k + 1]
+            ax.plot(g, d.chains[:, :, k], lw=0.5)
+            ax.axhline(u.reference[name], color=_CLR_FIT, ls='--', lw=0.8)
+            ax.set_ylabel(u.labels[name], fontsize=8)
+        for ax in axes:
+            ax.axvspan(0, d.burn_in, color=_CLR_EXCL, alpha=0.3, lw=0)
+            ax.tick_params(labelsize=7)
+        axes[-1].set_xlabel(tr('gift.dream_generation'))
+        axes[0].set_title(tr('gift.dream_trace_title'), fontsize=9)
+        self.canvas_trace.draw_idle()
+
+    def _plot_bands(self, u):
+        fig = self.fig_band
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            fig.clear()
+        b = u.bands
+        s = self.analysis.solution
+        gift = self.analysis.gift is not None
+        n_rows = 3 if gift else 2
+        ax = fig.add_subplot(n_rows, 1, 1)
+        pr = b['pr']
+        ax.fill_between(b['r'], pr[0], pr[4], color=_CLR_FIT, alpha=0.18, lw=0, label='95 %')
+        ax.fill_between(b['r'], pr[1], pr[3], color=_CLR_FIT, alpha=0.35, lw=0, label='68 %')
+        ax.plot(b['r'], pr[2], '-', color=_CLR_FIT, lw=1.5, label=tr('gift.dream_median'))
+        ax.plot(s.r, s.pr, '--', color='k', lw=1.0, label=tr('gift.dream_point_estimate'))
+        ax.axhline(0, color='k', lw=0.6)
+        ax.set_xlabel('r / nm')
+        ax.set_ylabel('p(r)')
+        ax.legend(fontsize=7)
+        ax2 = fig.add_subplot(n_rows, 1, 2)
+        pos = s.intensity > 0
+        ax2.plot(s.q[pos], s.intensity[pos], 'o', ms=2.5, color=_CLR_DATA, alpha=0.6,
+                 label=tr('gift.legend_data'))
+        fi = b['i_fit']
+        ax2.fill_between(b['q'], np.maximum(fi[0], 1e-300), fi[4], color=_CLR_FIT, alpha=0.3,
+                         lw=0, label='95 %')
+        ax2.plot(b['q'], fi[2], '-', color=_CLR_FIT, lw=1.2, label=tr('gift.dream_median'))
+        ax2.set_xscale('log')
+        ax2.set_yscale('log')
+        ax2.set_xlabel('q / nm⁻¹')
+        ax2.set_ylabel('I(q)')
+        ax2.legend(fontsize=7, loc='lower left')
+        if gift:
+            ax3 = fig.add_subplot(n_rows, 1, 3, sharex=ax2)
+            sq = b['sq']
+            ax3.fill_between(b['q'], sq[0], sq[4], color='#2e7d32', alpha=0.2, lw=0)
+            ax3.fill_between(b['q'], sq[1], sq[3], color='#2e7d32', alpha=0.35, lw=0)
+            ax3.plot(b['q'], sq[2], '-', color='#2e7d32', lw=1.2)
+            ax3.plot(s.q, self.analysis.gift.structure_factor, '--', color='k', lw=0.8)
+            ax3.axhline(1.0, color='k', lw=0.5, ls=':')
+            ax3.set_xscale('log')
+            ax3.set_xlabel('q / nm⁻¹')
+            ax3.set_ylabel('S(q)')
+        self.canvas_band.draw_idle()
+
     def _shade_excluded(self, ax, sel):
         q, _, _ = self._current_arrays()
         if sel.q_min > q[0]:
@@ -976,7 +1511,8 @@ class GiftDialog(QDialog):
             # Beim Leeren geteilter log-Achsen meldet matplotlib harmlose xlim-Warnungen
             warnings.simplefilter('ignore', UserWarning)
             self.fig_iq.clear()
-        gs = self.fig_iq.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.05)
+        gs = self.fig_iq.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.05, left=0.11,
+                                      right=0.97, top=0.97, bottom=0.1)
         ax = self.fig_iq.add_subplot(gs[0])
         axr = self.fig_iq.add_subplot(gs[1], sharex=ax)
         inside = a.selection.mask(q)
@@ -1168,25 +1704,47 @@ class GiftDialog(QDialog):
                 self.sigma_mode_combo.findData(SIGMA_RELATIVE if rel else 'estimated'))
             if rel:
                 self.sigma_rel_spin.setValue(100.0 * float(rel))
+        # DREAM-Einstellungen (falls der Sidecar eine Unsicherheitsanalyse enthält): nach der
+        # (G)IFT automatisch wiederholen und die Posterior-Mediane vergleichen
+        dream_act = next((a for a in acts if a['type'] == 'dream'), None)
+        self._pending_dream = None
+        if dream_act is not None:
+            self._apply_uncertainty_settings(dream_act['parameters'])
+            self._pending_dream = dream_act.get('results_summary', {}).get('posterior', {})
         self._updating = False
         self._on_qmode_changed()
-        self.compute()
 
         # Eingangsdatei unverändert?
         current = compute_sha256(self.dataset.filepath)
         stored = [e.get('sha256') for e in rec.to_dict()['input']['entities']]
-        if stored and current not in stored:
+        mismatch = bool(stored) and current not in stored
+        if mismatch:
+            self._pending_dream = None
+        self.compute()
+        if mismatch:
             QMessageBox.warning(self, tr('gift.load_sidecar'), tr('gift.sidecar_hash_mismatch'))
-        else:
-            old = next((a['results_summary'] for a in acts if a['type'] == 'ift'), {})
-            rg_old = old.get('rg_nm')
-            if rg_old is None:
-                return
-            if self._worker is not None:
-                # GIFT läuft asynchron: Vergleich nach Abschluss (_on_gift_done)
-                self._pending_reproduction = rg_old
-            elif self.analysis is not None:
+            return
+        old = next((a['results_summary'] for a in acts if a['type'] == 'ift'), {})
+        rg_old = old.get('rg_nm')
+        if self._worker is not None:
+            # GIFT läuft asynchron: Vergleich (und ggf. DREAM) nach Abschluss (_on_gift_done)
+            self._pending_reproduction = rg_old
+        elif self.analysis is not None:
+            if rg_old is not None:
                 self._report_reproduction(rg_old)
+            self._start_pending_dream()
+
+    def _start_pending_dream_when_idle(self):
+        if self._worker is not None:
+            QTimer.singleShot(50, self._start_pending_dream_when_idle)
+            return
+        self._start_pending_dream()
+
+    def _start_pending_dream(self):
+        pending = getattr(self, '_pending_dream', None)
+        self._pending_dream = None
+        if pending is not None and self.analysis is not None:
+            self._start_dream(compare=pending)
 
     def _report_reproduction(self, rg_old):
         QMessageBox.information(
@@ -1201,7 +1759,8 @@ class GiftDialog(QDialog):
     def apply(self):
         """Exportieren und ans Hauptfenster melden (IFT wird vorher frisch gerechnet)."""
         if self._model_key() == 'none':
-            self.compute()
+            if self._dirty or self.analysis is None:
+                self.compute()
         elif self.analysis is None or self.analysis.gift is None or self._dirty:
             QMessageBox.information(self, tr('gift.apply'), tr('gift.need_compute'))
             return
@@ -1219,9 +1778,9 @@ class GiftDialog(QDialog):
             written = export_ift_results(self.analysis, out_dir=self._out_dir(),
                                          source_file=self.dataset.filepath,
                                          write_w3c=self.w3c_check.isChecked())
-            # Veraltete S(q)/P(q)-Dateien einer früheren GIFT-Rechnung entfernen
+            # Veraltete S(q)/P(q)/DREAM-Dateien einer früheren Rechnung entfernen
             # (sie gehörten nicht zu diesem Sidecar; das Überschreiben wurde bestätigt)
-            for key in ('sq', 'pq', 'prov_w3c'):
+            for key in ('sq', 'pq', 'prov_w3c', 'dream', 'pr_band'):
                 if key not in written and paths[key].exists():
                     paths[key].unlink()
         except OSError as e:

@@ -393,6 +393,123 @@ def diagnose_gift(result, model):
     return flags
 
 
+def diagnose_uncertainty(u):
+    """Flags der DREAM-Analyse (Plan §2.3) für ein uncertainty.UncertaintyResult."""
+    flags = []
+    d = u.dream
+    names = u.names
+    lab = u.labels
+    rhat = dict(zip(names, map(float, d.r_hat)))
+    r_max = max(rhat.values())
+    if not d.converged:
+        bad = ', '.join(f"{lab[n]} ({rhat[n]:.2f})" for n in names
+                        if not rhat[n] < d.settings.r_hat_target)
+        variant = 'not_converged' if d.burn_in_completed else 'no_burn_in'
+        flags.append(Flag('dream_convergence', LEVEL_WARNING,
+                          f"DREAM nicht konvergiert: R̂ ≥ {d.settings.r_hat_target:g} für {bad} "
+                          f"nach {d.n_evals} Auswertungen — Budget erhöhen; die Intervalle sind "
+                          f"nur vorläufig.", r_max, d.settings.r_hat_target, variant,
+                          {'names': bad or '-', 'evals': str(d.n_evals),
+                           'target': f"{d.settings.r_hat_target:g}"}))
+    else:
+        flags.append(Flag('dream_convergence', LEVEL_OK,
+                          f"DREAM konvergiert (max. R̂ = {r_max:.3f}, {d.n_evals} Auswertungen)",
+                          r_max, d.settings.r_hat_target, 'ok',
+                          {'rhat': f"{r_max:.3f}", 'evals': str(d.n_evals)}))
+
+    unident = [n for n in names
+               if u.summary[n]['std'] > 0.8 * u.summary[n]['prior_std']]
+    if unident:
+        s = ', '.join(lab[n] for n in unident)
+        flags.append(Flag('dream_identifiability', LEVEL_WARNING,
+                          f"Nicht bestimmbar: {s} — die Posterior-Verteilung ist kaum schmaler "
+                          f"als die Priorverteilung; die Daten legen diese Größen nicht fest.",
+                          None, 0.8, 'unidentifiable', {'names': s}))
+
+    at_bound = [n for n in names
+                if max(u.summary[n]['mass_at_lower'], u.summary[n]['mass_at_upper']) > 0.1]
+    if at_bound:
+        s = ', '.join(lab[n] for n in at_bound)
+        flags.append(Flag('dream_boundary', LEVEL_WARNING,
+                          f"Posterior-Masse an einer Priorgrenze ({s}) — Grenzen erweitern; das "
+                          f"Intervall ist sonst abgeschnitten.", None, 0.1, 'at_bound',
+                          {'names': s}))
+
+    pairs = []
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            rho = float(u.correlation[i, j])
+            if abs(rho) > 0.9:
+                pairs.append(f"{lab[names[i]]}–{lab[names[j]]} ({rho:+.2f})")
+    if pairs:
+        s = ', '.join(pairs)
+        flags.append(Flag('dream_correlation', LEVEL_INFO,
+                          f"Stark korrelierte Parameter: {s} — nur Kombinationen sind gut "
+                          f"bestimmt (z. B. z ↔ R_HS ↔ φ bei geladenen Systemen [F00]).",
+                          None, 0.9, 'strong', {'pairs': s}))
+
+    multi = [n for n in names if u.modes.get(n, 1) > 1]
+    if multi:
+        s = ', '.join(f"{lab[n]} ({u.modes[n]})" for n in multi)
+        flags.append(Flag('dream_multimodal', LEVEL_WARNING,
+                          f"Mehrere getrennte Modi im Posterior: {s} — Median und Intervalle "
+                          f"beschreiben die Verteilung nur eingeschränkt (Corner-Plot prüfen).",
+                          None, None, 'multimodal', {'names': s}))
+
+    outside, hyper = [], []
+    for n in names:
+        sm = u.summary[n]
+        if not sm['q2.5'] <= u.reference[n] <= sm['q97.5']:
+            (hyper if n in ('log_lambda', 'dmax') else outside).append(n)
+    if outside:
+        s = ', '.join(f"{lab[n]} = {u.reference[n]:.4g} vs. {u.summary[n]['median']:.4g}"
+                      for n in outside)
+        flags.append(Flag('dream_reference', LEVEL_WARNING,
+                          f"BSSA-Optimum außerhalb des 95-%-Intervalls ({s}) — Hauptmodus des "
+                          f"Posteriors und MD-Minimum stimmen nicht überein.", None, None,
+                          'outside', {'names': s}))
+    if hyper:
+        s = ', '.join(f"{lab[n]}: {u.reference[n]:.4g} → {u.summary[n]['median']:.4g}"
+                      for n in hyper)
+        flags.append(Flag('dream_reference', LEVEL_INFO,
+                          f"Die Daten bevorzugen andere Werte als gewählt ({s}; gewählt → "
+                          f"Posterior-Median).", None, None, 'hyper', {'names': s}))
+
+    if 'dmax' in names:
+        limit = np.pi / u.q_min
+        sm = u.summary['dmax']
+        params = {'limit': f"{limit:.3g}", 'median': f"{sm['median']:.3g}",
+                  'q97': f"{sm['q97.5']:.3g}"}
+        if sm['median'] > limit:
+            flags.append(Flag('dream_dmax_qmin', LEVEL_WARNING,
+                              f"Dmax-Posterior (Median {sm['median']:.3g} nm) liegt über "
+                              f"π/q_min = {limit:.3g} nm — Information bei kleinen q fehlt.",
+                              sm['median'] / limit, 1.0, 'exceeded', params))
+        elif sm['q97.5'] > limit:
+            flags.append(Flag('dream_dmax_qmin', LEVEL_INFO,
+                              f"Der obere Teil des Dmax-Posteriors (97.5 %: {sm['q97.5']:.3g} nm) "
+                              f"reicht über π/q_min = {limit:.3g} nm.", sm['q97.5'] / limit, 1.0,
+                              'tail', params))
+        else:
+            flags.append(Flag('dream_dmax_qmin', LEVEL_OK,
+                              f"Dmax-Posterior vollständig unter π/q_min = {limit:.3g} nm",
+                              sm['q97.5'] / limit, 1.0, 'ok', params))
+
+    if u.sigma_scale != 1.0:
+        flags.append(Flag('dream_sigma', LEVEL_INFO,
+                          f"σ wurde mit √MD = {u.sigma_scale:.3g} skaliert (Anpassung an die "
+                          f"beobachtete Streuung).", u.sigma_scale, None, 'scaled',
+                          {'factor': f"{u.sigma_scale:.3g}"}))
+
+    acc = d.acceptance_rate
+    if np.isfinite(acc) and acc < 0.05:
+        flags.append(Flag('dream_acceptance', LEVEL_INFO,
+                          f"Niedrige Akzeptanzrate ({100 * acc:.1f} %) — Ketten mischen langsam; "
+                          f"Ergebnis mit mehr Auswertungen prüfen.", acc, 0.05, 'low',
+                          {'rate': f"{100 * acc:.1f}"}))
+    return flags
+
+
 def worst_level(flags):
     order = {LEVEL_OK: 0, LEVEL_INFO: 1, LEVEL_WARNING: 2}
     return max((f.level for f in flags), key=lambda lv: order[lv], default=LEVEL_OK)
