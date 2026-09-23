@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.9.0
+# ScatterForge Plot v7.10.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.9.0-blue)
+![Version](https://img.shields.io/badge/version-7.10.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **GIFT für geladene Systeme** | RMSA-Strukturfaktor (Hayter-Penfold, Rescaling nach Hansen-Hayter) mit Ladung, Salz, Temperatur, ε_r; validiert gegen sasmodels/SasView; BSSA-Mehrfachstart | ✅ **v7.10.0** |
 | **GIFT (Strukturfaktor)** | Generalisierte IFT für konzentrierte Systeme: S(q) (Harte Kugeln PY bzw. gemittelt S_ave) und modellfreies p(r) gleichzeitig, Optimierung per Boltzmann-Simplex-Simulated-Annealing, Hintergrund-Thread, S(q)/P(q)-Export | ✅ **v7.9.0** |
 | **P(r) per IFT (Glatter)** | Neues Menü „Analyse“: modellfreie Paarabstandsverteilung p(r) nach Glatter (1977) mit automatischer λ-Wahl (Wendepunkt-Methode), Fehlerbändern, Rg/I(0), q-Fitbereich per 1σ/2σ/3σ-Signifikanz, Plausibilitäts-Flags (u. a. Dmax ≤ π/q_min) | ✅ **v7.8.0** |
 | **Provenance-Sidecar** | Jede IFT-Auswertung schreibt ein JSON-Sidecar (SHA-256 der Ein-/Ausgaben, alle Parameter, Flags, record_id; optional W3C PROV-JSON), prüfbar und wiederholbar | ✅ **v7.8.0** |
@@ -92,6 +93,21 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.10?
+
+**Minor Release v7.10.0** — GIFT für geladene Systeme (RMSA)
+
+### Hauptfeatures v7.10
+
+- ⚡ **Neues Strukturfaktor-Modell „Geladene Kugeln, RMSA“**: Hayter-Penfold-MSA mit Rescaling nach Hansen & Hayter (Fritz, Bergmann & Glatter 2000); Temperatur, Salz und ε_r standardmäßig fest
+- ✅ **Validiert** gegen die sasmodels-Referenzwerte und eine SasView-Simulation (Abweichung < 10⁻⁵)
+- 🎯 **BSSA-Mehrfachstart** (4 bzw. 8 unabhängige Läufe) gegen Nebenminima der MD-Fläche, mit Flag zur Übereinstimmung
+- 🧾 Debye-Länge, κσ, Kontaktpotential und Rescaling-Faktor in Ergebnisanzeige und Sidecar
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.10.md](CHANGELOG_v7.10.md) · Lizenzhinweise: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 ---
 

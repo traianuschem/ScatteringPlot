@@ -11,6 +11,12 @@ per Boltzmann-Simplex-Simulated-Annealing [B00].
 λ-Behandlung: Während der BSSA-Suche ist λ fest (glatte MD-Fläche). Danach wird λ am
 Optimum per Wendepunkt-Methode neu bestimmt; weicht es um mehr als einen Faktor 10^0.25
 ab, folgt ein weiterer Zyklus ab dem gefundenen Optimum (max. `lambda_cycles`).
+
+Mehrfachstart: Im ersten Zyklus laufen `n_starts` unabhängige BSSA-Suchen (Lauf 0 ab den
+Startwerten, weitere ab zufälligen Punkten im Suchbereich, Seeds seed + 1000·k). Die
+beste wird übernommen. Wie oft das beste Minimum erreicht wurde, ist ein Maß für die
+Zuverlässigkeit (Flag `gift_multistart`). Bei geladenen Systemen (RMSA) hat die MD-Fläche
+ausgeprägte Nebenminima [F00].
 """
 
 from dataclasses import dataclass, field, replace
@@ -30,10 +36,11 @@ class GIFTSettings:
     start: Dict[str, float] = field(default_factory=dict)
     lower: Dict[str, float] = field(default_factory=dict)
     upper: Dict[str, float] = field(default_factory=dict)
-    fixed: List[str] = field(default_factory=list)
+    fixed: Optional[List[str]] = None      # None → Standard des Modells (fixed_default)
     bssa: BSSASettings = field(default_factory=BSSASettings)
     lambda_cycles: int = 3
     lambda_tolerance_log10: float = 0.25
+    n_starts: Optional[int] = None         # None → Standard des Modells (HS: 4, RMSA: 8)
 
     def to_dict(self):
         d = {k: v for k, v in self.__dict__.items() if k != 'bssa'}
@@ -66,6 +73,8 @@ class GIFTResult:
     lambda_history: List[float]
     lambda_converged: bool
     history: List[dict] = field(default_factory=list)   # BSSA-Verlauf (alle Zyklen)
+    model_info: Dict[str, float] = field(default_factory=dict)   # z. B. Debye-Länge (RMSA)
+    starts: List[dict] = field(default_factory=list)   # Ergebnisse der Mehrfachstarts
 
 
 def _bounds(model, settings, start):
@@ -101,7 +110,8 @@ def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSetti
     values = model.defaults()
     values.update({k: float(v) for k, v in settings.start.items() if k in values})
     lo, hi = _bounds(model, settings, values)
-    free = [p.name for p in model.params if p.name not in settings.fixed]
+    fixed = model.default_fixed() if settings.fixed is None else list(settings.fixed)
+    free = [p.name for p in model.params if p.name not in fixed]
     for name in values:
         if not lo[name] <= values[name] <= hi[name]:
             raise ValueError(f"Startwert {name} = {values[name]} liegt außerhalb "
@@ -132,6 +142,8 @@ def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSetti
     n_evals = 0
     lambda_converged = not auto_lambda
     cycle = 0
+    starts: List[dict] = []
+    rng_starts = np.random.default_rng(int(settings.bssa.seed) + 7919)
 
     for cycle in range(max(1, settings.lambda_cycles) if free else 0):
         lam_fixed = lam_rel
@@ -143,18 +155,36 @@ def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSetti
                 return np.inf                    # unphysikalisch [B00]
             return problem.md(sq, lam_fixed)
 
-        def cb(n, T, fbest, xbest, cycle=cycle):
-            if progress is None:
-                return True
-            return progress(n_evals + n, T, fbest, to_vals(xbest), cycle)
+        n_starts = model.default_starts if settings.n_starts is None else settings.n_starts
+        n_runs = max(1, int(n_starts)) if cycle == 0 else 1
+        best_res, best_hist = None, None
+        for k in range(n_runs):
+            evals_before = n_evals
 
-        bssa_settings = replace(settings.bssa, seed=int(settings.bssa.seed) + cycle)
-        res = minimize(objective, to_x(values), bssa_settings, cb)
-        for h in res.history:
-            history.append({'cycle': cycle, 'evals': n_evals + h['evals'], 'T': h['T'],
-                            'md': h['f_best'], 'params': to_vals(np.array(h['x_best']))})
-        n_evals += res.n_evals
-        values = to_vals(res.x)
+            def cb(n, T, fbest, xbest, cycle=cycle, base=evals_before):
+                if progress is None:
+                    return True
+                return progress(base + n, T, fbest, to_vals(xbest), cycle)
+
+            if cycle == 0:
+                seed = int(settings.bssa.seed) + 1000 * k
+                x_start = to_x(values) if k == 0 else rng_starts.random(len(free))
+            else:
+                seed = int(settings.bssa.seed) + cycle
+                x_start = to_x(values)
+            res = minimize(objective, x_start, replace(settings.bssa, seed=seed), cb)
+            hist = [{'cycle': cycle, 'start': k, 'evals': n_evals + h['evals'], 'T': h['T'],
+                     'md': h['f_best'], 'params': to_vals(np.array(h['x_best']))}
+                    for h in res.history]
+            n_evals += res.n_evals
+            if cycle == 0:
+                starts.append({'start': k, 'seed': seed, 'x_start': x_start.tolist(),
+                               'params': to_vals(res.x), 'md': float(res.f),
+                               'n_evals': res.n_evals})
+            if best_res is None or res.f < best_res.f:
+                best_res, best_hist = res, hist
+        history.extend(best_hist)
+        values = to_vals(best_res.x)
         if not auto_lambda:
             break
         lam_new = run_ift(q, I, s, ift_settings, smearing, s_of(values)).lam_rel
@@ -187,6 +217,7 @@ def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSetti
         form_factor=solution.extras.get('form_factor'), md=solution.md,
         md_without_sq=md_plain, n_evals=n_evals,
         lambda_history=lambda_history, lambda_converged=lambda_converged, history=history,
+        model_info=model.derived(values), starts=starts,
     )
 
 

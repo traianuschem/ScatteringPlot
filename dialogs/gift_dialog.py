@@ -51,7 +51,7 @@ from analysis.gift.structure_factors import MODELS, get_model
 from analysis.gift.gift import GIFTSettings
 from analysis.gift.bssa import BSSASettings, BSSACancelled
 
-_MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py')
+_MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py', 'rmsa')
 
 _LEVEL_STYLE = {
     LEVEL_OK: ('✔', '#2e7d32'),
@@ -691,6 +691,12 @@ class GiftDialog(QDialog):
                 unit = f" {p.unit}" if p.unit else ''
                 rows.append(f"&nbsp;&nbsp;{p.label} = {g.params[p.name]:.4g} ± {err:.2g}{unit}{fixed}")
             rows.append(f"MD<sub>ohne S(q)</sub> = {g.md_without_sq:.3g}")
+            info = g.model_info or {}
+            if 'debye_length_nm' in info:
+                rows.append(f"λ<sub>D</sub> = {info['debye_length_nm']:.3g} nm, κσ = {info['k']:.3g}, "
+                            f"βU(σ) = {info['contact_potential_kT']:.3g} kT")
+                if info.get('rescale_s', 1.0) < 0.999:
+                    rows.append(f"σ'/σ = {1.0 / info['rescale_s']:.3g} ({tr('gift.rmsa_rescaled')})")
         self.result_label.setText("<br>".join(rows))
 
         self.flag_list.clear()
@@ -753,6 +759,7 @@ class GiftDialog(QDialog):
             self.param_grid.addWidget(fixed, row, 4)
             widgets['fixed'] = fixed
             self.param_widgets[p.name] = widgets
+            fixed.setChecked(p.fixed_default)
             self._set_param(p, p.default)
             for w in (widgets['start'], widgets['lower'], widgets['upper']):
                 w.valueChanged.connect(self._schedule)
@@ -1131,7 +1138,10 @@ class GiftDialog(QDialog):
                     w['upper'].setValue(float(hi[name]))
                 if name in start:
                     w['start'].setValue(float(start[name]))
-                w['fixed'].setChecked(name in gp.get('fixed', []))
+                fixed_list = gp.get('fixed')
+                if fixed_list is None:
+                    fixed_list = get_model(gp.get('model', 'none')).default_fixed()
+                w['fixed'].setChecked(name in fixed_list)
             self.seed_spin.setValue(int(gp.get('bssa', {}).get('seed', 12345)))
         else:
             self.model_combo.setCurrentIndex(self.model_combo.findData('none'))

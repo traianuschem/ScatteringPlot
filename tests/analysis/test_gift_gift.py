@@ -268,10 +268,10 @@ class TestGIFTPipeline(unittest.TestCase):
         np.testing.assert_allclose(sq[:, 1], a.gift.structure_factor)
 
     def test_models_registered(self):
-        for key in ('none', 'hs_py', 'hs_py_avg'):
+        for key in ('none', 'hs_py', 'hs_py_avg', 'rmsa'):
             self.assertEqual(get_model(key).key, key)
         with self.assertRaises(ValueError):
-            get_model('rmsa')
+            get_model('unbekanntes_modell')
 
 
 if __name__ == '__main__':

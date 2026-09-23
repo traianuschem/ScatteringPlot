@@ -6,6 +6,10 @@ Phase 3a:
 - 'hs_py'      Harte Kugeln, Percus-Yevick, monodispers        [BP97 §2.4]
 - 'hs_py_avg'  gemittelter HS-PY-Strukturfaktor S_ave(q) mit Gaußverteilung der
                Radien, μ = σ_R/R_HS, bei festem Gesamt-φ          [BP97 Gl. 34, W99 Gl. 8]
+Phase 3b:
+- 'rmsa'       geladene Kugeln, Hayter-Penfold-MSA mit Rescaling nach Hansen-Hayter
+               (monodispers wie in [F00]); Parameter φ, R_HS, z; T, Salz und ε_r
+               standardmäßig fest (siehe rmsa.py)
 
 Alle Modelle sind vektorisiert: Parameter dürfen Arrays der Form (K,) sein, das
 Ergebnis hat dann die Form (K, M) — Grundlage für die spätere Batch-Auswertung
@@ -23,6 +27,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 import numpy as np
+
+from .rmsa import s_hayter_msa, rmsa_coefficients, dielectric_constant_water, RMSAError
 
 _X_SWITCH = 1.0
 _GL_X, _GL_W = np.polynomial.legendre.leggauss(24)
@@ -123,6 +129,8 @@ class ParamSpec:
     # Größenparameter: Standard-Suchbereich [Start/f, Start·f] statt der (sehr weiten)
     # physikalischen Grenzen, sofern keine eigenen Grenzen vorgegeben sind
     relative_search: float = 0.0
+    # Standardmäßig fest (z. B. Temperatur, Salz, ε_r bei der RMSA) — im Dialog änderbar
+    fixed_default: bool = False
 
 
 @dataclass
@@ -133,9 +141,22 @@ class StructureFactorModel:
     params: List[ParamSpec] = field(default_factory=list)
     reference: str = ''
     apparent_parameters: bool = False      # [W99]: Parameter nur „scheinbar“
+    info: Optional[Callable] = None        # values → dict abgeleiteter Größen (Anzeige, Sidecar)
+    default_starts: int = 4                # BSSA-Mehrfachstarts (RMSA: ausgeprägte Nebenminima)
 
     def evaluate(self, q, values: Dict[str, float]):
         return self.func(q, **{p.name: values[p.name] for p in self.params})
+
+    def default_fixed(self):
+        return [p.name for p in self.params if p.fixed_default]
+
+    def derived(self, values: Dict[str, float]):
+        if self.info is None:
+            return {}
+        try:
+            return self.info(values)
+        except (RMSAError, ValueError, ZeroDivisionError, OverflowError):
+            return {}
 
     def defaults(self):
         return {p.name: p.default for p in self.params}
@@ -165,6 +186,22 @@ MODELS: Dict[str, StructureFactorModel] = {
          ParamSpec('mu', 'μ', '', 0.20, 0.0, 0.9, 3)],
         'averaged PY structure factor S_ave (Brunner-Popela & Glatter 1997, Eq. 34; '
         'Weyerich et al. 1999, Eq. 8)', apparent_parameters=True),
+    'rmsa': StructureFactorModel(
+        'rmsa', 'gift.model_rmsa',
+        lambda q, phi, r_hs, charge, temperature, salt, eps_r:
+            s_hayter_msa(q, r_hs, phi, charge, temperature, salt, eps_r),
+        [ParamSpec('phi', 'φ', '', 0.10, 1e-4, 0.55, 4),
+         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0),
+         ParamSpec('charge', 'z', 'e', 20.0, 0.01, 200.0, 2, relative_search=10.0),
+         ParamSpec('temperature', 'T', 'K', 298.15, 250.0, 450.0, 2, fixed_default=True),
+         ParamSpec('salt', 'c_Salz', 'mol/L', 0.01, 0.0, 5.0, 4, fixed_default=True),
+         ParamSpec('eps_r', 'ε_r', '', round(dielectric_constant_water(298.15), 2), 1.0, 200.0,
+                   2, fixed_default=True)],
+        'rescaled MSA for charged spheres (Hayter & Penfold 1981; Hansen & Hayter 1982; '
+        'GIFT: Fritz, Bergmann & Glatter 2000); port of sasmodels hayter_msa (BSD-3)',
+        info=lambda v: rmsa_coefficients(v['r_hs'], v['phi'], v['charge'], v['temperature'],
+                                         v['salt'], v['eps_r'])[1],
+        default_starts=8),
 }
 DEFAULT_GIFT_MODEL = 'hs_py_avg'
 

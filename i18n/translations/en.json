@@ -1060,6 +1060,8 @@
     "model_none": "None (IFT, S = 1)",
     "model_hs_py": "Hard spheres, Percus-Yevick",
     "model_hs_py_avg": "Hard spheres, averaged S_ave (recommended)",
+    "model_rmsa": "Charged spheres, RMSA (Hayter-Penfold)",
+    "rmsa_rescaled": "Hansen-Hayter rescaling",
     "param_start": "Start",
     "param_lower": "min",
     "param_upper": "max",
@@ -1143,6 +1145,17 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "gift_multistart": {
+        "ok": "All {n} BSSA runs find the same minimum.",
+        "partial": "Best minimum found in {hits} of {n} BSSA runs (secondary minima present).",
+        "rare": "The best minimum was found in only 1 of {n} BSSA runs — the MD surface has secondary minima; use more starts or fix known quantities (e.g. φ)."
+      },
+      "gift_rmsa_degenerate": {
+        "charge_salt": "Charge and salt concentration are both free — they cannot be determined independently (Fritz et al. 2000). Keep one of them fixed."
+      },
+      "gift_rmsa_rescaled": {
+        "rescaled": "Hansen-Hayter rescaling active: effective diameter σ' = {factor}·σ (plain MSA would give g(σ+) < 0)."
+      },
       "gift_bound": {
         "ok": "All free S(q) parameters within bounds",
         "at_bound": "Parameter at the edge of the allowed bounds ({names}) — widen the bounds or the model is unsuitable (Bergmann et al. 2000)."

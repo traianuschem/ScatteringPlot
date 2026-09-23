@@ -350,6 +350,41 @@ def diagnose_gift(result, model):
                           f"oder nicht konvexe MD-Fläche).", None, None, 'undetermined',
                           {'names': names}))
 
+    if len(result.starts) > 1:
+        mds = np.array([s_['md'] for s_ in result.starts])
+        best = float(np.min(mds))
+        # „dasselbe Minimum“: MD innerhalb 1 % (bzw. 0.01 absolut bei MD ≈ 0) des besten
+        hits = int(np.count_nonzero(mds <= best + max(0.01 * best, 0.01)))
+        n = len(mds)
+        params = {'hits': str(hits), 'n': str(n)}
+        if hits == 1:
+            flags.append(Flag('gift_multistart', LEVEL_WARNING,
+                              f"Das beste Minimum wurde nur in 1 von {n} BSSA-Läufen gefunden — "
+                              f"die MD-Fläche hat Nebenminima; mehr Starts oder engere Grenzen "
+                              f"verwenden.", hits, n, 'rare', params))
+        elif hits < n:
+            flags.append(Flag('gift_multistart', LEVEL_INFO,
+                              f"Bestes Minimum in {hits} von {n} BSSA-Läufen gefunden "
+                              f"(Nebenminima vorhanden).", hits, n, 'partial', params))
+        else:
+            flags.append(Flag('gift_multistart', LEVEL_OK,
+                              f"Alle {n} BSSA-Läufe finden dasselbe Minimum.", hits, n, 'ok',
+                              params))
+
+    if model.key == 'rmsa':
+        if 'charge' in result.free and 'salt' in result.free:
+            flags.append(Flag('gift_rmsa_degenerate', LEVEL_WARNING,
+                              "Ladung und Salzkonzentration sind gleichzeitig frei — sie lassen "
+                              "sich nicht unabhängig bestimmen (Fritz et al. 2000). Eine der "
+                              "beiden festhalten.", variant='charge_salt'))
+        info = result.model_info or {}
+        s = info.get('rescale_s')
+        if s is not None and s < 0.999:
+            flags.append(Flag('gift_rmsa_rescaled', LEVEL_INFO,
+                              f"Rescaling nach Hansen & Hayter aktiv: effektiver Durchmesser "
+                              f"σ' = {1 / s:.3g}·σ (MSA allein gäbe g(σ+) < 0).", 1 / s, None,
+                              'rescaled', {'factor': f"{1 / s:.3g}"}))
+
     if model.apparent_parameters:
         flags.append(Flag('gift_apparent', LEVEL_INFO,
                           "S_ave-Parameter sind scheinbare Modellparameter mit begrenzter "

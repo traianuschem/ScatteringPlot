@@ -1060,6 +1060,8 @@
     "model_none": "Kein (IFT, S = 1)",
     "model_hs_py": "Harte Kugeln, Percus-Yevick",
     "model_hs_py_avg": "Harte Kugeln, gemittelt S_ave (empfohlen)",
+    "model_rmsa": "Geladene Kugeln, RMSA (Hayter-Penfold)",
+    "rmsa_rescaled": "Hansen-Hayter-Rescaling",
     "param_start": "Start",
     "param_lower": "min",
     "param_upper": "max",
@@ -1143,6 +1145,17 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "gift_multistart": {
+        "ok": "Alle {n} BSSA-Läufe finden dasselbe Minimum.",
+        "partial": "Bestes Minimum in {hits} von {n} BSSA-Läufen gefunden (Nebenminima vorhanden).",
+        "rare": "Das beste Minimum wurde nur in 1 von {n} BSSA-Läufen gefunden — die MD-Fläche hat Nebenminima; mehr Starts oder bekannte Größen (z. B. φ) festhalten."
+      },
+      "gift_rmsa_degenerate": {
+        "charge_salt": "Ladung und Salzkonzentration sind gleichzeitig frei — sie lassen sich nicht unabhängig bestimmen (Fritz et al. 2000). Eine der beiden festhalten."
+      },
+      "gift_rmsa_rescaled": {
+        "rescaled": "Rescaling nach Hansen & Hayter aktiv: effektiver Durchmesser σ' = {factor}·σ (die MSA allein gäbe g(σ+) < 0)."
+      },
       "gift_bound": {
         "ok": "Alle freien S(q)-Parameter innerhalb der Grenzen",
         "at_bound": "Parameter am Rand der erlaubten Grenzen ({names}) — Grenzen erweitern oder das Modell ist ungeeignet (Bergmann et al. 2000)."
