@@ -199,6 +199,10 @@ class ScatterPlotApp(QMainWindow):
         self.stack_mode = True
         self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True, 'yscale': None,
                              'symlog_decades': 4, 'symlog_linscale': 1.0}
+        # v7.7: Einstellungen für die untere Subplot-Achse (PDDF/ASAXS-Cross-Term/Significance)
+        self.sub_axis_limits = {'xlabel': None, 'ylabel': None,
+                                 'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+                                 'auto': True, 'yscale': None}
         self.wavelength = 0.1524  # Standardwellenlänge: Cu K-alpha in nm
 
         # Erweiterte Einstellungen (Version 5.1)
@@ -221,7 +225,8 @@ class ScatterPlotApp(QMainWindow):
             'background_alpha': 0.8,
             'size': 14,
             'bold': True,
-            'italic': False
+            'italic': False,
+            'subplot_text': ''  # v7.7: optionaler Titel für die untere Subplot-Achse
         }
         self.grid_settings = {
             'major_enable': True,
@@ -790,27 +795,32 @@ class ScatterPlotApp(QMainWindow):
             and getattr(self, 'asaxs_subplot_btn', None) is not None
             and self.asaxs_subplot_btn.isChecked()
         )
+        # v7.7: Welcher Subplot-Typ ist aktiv? Bestimmt, welche Achsen-/Titel-Optionen
+        # aus self.sub_axis_limits / self.title_settings['subplot_text'] greifen.
+        _subplot_kind = self._get_active_subplot_kind()
+        _sub_default_xlabel = 'r / nm' if _subplot_kind == 'PDDF' else None
+        _sub_default_ylabel = self._get_default_sub_ylabel(_subplot_kind)
+        _sub_ylabel = self.sub_axis_limits.get('ylabel') or _sub_default_ylabel
+
         if self.plot_type == 'PDDF':
             gs = GridSpec(2, 1, height_ratios=[1, 1], hspace=0.35, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
             ax_sub = self.fig.add_subplot(gs[1])  # Kein sharex: r-Achse ≠ q-Achse
-            _pddf_norm_active = (getattr(self, 'pddf_norm_btn', None) is not None
-                                 and self.pddf_norm_btn.isChecked())
-            ax_sub.set_ylabel('P(r) (norm.)' if _pddf_norm_active else 'P(r)')
+            ax_sub.set_ylabel(_sub_ylabel)
             ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
             self.ax_pddf = ax_sub  # Rückwärtskompatibilität
         elif asaxs_subplot_active:
             gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
             ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
-            ax_sub.set_ylabel('$I_{cross}$ / cm⁻¹')
+            ax_sub.set_ylabel(_sub_ylabel)
             ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
             self.ax_pddf = ax_sub
         elif self.plot_type == 'Significance':
             gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
             self.ax_main = self.fig.add_subplot(gs[0])
             ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
-            ax_sub.set_ylabel('|I(q)| / σ(q)')
+            ax_sub.set_ylabel(_sub_ylabel)
             for level in self._get_significance_thresholds():
                 ax_sub.axhline(level, color='gray', lw=0.8, ls='--', zorder=0)
                 ax_sub.text(0.01, level, f'{level:g}σ', transform=ax_sub.get_yaxis_transform(),
@@ -1294,18 +1304,35 @@ class ScatterPlotApp(QMainWindow):
                                                   self.font_settings.get('font_family', 'sans-serif')),
             )
             if self.plot_type == 'PDDF':
-                # P(r)-Subplot: unabhängige r-Achse, lin-lin
-                ax_sub.set_xlabel('r / nm', **font_kwargs)
+                # P(r)-Subplot: unabhängige r-Achse, lin-lin (v7.7: Titel per Dialog überschreibbar)
+                ax_sub.set_xlabel(self.sub_axis_limits.get('xlabel') or _sub_default_xlabel, **font_kwargs)
             else:
-                # ASAXS: geteilte q-Achse, log-Skala
+                # ASAXS/Significance: geteilte q-Achse, log-Skala (Titel folgt dem Hauptplot)
                 ax_sub.set_xlabel(xlabel, **font_kwargs)
                 ax_sub.set_xscale('log')
+            # v7.7: Y-Achsentitel des Subplots erneut mit Schriftart-Einstellungen setzen
+            ax_sub.set_ylabel(_sub_ylabel, **font_kwargs)
             if self.grid_settings['major_enable']:
                 ax_sub.grid(True, which='major',
                             linestyle=self.grid_settings['major_linestyle'],
                             linewidth=self.grid_settings['major_linewidth'],
                             color=self.grid_settings['major_color'],
                             alpha=self.grid_settings['major_alpha'])
+
+            # v7.7: Subplot-Achsenlimits und Y-Skala (aus AxesSettingsDialog, Subplot-Bereich)
+            if not self.sub_axis_limits.get('auto', True):
+                if self.plot_type == 'PDDF':
+                    # Nur beim P(r)-Subplot ist die X-Achse unabhängig vom Hauptplot
+                    if self.sub_axis_limits.get('xmin') is not None:
+                        ax_sub.set_xlim(left=self.sub_axis_limits['xmin'])
+                    if self.sub_axis_limits.get('xmax') is not None:
+                        ax_sub.set_xlim(right=self.sub_axis_limits['xmax'])
+                if self.sub_axis_limits.get('ymin') is not None:
+                    ax_sub.set_ylim(bottom=self.sub_axis_limits['ymin'])
+                if self.sub_axis_limits.get('ymax') is not None:
+                    ax_sub.set_ylim(top=self.sub_axis_limits['ymax'])
+            if self.sub_axis_limits.get('yscale'):
+                ax_sub.set_yscale(self.sub_axis_limits['yscale'])
 
         # Achsenlimits
         if not self.axis_limits['auto']:
@@ -1534,6 +1561,18 @@ class ScatterPlotApp(QMainWindow):
                     alpha=self.title_settings.get('background_alpha', 0.8),
                     edgecolor='none'
                 ))
+
+        # v7.7: Optionaler Titel für den unteren Subplot-Bereich (PDDF/ASAXS/Significance),
+        # unabhängig vom Haupttitel oben (der bei aktivem Subplot als fig.suptitle() läuft).
+        _subplot_title_text = self.title_settings.get('subplot_text', '')
+        if _has_subplot and _subplot_title_text:
+            ax_sub.set_title(
+                _subplot_title_text,
+                fontsize=max(self.title_settings.get('size', 14) - 2, 6),
+                fontweight='bold' if self.title_settings.get('bold', True) else 'normal',
+                fontstyle='italic' if self.title_settings.get('italic', False) else 'normal',
+                color=self.title_settings.get('color', '#000000'),
+            )
 
         # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
         # und stem plots (die manchmal tight_layout stören).
@@ -3098,9 +3137,44 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
             self.rebuild_tree()
 
+    def _get_active_subplot_kind(self):
+        """Ermittelt, welcher Subplot-Typ beim nächsten update_plot() aktiv sein wird
+        (v7.7). Wird von den Titel- und Achsen-Dialogen genutzt, um deren
+        Subplot-Bereich passend anzuzeigen/auszublenden.
+
+        Returns:
+            'PDDF', 'ASAXS', 'Significance' oder None (kein Subplot aktiv)
+        """
+        if self.plot_type == 'PDDF':
+            return 'PDDF'
+        if (self.plot_type == 'ASAXS'
+                and getattr(self, 'asaxs_subplot_btn', None) is not None
+                and self.asaxs_subplot_btn.isChecked()):
+            return 'ASAXS'
+        if self.plot_type == 'Significance':
+            return 'Significance'
+        return None
+
+    def _get_default_sub_ylabel(self, subplot_kind):
+        """Gibt die aktuell standardmäßig verwendete Y-Achsenbeschriftung des
+        Subplots zurück (v7.7), abhängig von Umschaltern wie der PDDF-Normierung."""
+        if subplot_kind == 'PDDF':
+            pddf_norm_active = (getattr(self, 'pddf_norm_btn', None) is not None
+                                 and self.pddf_norm_btn.isChecked())
+            return 'P(r) (norm.)' if pddf_norm_active else 'P(r)'
+        if subplot_kind == 'ASAXS':
+            return '$I_{cross}$ / cm⁻¹'
+        if subplot_kind == 'Significance':
+            return '|I(q)| / σ(q)'
+        return ''
+
     def show_title_editor(self):
-        """Zeigt Titel-Editor Dialog (v7.0)"""
-        dialog = TitleEditorDialog(self, self.title_settings)
+        """Zeigt Titel-Editor Dialog (v7.0, v7.7: mit Subplot-Titel)"""
+        dialog = TitleEditorDialog(
+            self,
+            self.title_settings,
+            subplot_kind=self._get_active_subplot_kind()
+        )
         if dialog.exec():
             self.title_settings = dialog.get_settings()
             self.update_plot()
@@ -3173,18 +3247,24 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
 
     def show_axes_settings(self):
-        """Zeigt Achsen und Limits Dialog (v7.0 - jetzt mit Schriftart-Einstellungen)"""
+        """Zeigt Achsen und Limits Dialog (v7.0 - jetzt mit Schriftart-Einstellungen,
+        v7.7 - jetzt auch mit Subplot-Achse für PDDF/ASAXS/Significance)"""
+        subplot_kind = self._get_active_subplot_kind()
         dialog = AxesSettingsDialog(
             self,
             self.custom_xlabel,
             self.custom_ylabel,
             self.plot_type,
             self.axis_limits,
-            self.font_settings
+            self.font_settings,
+            subplot_kind=subplot_kind,
+            sub_axis_limits=self.sub_axis_limits,
+            sub_default_ylabel=self._get_default_sub_ylabel(subplot_kind)
         )
         if dialog.exec():
             self.custom_xlabel, self.custom_ylabel = dialog.get_labels()
             self.axis_limits = dialog.get_axis_limits()
+            self.sub_axis_limits = dialog.get_sub_axis_limits()
             # Schriftart-Einstellungen aktualisieren
             font_updates = dialog.get_font_settings()
             self.font_settings.update(font_updates)
@@ -3760,6 +3840,7 @@ class ScatterPlotApp(QMainWindow):
                     'stack_mode': self.stack_mode,
                     'color_scheme': self.color_scheme_combo.currentText(),
                     'axis_limits': self.axis_limits,
+                    'sub_axis_limits': self.sub_axis_limits,  # v7.7
                     'wavelength': self.wavelength,  # v6.2
                     'legend_settings': self.legend_settings,
                     'title_settings': self.title_settings,  # v7.0
@@ -3866,6 +3947,13 @@ class ScatterPlotApp(QMainWindow):
                 self.axis_limits.setdefault('symlog_decades', 4)
                 self.axis_limits.setdefault('symlog_linscale', 1.0)
 
+                # v7.7: Subplot-Achseneinstellungen (backward compat: ältere Sessions haben das noch nicht)
+                self.sub_axis_limits = session.get('sub_axis_limits', {
+                    'xlabel': None, 'ylabel': None,
+                    'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+                    'auto': True, 'yscale': None
+                })
+
                 # Version 6.2: Wellenlänge für 2-Theta Plot
                 if 'wavelength' in session:
                     self.wavelength = session['wavelength']
@@ -3876,6 +3964,7 @@ class ScatterPlotApp(QMainWindow):
                     self.legend_settings = session['legend_settings']
                 if 'title_settings' in session:  # v7.0
                     self.title_settings = session['title_settings']
+                    self.title_settings.setdefault('subplot_text', '')  # v7.7 backward compat
                 if 'grid_settings' in session:
                     self.grid_settings = session['grid_settings']
                 if 'font_settings' in session:

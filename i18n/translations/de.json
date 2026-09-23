@@ -316,6 +316,26 @@
       "symlog_linscale_tooltip": "Relative Höhe des linearen Nullbereichs im Vergleich zu einer log-Dekade. Kleiner = schmalerer Nullbereich, größer = breiterer Nullbereich."
     },
 
+    "subplot": {
+      "title": "Subplot-Achse (P(r) / Cross-Term / Signifikanz)",
+      "no_subplot": "Der aktuelle Plot-Typ hat keinen Subplot. Diese Einstellungen greifen bei PDDF, ASAXS (mit aktiviertem ± Subplot) und Significance.",
+      "info_pddf": "Der P(r)-Subplot hat eine eigene, unabhängige r-Achse (nicht mit dem Hauptplot gekoppelt).",
+      "info_shared_x": "Die X-Achse dieses Subplots ist mit dem Hauptplot gekoppelt (geteilte q-Achse, log-Skala) und kann hier nicht separat verändert werden.",
+      "x_title": "X-Achse Titel:",
+      "y_title": "Y-Achse Titel:",
+      "auto_based_on_default": "Auto: '{default}'",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:",
+      "auto_scaling": "Automatische Skalierung (ignoriert obige Werte)",
+      "y_scale": "Y-Achsen-Skala:",
+      "y_scale_auto": "Auto (Standard)",
+      "y_scale_linear": "Linear",
+      "y_scale_log": "Logarithmisch",
+      "reset": "Subplot-Einstellungen zurücksetzen"
+    },
+
     "font_labels": {
       "title": "Schriftart Achsenbeschriftungen",
       "family": "Schriftart:",
@@ -459,7 +479,15 @@
     },
 
     "text_color_dialog": "Text-Farbe wählen",
-    "background_color_dialog": "Hintergrund-Farbe wählen"
+    "background_color_dialog": "Hintergrund-Farbe wählen",
+
+    "subplot": {
+      "title": "Subplot-Titel",
+      "label": "Titel:",
+      "placeholder": "z.B. Signifikanz (optional)",
+      "info": "Zusätzlicher Titel oberhalb des unteren Subplot-Bereichs. Nutzt Farbe und Schriftart von oben (etwas kleiner). Der Haupttitel bleibt unabhängig davon als figurweiter Titel erhalten.",
+      "no_subplot": "Der aktuelle Plot-Typ hat keinen Subplot. Dieser Titel greift bei PDDF, ASAXS (mit aktiviertem ± Subplot) und Significance."
+    }
   },
 
   "font_settings": {

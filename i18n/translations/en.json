@@ -316,6 +316,26 @@
       "reset": "Reset Limits"
     },
 
+    "subplot": {
+      "title": "Subplot Axis (P(r) / Cross-Term / Significance)",
+      "no_subplot": "The current plot type has no subplot. These settings apply to PDDF, ASAXS (with the ± subplot enabled) and Significance.",
+      "info_pddf": "The P(r) subplot has its own, independent r-axis (not linked to the main plot).",
+      "info_shared_x": "This subplot's X-axis is linked to the main plot (shared q-axis, log scale) and cannot be changed separately here.",
+      "x_title": "X-Axis Title:",
+      "y_title": "Y-Axis Title:",
+      "auto_based_on_default": "Auto: '{default}'",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:",
+      "auto_scaling": "Automatic Scaling (ignores values above)",
+      "y_scale": "Y-Axis Scale:",
+      "y_scale_auto": "Auto (default)",
+      "y_scale_linear": "Linear",
+      "y_scale_log": "Logarithmic",
+      "reset": "Reset Subplot Settings"
+    },
+
     "font_labels": {
       "title": "Axis Labels Font",
       "family": "Font Family:",
@@ -459,7 +479,15 @@
     },
 
     "text_color_dialog": "Choose Text Color",
-    "background_color_dialog": "Choose Background Color"
+    "background_color_dialog": "Choose Background Color",
+
+    "subplot": {
+      "title": "Subplot Title",
+      "label": "Title:",
+      "placeholder": "e.g. Significance (optional)",
+      "info": "Additional title above the lower subplot area. Uses the color and font from above (slightly smaller). The main title remains a separate, figure-wide title regardless.",
+      "no_subplot": "The current plot type has no subplot. This title applies to PDDF, ASAXS (with the ± subplot enabled) and Significance."
+    }
   },
 
   "font_settings": {

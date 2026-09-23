@@ -63,6 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **Subplot-Achsen-Editor** | Achsen und Limits-Dialog sowie Titel-Editor steuern jetzt auch die untere Subplot-Achse (PDDF/ASAXS-Cross-Term/Significance): Titel-Override, Limits, Y-Skala, eigener Subplot-Titel | ✅ **v7.7.0** |
 | **Plot-Typen** | 11 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, dlnI/dlnq, **Significance** | ✅ **v7.6.0** |
 | **Significance-Plot** | Subplot mit punktweiser Signifikanz \|I(q)/σ(q)\| (roh + median-geglättet) und einstellbaren σ-Schwellenlinien, um den vertrauenswürdigen q-Bereich einer Kurve abzulesen | ✅ **v7.6.0** |
 | **Symlog-Skala (ASAXS)** | Y-Achse zeigt negative Cross-Term-Werte jetzt auch im Hauptplot, mit einstellbaren Dekaden/Nullbereich | ✅ **v7.5.0** |
@@ -88,6 +89,20 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.7?
+
+**Minor Release v7.7.0** — Titel- und Achsen-Dialog jetzt subplot-fähig
+
+### Hauptfeatures v7.7
+
+- ⚙️ **Achsen und Limits-Dialog mit Subplot-Bereich**: Eigener Y-Achsentitel, Y-Limits und Y-Skala (Auto/Linear/Log) für die untere Subplot-Achse (PDDF P(r), ASAXS-Cross-Term, Significance); beim PDDF-Subplot zusätzlich eigener X-Achsentitel und X-Limits, da die r-Achse unabhängig vom Hauptplot ist
+- 📝 **Optionaler Subplot-Titel** im Titel-Editor: eigener Titel oberhalb des unteren Subplot-Bereichs, unabhängig vom figurweiten Haupttitel
+- 💾 **Session-Persistenz**: Neue Subplot-Achseneinstellungen werden beim Speichern/Laden von Sessions mitgesichert (mit Backward-Compat für ältere Session-Dateien)
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.7.md](CHANGELOG_v7.7.md)
 
 ---
 

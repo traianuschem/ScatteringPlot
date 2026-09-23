@@ -16,10 +16,11 @@ from i18n import tr
 class AxesSettingsDialog(QDialog):
     """Dialog für Achsen-Einstellungen"""
 
-    def __init__(self, parent, current_xlabel=None, current_ylabel=None, plot_type='Log-Log', axis_limits=None, font_settings=None):
+    def __init__(self, parent, current_xlabel=None, current_ylabel=None, plot_type='Log-Log', axis_limits=None,
+                 font_settings=None, subplot_kind=None, sub_axis_limits=None, sub_default_ylabel=''):
         super().__init__(parent)
         self.setWindowTitle(tr("axes.title"))
-        self.resize(650, 750)
+        self.resize(650, 900)
 
         # Font settings initialisieren
         if font_settings is None:
@@ -27,6 +28,18 @@ class AxesSettingsDialog(QDialog):
         self.font_settings = font_settings
 
         self.plot_type = plot_type
+
+        # v7.7: Subplot-Achse (PDDF P(r) / ASAXS-Cross-Term / Significance)
+        # 'PDDF', 'ASAXS', 'Significance' oder None (aktueller Plot-Typ hat keinen Subplot)
+        self.subplot_kind = subplot_kind
+        if sub_axis_limits is None:
+            sub_axis_limits = {'xlabel': None, 'ylabel': None,
+                                'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
+                                'auto': True, 'yscale': None}
+        # Unveränderte Kopie: wird zurückgegeben, wenn kein Subplot aktiv ist (die
+        # zugehörigen Widgets werden dann gar nicht erst in die UI eingebaut).
+        self._sub_axis_limits_original = dict(sub_axis_limits)
+        self.sub_default_ylabel = sub_default_ylabel
 
         layout = QVBoxLayout(self)
 
@@ -176,6 +189,103 @@ class AxesSettingsDialog(QDialog):
         limits_group.setLayout(limits_layout)
         layout.addWidget(limits_group)
 
+        # Subplot-Achse (v7.7): PDDF P(r)-Plot, ASAXS-Cross-Term oder Significance
+        subplot_group = QGroupBox(tr("axes.subplot.title"))
+        subplot_layout = QGridLayout()
+        row = 0
+
+        # Immer anlegen (auch wenn versteckt), damit get_sub_axis_limits() konsistent bleibt
+        self.sub_ylabel_edit = QLineEdit()
+        self.sub_xlabel_edit = QLineEdit()
+        self.sub_xmin_edit = QLineEdit()
+        self.sub_xmax_edit = QLineEdit()
+        self.sub_ymin_edit = QLineEdit()
+        self.sub_ymax_edit = QLineEdit()
+        self.sub_auto_checkbox = QCheckBox(tr("axes.subplot.auto_scaling"))
+        self.sub_yscale_combo = QComboBox()
+
+        if self.subplot_kind is None:
+            no_subplot_label = QLabel(tr("axes.subplot.no_subplot"))
+            no_subplot_label.setWordWrap(True)
+            subplot_layout.addWidget(no_subplot_label, row, 0, 1, 2)
+            row += 1
+        else:
+            info_key = 'info_pddf' if self.subplot_kind == 'PDDF' else 'info_shared_x'
+            subplot_info = QLabel(tr(f"axes.subplot.{info_key}"))
+            subplot_info.setWordWrap(True)
+            subplot_layout.addWidget(subplot_info, row, 0, 1, 2)
+            row += 1
+
+            # Y-Achsentitel-Override
+            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_title")), row, 0)
+            self.sub_ylabel_edit.setPlaceholderText(
+                tr("axes.subplot.auto_based_on_default", default=self.sub_default_ylabel))
+            if sub_axis_limits.get('ylabel'):
+                self.sub_ylabel_edit.setText(sub_axis_limits['ylabel'])
+            subplot_layout.addWidget(self.sub_ylabel_edit, row, 1)
+            row += 1
+
+            if self.subplot_kind == 'PDDF':
+                # Unabhängige r-Achse: eigener Titel + eigene Limits möglich
+                subplot_layout.addWidget(QLabel(tr("axes.subplot.x_title")), row, 0)
+                self.sub_xlabel_edit.setPlaceholderText(
+                    tr("axes.subplot.auto_based_on_default", default='r / nm'))
+                if sub_axis_limits.get('xlabel'):
+                    self.sub_xlabel_edit.setText(sub_axis_limits['xlabel'])
+                subplot_layout.addWidget(self.sub_xlabel_edit, row, 1)
+                row += 1
+
+                subplot_layout.addWidget(QLabel(tr("axes.subplot.x_min")), row, 0)
+                if sub_axis_limits.get('xmin') is not None:
+                    self.sub_xmin_edit.setText(str(sub_axis_limits['xmin']))
+                subplot_layout.addWidget(self.sub_xmin_edit, row, 1)
+                row += 1
+
+                subplot_layout.addWidget(QLabel(tr("axes.subplot.x_max")), row, 0)
+                if sub_axis_limits.get('xmax') is not None:
+                    self.sub_xmax_edit.setText(str(sub_axis_limits['xmax']))
+                subplot_layout.addWidget(self.sub_xmax_edit, row, 1)
+                row += 1
+
+            # Y-Limits
+            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_min")), row, 0)
+            if sub_axis_limits.get('ymin') is not None:
+                self.sub_ymin_edit.setText(str(sub_axis_limits['ymin']))
+            subplot_layout.addWidget(self.sub_ymin_edit, row, 1)
+            row += 1
+
+            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_max")), row, 0)
+            if sub_axis_limits.get('ymax') is not None:
+                self.sub_ymax_edit.setText(str(sub_axis_limits['ymax']))
+            subplot_layout.addWidget(self.sub_ymax_edit, row, 1)
+            row += 1
+
+            self.sub_auto_checkbox.setChecked(sub_axis_limits.get('auto', True))
+            subplot_layout.addWidget(self.sub_auto_checkbox, row, 0, 1, 2)
+            row += 1
+
+            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_scale")), row, 0)
+            self.sub_yscale_combo.addItem(tr("axes.subplot.y_scale_auto"), userData=None)
+            self.sub_yscale_combo.addItem(tr("axes.subplot.y_scale_linear"), userData='linear')
+            self.sub_yscale_combo.addItem(tr("axes.subplot.y_scale_log"), userData='log')
+            sub_yscale_val = sub_axis_limits.get('yscale', None)
+            if sub_yscale_val == 'linear':
+                self.sub_yscale_combo.setCurrentIndex(1)
+            elif sub_yscale_val == 'log':
+                self.sub_yscale_combo.setCurrentIndex(2)
+            else:
+                self.sub_yscale_combo.setCurrentIndex(0)
+            subplot_layout.addWidget(self.sub_yscale_combo, row, 1)
+            row += 1
+
+            reset_sub_limits_btn = QPushButton(tr("axes.subplot.reset"))
+            reset_sub_limits_btn.clicked.connect(self.reset_sub_limits)
+            subplot_layout.addWidget(reset_sub_limits_btn, row, 0, 1, 2)
+            row += 1
+
+        subplot_group.setLayout(subplot_layout)
+        layout.addWidget(subplot_group)
+
         # Schriftart-Einstellungen für Achsenbeschriftungen
         labels_font_group = QGroupBox(tr("axes.font_labels.title"))
         labels_font_layout = QGridLayout()
@@ -277,6 +387,17 @@ class AxesSettingsDialog(QDialog):
         self.symlog_decades_spin.setValue(4)
         self.symlog_linscale_spin.setValue(1.0)
 
+    def reset_sub_limits(self):
+        """Setzt die Subplot-Achseneinstellungen zurück (v7.7)"""
+        self.sub_ylabel_edit.clear()
+        self.sub_xlabel_edit.clear()
+        self.sub_xmin_edit.clear()
+        self.sub_xmax_edit.clear()
+        self.sub_ymin_edit.clear()
+        self.sub_ymax_edit.clear()
+        self.sub_auto_checkbox.setChecked(True)
+        self.sub_yscale_combo.setCurrentIndex(0)
+
     def _update_symlog_controls_visibility(self):
         """Zeigt die Symlog-Feinsteuerung nur, wenn Symlog als Y-Skala gewählt ist"""
         is_symlog = self.yscale_combo.currentData() == 'symlog'
@@ -322,6 +443,33 @@ class AxesSettingsDialog(QDialog):
             'yscale': self.yscale_combo.currentData(),
             'symlog_decades': self.symlog_decades_spin.value(),
             'symlog_linscale': self.symlog_linscale_spin.value()
+        }
+
+    def get_sub_axis_limits(self):
+        """Gibt die Subplot-Achseneinstellungen zurück (v7.7: PDDF/ASAXS/Significance)"""
+        if self.subplot_kind is None:
+            # Kein Subplot beim aktuellen Plot-Typ -> Widgets existieren nicht in der UI,
+            # unveränderte Ausgangswerte zurückgeben
+            return dict(self._sub_axis_limits_original)
+
+        def _to_float(edit):
+            try:
+                return float(edit.text()) if edit.text() else None
+            except ValueError:
+                return None
+
+        xlabel = self.sub_xlabel_edit.text().strip() or None
+        ylabel = self.sub_ylabel_edit.text().strip() or None
+
+        return {
+            'xlabel': xlabel,
+            'ylabel': ylabel,
+            'xmin': _to_float(self.sub_xmin_edit),
+            'xmax': _to_float(self.sub_xmax_edit),
+            'ymin': _to_float(self.sub_ymin_edit),
+            'ymax': _to_float(self.sub_ymax_edit),
+            'auto': self.sub_auto_checkbox.isChecked(),
+            'yscale': self.sub_yscale_combo.currentData(),
         }
 
     def get_font_settings(self):

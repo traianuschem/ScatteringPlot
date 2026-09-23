@@ -22,10 +22,10 @@ from i18n import tr
 class TitleEditorDialog(QDialog):
     """Dialog für Titel-Einstellungen"""
 
-    def __init__(self, parent, title_settings=None):
+    def __init__(self, parent, title_settings=None, subplot_kind=None):
         super().__init__(parent)
         self.setWindowTitle(tr("title_editor.title"))
-        self.resize(550, 500)
+        self.resize(550, 560)
 
         # Title settings initialisieren
         if title_settings is None:
@@ -38,9 +38,12 @@ class TitleEditorDialog(QDialog):
                 'background_alpha': 0.8,
                 'size': 14,
                 'bold': True,
-                'italic': False
+                'italic': False,
+                'subplot_text': ''
             }
         self.title_settings = title_settings
+        # v7.7: 'PDDF', 'ASAXS', 'Significance' oder None (kein Subplot beim aktuellen Plot-Typ)
+        self.subplot_kind = subplot_kind
 
         self.setup_ui()
 
@@ -153,6 +156,33 @@ class TitleEditorDialog(QDialog):
         font_group.setLayout(font_layout)
         layout.addWidget(font_group)
 
+        # Subplot-Titel (v7.7): eigener, optionaler Titel für die untere Subplot-Achse
+        # (PDDF P(r)-Plot, ASAXS-Cross-Term oder Significance) - unabhängig vom
+        # Haupttitel oben, der bei aktivem Subplot als figurweiter Titel gerendert wird.
+        subplot_group = QGroupBox(tr("title_editor.subplot.title"))
+        subplot_layout = QGridLayout()
+
+        self.subplot_title_edit = QLineEdit()
+        self.subplot_title_edit.setText(self.title_settings.get('subplot_text', ''))
+
+        if self.subplot_kind:
+            subplot_layout.addWidget(QLabel(tr("title_editor.subplot.label")), 0, 0)
+            self.subplot_title_edit.setPlaceholderText(tr("title_editor.subplot.placeholder"))
+            subplot_layout.addWidget(self.subplot_title_edit, 0, 1)
+
+            subplot_info = QLabel(tr("title_editor.subplot.info"))
+            subplot_info.setWordWrap(True)
+            subplot_layout.addWidget(subplot_info, 1, 0, 1, 2)
+        else:
+            # Aktueller Plot-Typ hat keinen Subplot -> Eingabe ausblenden, Wert aber erhalten
+            self.subplot_title_edit.setVisible(False)
+            no_subplot_label = QLabel(tr("title_editor.subplot.no_subplot"))
+            no_subplot_label.setWordWrap(True)
+            subplot_layout.addWidget(no_subplot_label, 0, 0, 1, 2)
+
+        subplot_group.setLayout(subplot_layout)
+        layout.addWidget(subplot_group)
+
         layout.addStretch()
 
         # Buttons
@@ -207,5 +237,6 @@ class TitleEditorDialog(QDialog):
             'background_alpha': self.bg_alpha_spin.value() / 100.0,
             'size': self.size_spin.value(),
             'bold': self.bold_check.isChecked(),
-            'italic': self.italic_check.isChecked()
+            'italic': self.italic_check.isChecked(),
+            'subplot_text': self.subplot_title_edit.text()
         }
