@@ -6,7 +6,9 @@ IFT/GIFT-Modul (GUI-frei).
   nach Brunner-Popela & Glatter (1997) / Bergmann et al. (2000) (0.2)
 - GIFT für geladene Kugeln: RMSA nach Hayter & Penfold (1981) / Hansen & Hayter (1982),
   Portierung aus sasmodels (BSD-3, siehe rmsa.py), BSSA-Mehrfachstart (0.3)
-Parallelisierung und DREAM folgen (siehe GIFT/PLAN.md).
+- Prozess-Pool für parallele BSSA-Starts (bitgleich unabhängig von der Worker-Zahl),
+  vektorisierte Batch-Likelihood (0.4)
+DREAM folgt (siehe GIFT/PLAN.md).
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

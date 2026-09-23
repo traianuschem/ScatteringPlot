@@ -27,6 +27,7 @@ import numpy as np
 from .ift import IFTSettings, IFTSolution, IFTProblem, run_ift, LAMBDA_AUTO
 from .structure_factors import get_model, DEFAULT_GIFT_MODEL
 from .bssa import BSSASettings, minimize, BSSACancelled   # noqa: F401 (re-export)
+from . import parallel
 
 
 @dataclass
@@ -41,6 +42,11 @@ class GIFTSettings:
     lambda_cycles: int = 3
     lambda_tolerance_log10: float = 0.25
     n_starts: Optional[int] = None         # None → Standard des Modells (HS: 4, RMSA: 8)
+    # Prozesse für die BSSA-Starts: None → parallel.default_workers(), ≥ 1 → Prozess-Pool.
+    # Im Pool rechnet BLAS einfädig; das Ergebnis ist daher von der Worker-Zahl
+    # unabhängig bitgleich (Seeds hängen an den Starts). 0 → im Hauptprozess (Diagnose;
+    # mehrfädiges BLAS, nicht bitgleich zu den Pool-Ergebnissen).
+    n_workers: Optional[int] = None
 
     def to_dict(self):
         d = {k: v for k, v in self.__dict__.items() if k != 'bssa'}
@@ -75,6 +81,7 @@ class GIFTResult:
     history: List[dict] = field(default_factory=list)   # BSSA-Verlauf (alle Zyklen)
     model_info: Dict[str, float] = field(default_factory=dict)   # z. B. Debye-Länge (RMSA)
     starts: List[dict] = field(default_factory=list)   # Ergebnisse der Mehrfachstarts
+    n_workers: int = 1                                  # verwendete Prozesse
 
 
 def _bounds(model, settings, start):
@@ -94,6 +101,63 @@ def _bounds(model, settings, start):
         if not lo[p.name] < hi[p.name]:
             raise ValueError(f"Ungültige Grenzen für {p.label}: {lo[p.name]} … {hi[p.name]}")
     return lo, hi
+
+
+class _Search:
+    """Picklebare Beschreibung der BSSA-Suche (Daten, Modell, Grenzen, festes λ)."""
+
+    def __init__(self, q, I, s, ift_settings, smearing, model_key, values, free, lo, hi,
+                 lam_fixed):
+        self.q, self.I, self.s = q, I, s
+        self.ift_settings, self.smearing = ift_settings, smearing
+        self.model_key, self.values, self.free = model_key, dict(values), list(free)
+        self.lo, self.hi, self.lam_fixed = dict(lo), dict(hi), float(lam_fixed)
+        self._problem = None
+
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        state['_problem'] = None          # wird im Worker neu aufgebaut
+        return state
+
+    def to_vals(self, x):
+        vals = dict(self.values)
+        for n, xi in zip(self.free, x):
+            vals[n] = self.lo[n] + xi * (self.hi[n] - self.lo[n])
+        return vals
+
+    def objective(self, x):
+        if self._problem is None:
+            self._problem = IFTProblem(self.q, self.I, self.s, self.ift_settings, self.smearing)
+        sq = get_model(self.model_key).evaluate(self.q, self.to_vals(x))
+        if np.any(sq < 0):
+            return np.inf                    # unphysikalisch [B00]
+        return self._problem.md(sq, self.lam_fixed)
+
+
+def _run_start(search, x_start, bssa_settings, start, cycle, progress=None):
+    """Ein BSSA-Lauf. progress(start, n, T, f, x) → False bricht ab."""
+    def cb(n, T, fbest, xbest):
+        if progress is None:
+            return True
+        return progress(start, n, T, fbest, xbest)
+
+    res = minimize(search.objective, x_start, bssa_settings, cb)
+    return {'start': start, 'cycle': cycle, 'x': res.x, 'f': float(res.f),
+            'n_evals': res.n_evals, 'history': res.history}
+
+
+def _start_task(task):
+    """Worker-Aufgabe (Prozess-Pool): ein BSSA-Lauf mit Fortschritt/Abbruch über den Pool."""
+    search, x_start, bssa_settings, start, cycle = task
+
+    def progress(k, n, T, f, x):
+        parallel.report_progress((k, n, T, f, np.asarray(x).tolist()))
+        return not parallel.cancel_requested()
+
+    try:
+        return _run_start(search, x_start, bssa_settings, start, cycle, progress)
+    except BSSACancelled:
+        return {'start': start, 'cancelled': True}
 
 
 def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSettings,
@@ -145,46 +209,76 @@ def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSetti
     starts: List[dict] = []
     rng_starts = np.random.default_rng(int(settings.bssa.seed) + 7919)
 
+    n_starts = model.default_starts if settings.n_starts is None else settings.n_starts
+    n_workers_used = 1
     for cycle in range(max(1, settings.lambda_cycles) if free else 0):
-        lam_fixed = lam_rel
-
-        def objective(x, lam_fixed=lam_fixed):
-            vals = to_vals(x)
-            sq = s_of(vals)
-            if np.any(sq < 0):
-                return np.inf                    # unphysikalisch [B00]
-            return problem.md(sq, lam_fixed)
-
-        n_starts = model.default_starts if settings.n_starts is None else settings.n_starts
+        search = _Search(q, I, s, ift_settings, smearing, model.key, values, free, lo, hi,
+                         lam_rel)
         n_runs = max(1, int(n_starts)) if cycle == 0 else 1
-        best_res, best_hist = None, None
+        tasks = []
         for k in range(n_runs):
-            evals_before = n_evals
-
-            def cb(n, T, fbest, xbest, cycle=cycle, base=evals_before):
-                if progress is None:
-                    return True
-                return progress(base + n, T, fbest, to_vals(xbest), cycle)
-
             if cycle == 0:
                 seed = int(settings.bssa.seed) + 1000 * k
                 x_start = to_x(values) if k == 0 else rng_starts.random(len(free))
             else:
                 seed = int(settings.bssa.seed) + cycle
                 x_start = to_x(values)
-            res = minimize(objective, x_start, replace(settings.bssa, seed=seed), cb)
+            tasks.append((search, x_start, replace(settings.bssa, seed=seed), k, cycle))
+
+        workers = parallel.default_workers() if settings.n_workers is None \
+            else max(0, int(settings.n_workers))
+        n_workers_used = max(n_workers_used, min(workers, n_runs))
+        base = n_evals
+        if workers >= 1:
+            # Parallel: Fortschritt aggregiert (Summe der Auswertungen, bestes MD)
+            evals_per_start, best_seen = {}, [np.inf, None]
+
+            def on_item(item, cycle=cycle, base=base):
+                k, n, T, f, x = item
+                evals_per_start[k] = n
+                if f < best_seen[0]:
+                    best_seen[:] = [f, x]
+                if progress is None:
+                    return True
+                x_best = best_seen[1] if best_seen[1] is not None else x
+                return progress(base + sum(evals_per_start.values()), T, best_seen[0],
+                                search.to_vals(np.asarray(x_best)), cycle)
+
+            try:
+                results = parallel.get_pool(workers).run(_start_task, tasks, on_item)
+            except parallel.TasksCancelled:
+                raise BSSACancelled()
+        else:
+            results = []
+            for task in tasks:
+                done = n_evals + sum(r['n_evals'] for r in results)
+
+                def on_step(k, n, T, f, x, cycle=cycle, done=done):
+                    if progress is None:
+                        return True
+                    return progress(done + n, T, f, search.to_vals(x), cycle)
+
+                results.append(_run_start(*task, progress=on_step))
+        if any(r.get('cancelled') for r in results):
+            raise BSSACancelled()
+
+        # Auswertung in Startreihenfolge (identisch für seriell und parallel)
+        best = None
+        for r, task in zip(results, tasks):
+            k = r['start']
             hist = [{'cycle': cycle, 'start': k, 'evals': n_evals + h['evals'], 'T': h['T'],
-                     'md': h['f_best'], 'params': to_vals(np.array(h['x_best']))}
-                    for h in res.history]
-            n_evals += res.n_evals
+                     'md': h['f_best'], 'params': search.to_vals(np.array(h['x_best']))}
+                    for h in r['history']]
+            n_evals += r['n_evals']
             if cycle == 0:
-                starts.append({'start': k, 'seed': seed, 'x_start': x_start.tolist(),
-                               'params': to_vals(res.x), 'md': float(res.f),
-                               'n_evals': res.n_evals})
-            if best_res is None or res.f < best_res.f:
-                best_res, best_hist = res, hist
-        history.extend(best_hist)
-        values = to_vals(best_res.x)
+                starts.append({'start': k, 'seed': task[2].seed,
+                               'x_start': np.asarray(task[1]).tolist(),
+                               'params': search.to_vals(r['x']), 'md': r['f'],
+                               'n_evals': r['n_evals']})
+            if best is None or r['f'] < best[0]['f']:
+                best = (r, hist)
+        history.extend(best[1])
+        values = search.to_vals(best[0]['x'])
         if not auto_lambda:
             break
         lam_new = run_ift(q, I, s, ift_settings, smearing, s_of(values)).lam_rel
@@ -217,7 +311,7 @@ def run_gift(q, intensity, sigma, ift_settings: IFTSettings, settings: GIFTSetti
         form_factor=solution.extras.get('form_factor'), md=solution.md,
         md_without_sq=md_plain, n_evals=n_evals,
         lambda_history=lambda_history, lambda_converged=lambda_converged, history=history,
-        model_info=model.derived(values), starts=starts,
+        model_info=model.derived(values), starts=starts, n_workers=n_workers_used,
     )
 
 

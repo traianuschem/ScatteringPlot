@@ -17,6 +17,7 @@ Die IFT ist schnell (Millisekunden) und läuft synchron mit entprellter
 Live-Vorschau. GIFT/DREAM (spätere Phasen) laufen im Hintergrund-Thread.
 """
 
+import os
 import time
 import warnings
 from pathlib import Path
@@ -50,6 +51,7 @@ from analysis.gift.provenance import ProvenanceRecord, compute_sha256
 from analysis.gift.structure_factors import MODELS, get_model
 from analysis.gift.gift import GIFTSettings
 from analysis.gift.bssa import BSSASettings, BSSACancelled
+from analysis.gift.parallel import default_workers
 
 _MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py', 'rmsa')
 
@@ -333,6 +335,12 @@ class GiftDialog(QDialog):
         self.seed_spin.setValue(12345)
         self.seed_spin.setToolTip(tr('gift.seed_tooltip'))
         row.addWidget(self.seed_spin)
+        row.addWidget(QLabel(tr('gift.workers') + ':'))
+        self.workers_spin = QSpinBox()
+        self.workers_spin.setRange(0, max(1, os.cpu_count() or 1))
+        self.workers_spin.setValue(default_workers())
+        self.workers_spin.setToolTip(tr('gift.workers_tooltip'))
+        row.addWidget(self.workers_spin)
         v.addLayout(row)
         self.apparent_label = QLabel(tr('gift.apparent_hint'))
         self.apparent_label.setWordWrap(True)
@@ -807,7 +815,8 @@ class GiftDialog(QDialog):
             if w['fixed'].isChecked():
                 fixed.append(p.name)
         return GIFTSettings(model=model.key, start=start, lower=lower, upper=upper,
-                            fixed=fixed, bssa=BSSASettings(seed=self.seed_spin.value()))
+                            fixed=fixed, bssa=BSSASettings(seed=self.seed_spin.value()),
+                            n_workers=self.workers_spin.value())
 
     def _set_busy(self, busy):
         self.compute_btn.setEnabled(not busy)
@@ -896,7 +905,9 @@ class GiftDialog(QDialog):
             self._no_gift_text(self.fig_sq, self.canvas_sq)
             return
         s = g.solution
-        self.fig_sq.clear()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            self.fig_sq.clear()
         ax1 = self.fig_sq.add_subplot(211)
         ax1.plot(s.q, g.structure_factor, '-', color='#2e7d32', lw=1.6)
         ax1.axhline(1.0, color='k', lw=0.6, ls=':')
@@ -925,7 +936,9 @@ class GiftDialog(QDialog):
         model = get_model(g.model_key)
         h = g.history
         ev = np.array([x['evals'] for x in h])
-        self.fig_bssa.clear()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            self.fig_bssa.clear()
         ax1 = self.fig_bssa.add_subplot(211)
         ax1.semilogy(ev, [x['md'] for x in h], '-', color=_CLR_FIT, label='MD')
         ax1.set_ylabel(tr('gift.md_axis'), color=_CLR_FIT)
@@ -1143,6 +1156,10 @@ class GiftDialog(QDialog):
                     fixed_list = get_model(gp.get('model', 'none')).default_fixed()
                 w['fixed'].setChecked(name in fixed_list)
             self.seed_spin.setValue(int(gp.get('bssa', {}).get('seed', 12345)))
+            # Worker-Zahl beeinflusst das Ergebnis nicht; 0 (Hauptprozess) wird übernommen,
+            # damit auch Diagnose-Läufe exakt wiederholt werden können
+            if gp.get('n_workers') == 0:
+                self.workers_spin.setValue(0)
         else:
             self.model_combo.setCurrentIndex(self.model_combo.findData('none'))
         if not self.has_errors:

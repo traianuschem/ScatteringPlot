@@ -183,6 +183,47 @@ class IFTProblem:
         r = Aw_p @ c - self.yw_p
         return float(r @ r) / len(self.q)
 
+    def md_batch(self, structure_factors, lam_rel, chunk=64):
+        """MD für K Strukturfaktoren auf einmal (Form (K, M)) — vektorisiert.
+
+        Gleiche Mathematik wie md(); gestapelte Cholesky-Zerlegungen (K, N, N). Parametersätze
+        mit nicht-endlichem S(q) oder nicht positiv definitem System ergeben ∞. Grundlage
+        für DREAM und das Screening (viele Parametersätze je Generation).
+        """
+        S_all = np.atleast_2d(np.asarray(structure_factors, dtype=float))
+        out = np.full(len(S_all), np.inf)
+        lam_rel = np.broadcast_to(np.asarray(lam_rel, dtype=float), (len(S_all),))
+        for start in range(0, len(S_all), chunk):
+            S = S_all[start:start + chunk]
+            lr = lam_rel[start:start + chunk]
+            ok = np.all(np.isfinite(S), axis=1)
+            if not ok.any():
+                continue
+            Aw = self.Aw[None, :, :] * S[ok][:, :, None]                    # (K, M, N)
+            if self.settings.background:
+                Aw = Aw - self.w[None, :, None] * \
+                    (np.einsum('m,kmn->kn', self.w, Aw) / self.w_norm2)[:, None, :]
+            AwT = np.swapaxes(Aw, 1, 2)                                      # (K, N, M)
+            B = np.matmul(AwT, Aw)                                           # BLAS-GEMM je k
+            b = np.matmul(AwT, self.yw_p)
+            lam = lr[ok] * np.trace(B, axis1=1, axis2=2) / self.trace_k
+            H = B + lam[:, None, None] * self.K[None, :, :]
+            md = np.full(len(B), np.inf)
+            try:
+                L = np.linalg.cholesky(H)
+                c = np.linalg.solve(np.swapaxes(L, 1, 2),
+                                    np.linalg.solve(L, b[..., None]))[..., 0]
+                r = np.matmul(Aw, c[..., None])[..., 0] - self.yw_p[None, :]
+                md = np.sum(r * r, axis=1) / len(self.q)
+            except np.linalg.LinAlgError:
+                # Einzelne nicht positiv definite Systeme: einzeln auswerten
+                for j in range(len(B)):
+                    md[j] = self.md(S[ok][j], lr[ok][j])
+            idx = np.nonzero(ok)[0] + start
+            out[idx] = md
+        self.n_eval += len(S_all)
+        return out
+
 
 def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure_factor=None):
     """Führt eine IFT durch.

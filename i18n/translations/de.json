@@ -1070,6 +1070,8 @@
     "from_ift_tooltip": "R_HS aus dem Rg der IFT (äquivalente Kugel √(5/3)·Rg), φ und μ auf Standardwerte. Eher überschätzte Startwerte konvergieren besser (Brunner-Popela & Glatter 1997).",
     "seed": "Seed",
     "seed_tooltip": "Startwert des Zufallszahlengenerators der BSSA-Suche (reproduzierbar, im Sidecar dokumentiert)",
+    "workers": "Prozesse",
+    "workers_tooltip": "Parallele Prozesse für die BSSA-Mehrfachstarts. Das Ergebnis ist von der Anzahl unabhängig (bitgleich). 0 = im Hauptprozess rechnen (Diagnose, nicht bitgleich zu den Pool-Ergebnissen).",
     "apparent_hint": "S_ave-Parameter sind scheinbare Modellparameter; das eigentliche Ergebnis ist p(r) bzw. P(q) (Weyerich et al. 1999).",
     "run_gift": "GIFT starten",
     "cancel": "Abbrechen",

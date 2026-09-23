@@ -1070,6 +1070,8 @@
     "from_ift_tooltip": "R_HS from the IFT Rg (equivalent sphere √(5/3)·Rg), φ and μ at defaults. Rather overestimated start values converge better (Brunner-Popela & Glatter 1997).",
     "seed": "Seed",
     "seed_tooltip": "Random seed of the BSSA search (reproducible, documented in the sidecar)",
+    "workers": "Processes",
+    "workers_tooltip": "Parallel processes for the BSSA multi-starts. The result does not depend on the number (bit-identical). 0 = compute in the main process (diagnostics, not bit-identical to pool results).",
     "apparent_hint": "S_ave parameters are apparent model parameters; the actual result is p(r) or P(q) (Weyerich et al. 1999).",
     "run_gift": "Run GIFT",
     "cancel": "Cancel",

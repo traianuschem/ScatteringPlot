@@ -165,7 +165,7 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
                              'lambda_converged': gift.lambda_converged,
                              'bssa_steps': len(gift.history),
                              'model_info': gift.model_info,
-                             'multistart': gift.starts})
+                             'multistart': gift.starts, 'n_workers': gift.n_workers})
         solution = gift.solution
     else:
         solution = run_ift(q[mask], I[mask], sigma_arr[mask], settings)
@@ -202,7 +202,9 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
             deterministic=True, random_seed=int(gift_settings.bssa.seed),
             seed_per_cycle="seed + Zyklusnummer", seed_per_start="seed + 1000·Start",
             start_points="Start 0: Startwerte; weitere: default_rng(seed + 7919)",
-            n_starts=len(gift.starts), rng="numpy.random.default_rng (PCG64)",
+            n_starts=len(gift.starts), n_workers=gift.n_workers,
+            workers_note="Ergebnis unabhängig von der Worker-Zahl (Seeds je Start)",
+            rng="numpy.random.default_rng (PCG64)",
             note="BSSA ist bei gleichem Seed, gleichen Daten und gleichen Einstellungen "
                  "bitgleich reproduzierbar.")
 

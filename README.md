@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.10.0
+# ScatterForge Plot v7.11.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.10.0-blue)
+![Version](https://img.shields.io/badge/version-7.11.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **Parallele GIFT-Rechnung** | BSSA-Mehrfachstarts im Prozess-Pool, Ergebnis bitgleich unabhängig von der Prozesszahl; vektorisierte Batch-Likelihood | ✅ **v7.11.0** |
 | **GIFT für geladene Systeme** | RMSA-Strukturfaktor (Hayter-Penfold, Rescaling nach Hansen-Hayter) mit Ladung, Salz, Temperatur, ε_r; validiert gegen sasmodels/SasView; BSSA-Mehrfachstart | ✅ **v7.10.0** |
 | **GIFT (Strukturfaktor)** | Generalisierte IFT für konzentrierte Systeme: S(q) (Harte Kugeln PY bzw. gemittelt S_ave) und modellfreies p(r) gleichzeitig, Optimierung per Boltzmann-Simplex-Simulated-Annealing, Hintergrund-Thread, S(q)/P(q)-Export | ✅ **v7.9.0** |
 | **P(r) per IFT (Glatter)** | Neues Menü „Analyse“: modellfreie Paarabstandsverteilung p(r) nach Glatter (1977) mit automatischer λ-Wahl (Wendepunkt-Methode), Fehlerbändern, Rg/I(0), q-Fitbereich per 1σ/2σ/3σ-Signifikanz, Plausibilitäts-Flags (u. a. Dmax ≤ π/q_min) | ✅ **v7.8.0** |
@@ -93,6 +94,22 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.11?
+
+**Minor Release v7.11.0** — Parallelisierung der GIFT-Rechnung
+
+### Hauptfeatures v7.11
+
+- 🚀 **BSSA-Mehrfachstarts parallel** im persistenten Prozess-Pool (RMSA-Beispiel: 11.4 s → 5.5 s)
+- 🎯 **Bitgleich unabhängig von der Prozesszahl**: Seeds hängen an den Starts, BLAS rechnet im Pool einfädig
+- 🪟 **Windows-tauglich**: Worker starten ohne erneuten Import des Hauptprogramms (kein PySide6 in den Workern)
+- 🧮 **Vektorisierte Batch-Likelihood** als Grundlage für DREAM
+- ⚙️ Neues Feld „Prozesse“ im GIFT-Bereich des Dialogs
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.11.md](CHANGELOG_v7.11.md)
 
 ---
 
