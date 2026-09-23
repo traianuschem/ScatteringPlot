@@ -172,8 +172,9 @@ class TestTruncatedLowQ(unittest.TestCase):
 
 
 class TestLargeSphereSimulation(unittest.TestCase):
-    """Rauschfreie Simulation wie `GIFT/0_Sources/Sphere_142.txt` (SasView-Kugel, R = 142 nm,
-    1000 log-verteilte Punkte q = 0.001 … 1 nm⁻¹, Untergrund 0.001). Viele Shannon-Kanäle
+    """Rauschfreie Simulation wie `GIFT/0_Sources/Sphere_142.txt` (SasView-Kugel R = 142 Å,
+    q = 0.001 … 1 Å⁻¹; hier skaleninvariant als R = 142 nm bei q in nm⁻¹ gerechnet,
+    1000 log-verteilte Punkte, Untergrund 0.001). Viele Shannon-Kanäle
     (≈ 90–125) → N muss aus N_s abgeleitet werden; σ wird relativ angenommen."""
 
     R = 142.0

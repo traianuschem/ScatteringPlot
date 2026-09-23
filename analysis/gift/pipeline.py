@@ -6,6 +6,7 @@ Gesamtablauf einer IFT-Analyse mit lückenloser Provenance:
 GUI-frei; der Dialog ruft `run_ift_analysis()` und `export_ift_results()` auf.
 """
 
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,6 +17,9 @@ from . import __version__ as MODULE_VERSION
 from .ift import IFTSettings, IFTSolution, run_ift, estimate_sigma
 from .diagnostics import (diagnose_ift, guinier_rg, worst_level, Flag, SIGMA_MEASURED,
                           SIGMA_ESTIMATED, SIGMA_RELATIVE)
+from .diagnostics import diagnose_gift
+from .gift import GIFTSettings, GIFTResult, run_gift
+from .structure_factors import get_model
 from .provenance import ProvenanceRecord, default_agent, compute_sha256
 from ..significance import select_q_range, QRANGE_FULL
 
@@ -50,6 +54,7 @@ class IFTAnalysis:
     sigma_source: str = SIGMA_MEASURED
     sigma_relative: Optional[float] = None
     source_file: Optional[Path] = None
+    gift: Optional[GIFTResult] = None
     extras: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -75,7 +80,9 @@ def relative_sigma(intensity, fraction):
 def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
                      q_range: QRangeSettings = None, source_file=None,
                      source_metadata: Optional[Dict[str, Any]] = None,
-                     sigma_relative: Optional[float] = None) -> IFTAnalysis:
+                     sigma_relative: Optional[float] = None,
+                     gift_settings: Optional[GIFTSettings] = None,
+                     progress=None) -> IFTAnalysis:
     """Komplette IFT-Analyse eines Datensatzes.
 
     Args:
@@ -86,6 +93,8 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
         source_metadata: z. B. Spaltenzuordnung, Datensatzname
         sigma_relative: nur ohne σ — nimmt σ = sigma_relative·|I| an, statt σ aus dem
             Rauschen zu schätzen (sinnvoll für rauschfreie Simulationen)
+        gift_settings: GIFT statt IFT (Strukturfaktor-Modell ≠ 'none')
+        progress: Fortschritts-Callback der BSSA-Suche (siehe gift.run_gift)
     """
     if settings is None:
         raise ValueError("IFTSettings mit Dmax erforderlich")
@@ -136,16 +145,41 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
                                                        SIGMA_RELATIVE else None)},
                         results_summary=selection.to_dict())
 
-    # 3) IFT
-    solution = run_ift(q[mask], I[mask], sigma_arr[mask], settings)
+    # 3) GIFT (optional): Strukturfaktor-Parameter per BSSA
+    gift = None
+    model_key = 'none'
+    if gift_settings is not None and gift_settings.model != 'none':
+        model = get_model(gift_settings.model)
+        model_key = model.key
+        gift = run_gift(q[mask], I[mask], sigma_arr[mask], settings, gift_settings,
+                        progress=progress)
+        record.add_activity(
+            "GIFT: Strukturfaktor per BSSA (Bergmann et al. 2000)", "gift_bssa",
+            parameters={**gift_settings.to_dict(), 'model_reference': model.reference,
+                        'lower_effective': gift.lower, 'upper_effective': gift.upper,
+                        'free': gift.free},
+            results_summary={'params': gift.params, 'param_errors': gift.param_errors,
+                             'param_error_method': 'MD curvature (approximate)',
+                             'md': gift.md, 'md_without_structure_factor': gift.md_without_sq,
+                             'n_evals': gift.n_evals, 'lambda_history': gift.lambda_history,
+                             'lambda_converged': gift.lambda_converged,
+                             'bssa_steps': len(gift.history)})
+        solution = gift.solution
+    else:
+        solution = run_ift(q[mask], I[mask], sigma_arr[mask], settings)
+
+    # 4) IFT-Ergebnis und Diagnose
     guinier = guinier_rg(q[mask], I[mask], sigma_arr[mask])
     flags = diagnose_ift(solution, selection, guinier=guinier, sigma_source=sigma_source,
                          sigma_relative=sigma_relative)
+    if gift is not None:
+        flags += diagnose_gift(gift, get_model(model_key))
     record.add_activity(
-        "Indirekte Fourier-Transformation (Glatter 1977)", "ift",
+        "Indirekte Fourier-Transformation (Glatter 1977)"
+        + (f" mit S(q) = {model_key}" if gift is not None else ""), "ift",
         parameters={**settings.to_dict(), 'basis': 'clamped cubic B-splines',
                     'lambda_selection': 'inflexion point (log N_c vs. log λ)',
-                    'smearing': 'pinhole'},
+                    'smearing': 'pinhole', 'structure_factor_model': model_key},
         results_summary={
             'lambda_rel': solution.lam_rel, 'lambda_abs': solution.lam,
             'lambda_manual': solution.lam_manual,
@@ -158,14 +192,23 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
             'guinier_points': guinier[2] if guinier else None,
         })
     record.set_flags(flags)
-    record.set_reproducibility(deterministic=True, random_seed=None,
-                               note="IFT ist deterministisch (keine Zufallszahlen).")
+    if gift is None:
+        record.set_reproducibility(deterministic=True, random_seed=None,
+                                   note="IFT ist deterministisch (keine Zufallszahlen).")
+    else:
+        record.set_reproducibility(
+            deterministic=True, random_seed=int(gift_settings.bssa.seed),
+            seed_per_cycle="seed + Zyklusnummer", rng="numpy.random.default_rng (PCG64)",
+            note="BSSA ist bei gleichem Seed, gleichen Daten und gleichen Einstellungen "
+                 "bitgleich reproduzierbar.")
 
-    return IFTAnalysis(solution=solution, selection=selection, flags=flags, guinier=guinier,
+    extras = {'source_metadata': meta, 'q_all': q, 'I_all': I, 'sigma_all': sigma_arr}
+    return IFTAnalysis(extras=extras,
+                       solution=solution, selection=selection, flags=flags, guinier=guinier,
                        sigma_estimated=sigma_estimated, record=record,
                        sigma_source=sigma_source,
                        sigma_relative=sigma_relative if sigma_source == SIGMA_RELATIVE else None,
-                       source_file=source_file)
+                       source_file=source_file, gift=gift)
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +230,18 @@ def _header(analysis: IFTAnalysis, title: str, columns: List[str]) -> str:
         f"({analysis.selection.mode})",
         f"# Rg = {s.rg:.6g} +- {s.rg_err:.3g} nm, I(0) = {s.i0:.6g} +- {s.i0_err:.3g}, "
         f"MD = {s.md:.4g}",
+        *([_gift_header_line(analysis)] if analysis.gift is not None else []),
         f"# Flags: " + ", ".join(f"{f.code}={f.level}" for f in analysis.flags),
         "# " + "\t".join(columns),
     ]
     return "\n".join(lines)
+
+
+def _gift_header_line(analysis: IFTAnalysis) -> str:
+    g = analysis.gift
+    params = ", ".join(f"{k} = {v:.6g} +- {g.param_errors.get(k, float('nan')):.3g}"
+                       for k, v in g.params.items())
+    return f"# GIFT: S(q) = {g.model_key}; {params}; MD ohne S(q) = {g.md_without_sq:.4g}"
 
 
 def result_paths(source_file, out_dir=None) -> Dict[str, Path]:
@@ -201,6 +252,9 @@ def result_paths(source_file, out_dir=None) -> Dict[str, Path]:
     return {
         'pr': out_dir / f"{stem}_GIFT_pr.dat",
         'fit': out_dir / f"{stem}_GIFT_fit-PDDF.dat",
+        'data': out_dir / f"{stem}_GIFT_data.dat",
+        'sq': out_dir / f"{stem}_GIFT_Sq.dat",
+        'pq': out_dir / f"{stem}_GIFT_Pq.dat",
         'prov': out_dir / f"{stem}_GIFT_prov.json",
         'prov_w3c': out_dir / f"{stem}_GIFT.prov-w3c.json",
     }
@@ -219,26 +273,59 @@ def export_ift_results(analysis: IFTAnalysis, out_dir=None, source_file=None,
     paths = result_paths(source, out_dir)
     paths['pr'].parent.mkdir(parents=True, exist_ok=True)
     s = analysis.solution
-    rec = analysis.record
+    # Der Export arbeitet auf einer Kopie des Records: Die Analyse bleibt unverändert und
+    # kann erneut (z. B. in einen anderen Ordner) exportiert werden.
+    rec = copy.deepcopy(analysis.record)
+    analysis.extras['exported_record'] = rec
 
     rec.add_activity("Export", "export",
                      parameters={'out_dir': paths['pr'].parent, 'write_w3c': write_w3c})
 
     np.savetxt(paths['pr'], np.column_stack([s.r, s.pr, s.pr_err]), fmt='%.8e',
-               delimiter='\t', comments='',
+               delimiter='\t', comments='', encoding='utf-8',
                header=_header(analysis, "p(r) aus IFT (Glatter 1977)",
                               ['r / nm', 'p(r)', 'sigma_p(r)']))
     rec.add_output('pr', paths['pr'].name, paths['pr'],
                    extra_fields={'columns': ['r_nm', 'p_r', 'sigma_p_r']})
 
     np.savetxt(paths['fit'], np.column_stack([s.q, s.i_fit, s.i_fit_err]), fmt='%.8e',
-               delimiter='\t', comments='',
+               delimiter='\t', comments='', encoding='utf-8',
                header=_header(analysis, "IFT-Fit I(q) im Fitbereich",
                               ['q / nm^-1', 'I_fit', 'sigma_I_fit']))
     rec.add_output('fit', paths['fit'].name, paths['fit'],
                    extra_fields={'columns': ['q_nm-1', 'I_fit', 'sigma_I_fit']})
 
     written = {'pr': paths['pr'], 'fit': paths['fit']}
+    meta = analysis.extras.get('source_metadata', {})
+    if float(meta.get('q_conversion_factor', 1.0)) != 1.0:
+        # q wurde umgerechnet (z. B. Å⁻¹ → nm⁻¹): verwendete Eingangsdaten mitschreiben,
+        # damit Daten und Fit in derselben Einheit geplottet werden können
+        x = analysis.extras
+        np.savetxt(paths['data'], np.column_stack([x['q_all'], x['I_all'], x['sigma_all']]),
+                   fmt='%.8e', delimiter='\t', comments='', encoding='utf-8',
+                   header=_header(analysis, f"Eingangsdaten nach q-Umrechnung "
+                                            f"(Faktor {meta['q_conversion_factor']:g} → nm^-1)",
+                                  ['q / nm^-1', 'I', 'sigma (verwendet)']))
+        rec.add_output('input_converted', paths['data'].name, paths['data'],
+                       extra_fields={'columns': ['q_nm-1', 'I', 'sigma_used']})
+        written['data'] = paths['data']
+    if analysis.gift is not None:
+        g = analysis.gift
+        np.savetxt(paths['sq'], np.column_stack([s.q, g.structure_factor]), fmt='%.8e',
+                   delimiter='\t', comments='', encoding='utf-8',
+                   header=_header(analysis, f"Strukturfaktor S(q) ({g.model_key})",
+                                  ['q / nm^-1', 'S(q)']))
+        rec.add_output('structure_factor', paths['sq'].name, paths['sq'],
+                       extra_fields={'columns': ['q_nm-1', 'S_q']})
+        pq = s.extras['form_factor']
+        pq_err = s.extras['form_factor_err']
+        np.savetxt(paths['pq'], np.column_stack([s.q, pq, pq_err]), fmt='%.8e',
+                   delimiter='\t', comments='', encoding='utf-8',
+                   header=_header(analysis, "Formfaktor P(q) = I_fit/S(q) (ohne Untergrund)",
+                                  ['q / nm^-1', 'P(q)', 'sigma_P(q)']))
+        rec.add_output('form_factor', paths['pq'].name, paths['pq'],
+                       extra_fields={'columns': ['q_nm-1', 'P_q', 'sigma_P_q']})
+        written.update({'sq': paths['sq'], 'pq': paths['pq']})
     if write_w3c:
         rec.export_prov_json_to_file(paths['prov_w3c'])
         rec.add_output('provenance_prov_json', paths['prov_w3c'].name, paths['prov_w3c'])

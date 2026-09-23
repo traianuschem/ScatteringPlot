@@ -2982,9 +2982,13 @@ class ScatterPlotApp(QMainWindow):
         paths = info['paths']
         name = source.display_label
         try:
-            ds_data = DataSet(source.filepath, name=name)
-            if getattr(source, '_columns_configured', False):
-                ds_data.set_column_mapping(source.col_x, source.col_y, source.col_err)
+            if 'data' in paths:
+                # q wurde für die Analyse umgerechnet (z. B. Å⁻¹ → nm⁻¹)
+                ds_data = DataSet(paths['data'], name=name)
+            else:
+                ds_data = DataSet(source.filepath, name=name)
+                if getattr(source, '_columns_configured', False):
+                    ds_data.set_column_mapping(source.col_x, source.col_y, source.col_err)
             ds_data.set_pddf_role('data')
 
             ds_fit = DataSet(paths['fit'])

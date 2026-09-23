@@ -17,6 +17,7 @@ Die IFT ist schnell (Millisekunden) und läuft synchron mit entprellter
 Live-Vorschau. GIFT/DREAM (spätere Phasen) laufen im Hintergrund-Thread.
 """
 
+import time
 import warnings
 from pathlib import Path
 
@@ -26,9 +27,9 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox, QFormLayout, QLabel,
     QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, QTabWidget, QWidget,
     QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QMessageBox,
-    QFileDialog, QScrollArea, QSizePolicy, QFrame,
+    QFileDialog, QScrollArea, QSizePolicy, QFrame, QGridLayout,
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QThread
 from PySide6.QtGui import QColor, QBrush
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
@@ -46,6 +47,11 @@ from analysis.gift.diagnostics import (guinier_rg, dmax_qmin_ratio, shannon_chan
 from analysis.gift.pipeline import (run_ift_analysis, export_ift_results, result_paths,
                                     relative_sigma, QRangeSettings, RESULT_SUBDIR)
 from analysis.gift.provenance import ProvenanceRecord, compute_sha256
+from analysis.gift.structure_factors import MODELS, get_model
+from analysis.gift.gift import GIFTSettings
+from analysis.gift.bssa import BSSASettings, BSSACancelled
+
+_MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py')
 
 _LEVEL_STYLE = {
     LEVEL_OK: ('✔', '#2e7d32'),
@@ -64,8 +70,41 @@ def flag_text(flag):
     return flag.message if text == key else text
 
 
+class _GiftWorker(QThread):
+    """Führt eine GIFT-Analyse (BSSA) im Hintergrund aus."""
+
+    progress = Signal(int, float, float, int)      # Auswertungen, T, MD, Zyklus
+    done = Signal(object)                          # IFTAnalysis
+    failed = Signal(str)
+
+    CANCELLED = '__cancelled__'
+
+    def __init__(self, kwargs, parent=None):
+        super().__init__(parent)
+        self.kwargs = kwargs
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def _callback(self, n, temperature, md, params, cycle):
+        self.progress.emit(int(n), float(temperature), float(md), int(cycle))
+        return not self._cancel
+
+    def run(self):
+        try:
+            analysis = run_ift_analysis(**self.kwargs, progress=self._callback)
+        except BSSACancelled:
+            self.failed.emit(self.CANCELLED)
+            return
+        except (ValueError, np.linalg.LinAlgError) as e:
+            self.failed.emit(str(e))
+            return
+        self.done.emit(analysis)
+
+
 class GiftDialog(QDialog):
-    """Nicht-modaler Dialog für IFT (Phase 2; GIFT folgt)."""
+    """Nicht-modaler Dialog für IFT und GIFT."""
 
     results_applied = Signal(object)   # dict: paths, record_id, dataset, flags
 
@@ -79,6 +118,10 @@ class GiftDialog(QDialog):
         self.analysis = None
         self.out_dir = None
         self._updating = False
+        self._dirty = True
+        self._worker = None
+        self._t_start = 0.0
+        self.param_widgets = {}
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
@@ -117,13 +160,18 @@ class GiftDialog(QDialog):
         self.has_errors = self.err_all is not None and np.all(self.err_all > 0)
         self.n_nonpositive = int(np.count_nonzero(self.I_all <= 0))
 
+    def _q_factor(self):
+        """Umrechnungsfaktor der Datei-q-Einheit nach nm⁻¹ (Å⁻¹ → nm⁻¹: 10)."""
+        combo = getattr(self, 'qunit_combo', None)
+        return float(combo.currentData()) if combo is not None else 1.0
+
     def _current_arrays(self):
         if self.keep_nonpositive_check.isChecked():
             mask = np.ones(len(self.q_all), dtype=bool)
         else:
             mask = self.I_all > 0
         err = self.err_all[mask] if self.has_errors else None
-        return self.q_all[mask], self.I_all[mask], err
+        return self._q_factor() * self.q_all[mask], self.I_all[mask], err
 
     # ------------------------------------------------------------------
     # UI
@@ -148,6 +196,11 @@ class GiftDialog(QDialog):
         file_label.setToolTip(str(self.dataset.filepath))
         f.addRow(tr('gift.file') + ':', file_label)
         f.addRow(tr('gift.points') + ':', QLabel(str(len(self.q_all))))
+        self.qunit_combo = QComboBox()
+        self.qunit_combo.addItem('nm⁻¹', 1.0)
+        self.qunit_combo.addItem(tr('gift.qunit_angstrom'), 10.0)
+        self.qunit_combo.setToolTip(tr('gift.qunit_tooltip'))
+        f.addRow(tr('gift.qunit') + ':', self.qunit_combo)
         f.addRow(tr('gift.sigma_source') + ':', QLabel(
             tr('gift.sigma_measured') if self.has_errors else tr('gift.sigma_estimated')))
         # Ohne Fehlerspalte: σ aus dem Rauschen schätzen oder relativ annehmen (Simulationen)
@@ -254,6 +307,42 @@ class GiftDialog(QDialog):
         f.addRow(self.bg_check)
         lv.addWidget(g_ift)
 
+        # GIFT: Strukturfaktor
+        g_sq = QGroupBox(tr('gift.group_sq'))
+        v = QVBoxLayout(g_sq)
+        form = QFormLayout()
+        self.model_combo = QComboBox()
+        for key in _MODEL_ORDER:
+            self.model_combo.addItem(tr(MODELS[key].label_key), key)
+        self.model_combo.setToolTip(tr('gift.model_tooltip'))
+        form.addRow(tr('gift.model') + ':', self.model_combo)
+        v.addLayout(form)
+        self.param_grid_w = QWidget()
+        self.param_grid = QGridLayout(self.param_grid_w)
+        self.param_grid.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(self.param_grid_w)
+        row = QHBoxLayout()
+        self.from_ift_btn = QPushButton(tr('gift.from_ift'))
+        self.from_ift_btn.setToolTip(tr('gift.from_ift_tooltip'))
+        self.from_ift_btn.clicked.connect(self._starts_from_ift)
+        row.addWidget(self.from_ift_btn)
+        row.addStretch()
+        row.addWidget(QLabel(tr('gift.seed') + ':'))
+        self.seed_spin = QSpinBox()
+        self.seed_spin.setRange(0, 2 ** 31 - 1)
+        self.seed_spin.setValue(12345)
+        self.seed_spin.setToolTip(tr('gift.seed_tooltip'))
+        row.addWidget(self.seed_spin)
+        v.addLayout(row)
+        self.apparent_label = QLabel(tr('gift.apparent_hint'))
+        self.apparent_label.setWordWrap(True)
+        self.apparent_label.setStyleSheet('font-style: italic;')
+        v.addWidget(self.apparent_label)
+        self.gift_status = QLabel()
+        self.gift_status.setWordWrap(True)
+        v.addWidget(self.gift_status)
+        lv.addWidget(g_sq)
+
         # Ausgabe
         g_out = QGroupBox(tr('gift.group_output'))
         f = QVBoxLayout(g_out)
@@ -277,7 +366,7 @@ class GiftDialog(QDialog):
         scroll.setWidget(left)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setMinimumWidth(400)
+        scroll.setMinimumWidth(440)
         splitter.addWidget(scroll)
 
         # --- rechte Seite: Tabs + Ergebnisse -------------------------------------
@@ -287,8 +376,10 @@ class GiftDialog(QDialog):
         self.tabs = QTabWidget()
         self.fig_iq, self.canvas_iq = self._add_plot_tab(tr('gift.tab_iq'))
         self.fig_pr, self.canvas_pr = self._add_plot_tab(tr('gift.tab_pr'))
+        self.fig_sq, self.canvas_sq = self._add_plot_tab(tr('gift.tab_sq'))
         self.fig_lam, self.canvas_lam = self._add_plot_tab(tr('gift.tab_lambda'))
         self.fig_sig, self.canvas_sig = self._add_plot_tab(tr('gift.tab_significance'))
+        self.fig_bssa, self.canvas_bssa = self._add_plot_tab(tr('gift.tab_bssa'))
         prov_w = QWidget()
         pv = QVBoxLayout(prov_w)
         self.record_label = QLabel()
@@ -318,13 +409,17 @@ class GiftDialog(QDialog):
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([430, 820])
+        splitter.setSizes([460, 790])
 
         # --- Buttons ---------------------------------------------------------------
         btn_row = QHBoxLayout()
         self.compute_btn = QPushButton(tr('gift.compute'))
         self.compute_btn.clicked.connect(self.compute)
         btn_row.addWidget(self.compute_btn)
+        self.cancel_btn = QPushButton(tr('gift.cancel'))
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.clicked.connect(self._cancel_gift)
+        btn_row.addWidget(self.cancel_btn)
         load_btn = QPushButton(tr('gift.load_sidecar'))
         load_btn.setToolTip(tr('gift.load_sidecar_tooltip'))
         load_btn.clicked.connect(self._load_settings_from_sidecar)
@@ -347,6 +442,9 @@ class GiftDialog(QDialog):
             w.valueChanged.connect(self._schedule)
         self.k_combo.currentIndexChanged.connect(self._schedule)
         self.bg_check.toggled.connect(self._schedule)
+        self.model_combo.currentIndexChanged.connect(self._on_model_changed)
+        self.qunit_combo.currentIndexChanged.connect(self._on_qunit_changed)
+        self.seed_spin.valueChanged.connect(self._schedule)
         self.sigma_mode_combo.currentIndexChanged.connect(self._on_sigma_mode_changed)
         self.sigma_rel_spin.valueChanged.connect(self._schedule)
         self.keep_nonpositive_check.toggled.connect(self._on_data_filter_changed)
@@ -391,6 +489,7 @@ class GiftDialog(QDialog):
         self._on_qmode_changed()
         # Spline-Anzahl aus den Shannon-Kanälen des (vorläufigen) Fitbereichs
         self._set_suggested_n()
+        self._on_model_changed()
         self._update_out_label()
 
     # ------------------------------------------------------------------
@@ -399,6 +498,12 @@ class GiftDialog(QDialog):
 
     def _schedule(self, *_):
         if self._updating:
+            return
+        self._dirty = True
+        if self._model_key() != 'none':
+            # GIFT dauert Sekunden: nur auf Knopfdruck rechnen
+            if self._worker is None:
+                self.gift_status.setText(tr('gift.gift_stale'))
             return
         if self.live_check.isChecked():
             self._timer.start()
@@ -419,6 +524,11 @@ class GiftDialog(QDialog):
 
     def _on_lam_auto_toggled(self, checked):
         self.lam_spin.setEnabled(not checked)
+        self._schedule()
+
+    def _on_qunit_changed(self, *_):
+        """Neue q-Einheit: Startwerte (q-Bereich, Dmax, N) neu bestimmen."""
+        self._init_defaults()
         self._schedule()
 
     def _on_data_filter_changed(self, *_):
@@ -507,23 +617,38 @@ class GiftDialog(QDialog):
             'nonpositive_intensities': 'kept' if self.keep_nonpositive_check.isChecked()
             else 'removed',
             'n_nonpositive': self.n_nonpositive,
+            'q_unit_file': 'nm^-1' if self._q_factor() == 1.0 else 'A^-1',
+            'q_conversion_factor': self._q_factor(),
         }
 
-    def compute(self):
-        """Führt die IFT mit den aktuellen Einstellungen aus und aktualisiert alles."""
-        self._timer.stop()
+    def _analysis_kwargs(self):
         q, I, err = self._current_arrays()
-        try:
-            self.analysis = run_ift_analysis(
-                q, I, err, self._settings(), q_range=self._qrange_settings(),
-                source_file=self.dataset.filepath, source_metadata=self._source_metadata(),
-                sigma_relative=self._sigma_relative())
-        except (ValueError, np.linalg.LinAlgError) as e:
-            self.analysis = None
-            self.result_label.setText(f"<b style='color:#c62828'>{tr('gift.error')}</b><br>{e}")
-            self.flag_list.clear()
-            self.apply_btn.setEnabled(False)
+        return dict(q=q, intensity=I, sigma=err, settings=self._settings(),
+                    q_range=self._qrange_settings(), source_file=self.dataset.filepath,
+                    source_metadata=self._source_metadata(),
+                    sigma_relative=self._sigma_relative())
+
+    def _show_error(self, message):
+        self.analysis = None
+        self.result_label.setText(f"<b style='color:#c62828'>{tr('gift.error')}</b><br>{message}")
+        self.flag_list.clear()
+        self.apply_btn.setEnabled(False)
+
+    def compute(self):
+        """IFT (synchron, Millisekunden) oder GIFT (Hintergrund-Thread) starten."""
+        self._timer.stop()
+        if self._model_key() != 'none':
+            self._start_gift()
             return
+        try:
+            self.analysis = run_ift_analysis(**self._analysis_kwargs())
+        except (ValueError, np.linalg.LinAlgError) as e:
+            self._show_error(e)
+            return
+        self._dirty = False
+        self._show_analysis()
+
+    def _show_analysis(self):
         self.apply_btn.setEnabled(True)
         sel = self.analysis.selection
         # q-Spinboxen an die tatsächliche Auswahl anpassen (σ-Modus berechnet q_max)
@@ -556,6 +681,16 @@ class GiftDialog(QDialog):
             rows.append(f"{tr('gift.background_value')} = {s.background:.4g} ± {s.background_err:.2g}")
         ns = shannon_channels(s.settings.dmax, s.q[0], s.q[-1])
         rows.append(f"N<sub>s</sub> = {ns:.1f}")
+        if a.gift is not None:
+            g = a.gift
+            model = get_model(g.model_key)
+            rows.append(f"<b>S(q)</b>: {tr(model.label_key)}")
+            for p in model.params:
+                err = g.param_errors.get(p.name, float('nan'))
+                fixed = '' if p.name in g.free else f" ({tr('gift.param_fixed')})"
+                unit = f" {p.unit}" if p.unit else ''
+                rows.append(f"&nbsp;&nbsp;{p.label} = {g.params[p.name]:.4g} ± {err:.2g}{unit}{fixed}")
+            rows.append(f"MD<sub>ohne S(q)</sub> = {g.md_without_sq:.3g}")
         self.result_label.setText("<br>".join(rows))
 
         self.flag_list.clear()
@@ -568,14 +703,242 @@ class GiftDialog(QDialog):
             self.flag_list.addItem(item)
 
     # ------------------------------------------------------------------
+    # GIFT
+    # ------------------------------------------------------------------
+
+    def _model_key(self):
+        return self.model_combo.currentData() if hasattr(self, 'model_combo') else 'none'
+
+    def _on_model_changed(self, *_):
+        key = self._model_key()
+        model = get_model(key)
+        self._rebuild_param_grid()
+        self.param_grid_w.setVisible(bool(model.params))
+        self.from_ift_btn.setVisible(bool(model.params))
+        self.seed_spin.setEnabled(bool(model.params))
+        self.apparent_label.setVisible(model.apparent_parameters)
+        self.live_check.setEnabled(key == 'none')
+        self.compute_btn.setText(tr('gift.compute') if key == 'none' else tr('gift.run_gift'))
+        if model.params and self.analysis is not None and self.analysis.gift is None:
+            self._starts_from_ift()
+        self.gift_status.setText('' if key == 'none' else tr('gift.gift_stale'))
+        self._dirty = True
+        if key == 'none' and not self._updating:
+            self._schedule()
+
+    def _rebuild_param_grid(self):
+        while self.param_grid.count():
+            item = self.param_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.param_widgets = {}
+        model = get_model(self._model_key())
+        if not model.params:
+            return
+        for col, text in enumerate(('', tr('gift.param_start'), tr('gift.param_lower'),
+                                    tr('gift.param_upper'), tr('gift.param_fixed'))):
+            self.param_grid.addWidget(QLabel(f"<i>{text}</i>"), 0, col)
+        for row, p in enumerate(model.params, start=1):
+            unit = f" / {p.unit}" if p.unit else ''
+            self.param_grid.addWidget(QLabel(p.label + unit), row, 0)
+            widgets = {}
+            for col, key in enumerate(('start', 'lower', 'upper'), start=1):
+                spin = QDoubleSpinBox()
+                spin.setDecimals(p.decimals)
+                spin.setRange(p.lower, p.upper)
+                spin.setSingleStep(10 ** -max(p.decimals - 1, 0))
+                self.param_grid.addWidget(spin, row, col)
+                widgets[key] = spin
+            fixed = QCheckBox()
+            self.param_grid.addWidget(fixed, row, 4)
+            widgets['fixed'] = fixed
+            self.param_widgets[p.name] = widgets
+            self._set_param(p, p.default)
+            for w in (widgets['start'], widgets['lower'], widgets['upper']):
+                w.valueChanged.connect(self._schedule)
+            fixed.toggled.connect(self._schedule)
+
+    def _set_param(self, spec, start):
+        """Setzt Startwert und Standard-Suchgrenzen eines Parameters."""
+        w = self.param_widgets[spec.name]
+        lo, hi = spec.lower, spec.upper
+        if spec.relative_search and start > 0:
+            lo = max(spec.lower, start / spec.relative_search)
+            hi = min(spec.upper, start * spec.relative_search)
+        was = self._updating
+        self._updating = True
+        w['lower'].setValue(lo)
+        w['upper'].setValue(hi)
+        w['start'].setValue(start)
+        self._updating = was
+
+    def _starts_from_ift(self):
+        """Startwerte: R_HS aus dem Rg der IFT (äquivalente Kugel, R = √(5/3)·Rg); φ, μ Standard.
+
+        Nach [BP97] konvergiert die Suche mit eher überschätzten Startwerten besser.
+        """
+        model = get_model(self._model_key())
+        rg = None
+        if self.analysis is not None and np.isfinite(self.analysis.solution.rg):
+            rg = self.analysis.solution.rg
+        for p in model.params:
+            if p.name == 'r_hs':
+                start = np.sqrt(5.0 / 3.0) * rg if rg else self.dmax_spin.value() / 2.0
+                self._set_param(p, float(f"{start:.3g}"))
+            else:
+                self._set_param(p, p.default)
+        self._schedule()
+
+    def _gift_settings(self):
+        model = get_model(self._model_key())
+        start, lower, upper, fixed = {}, {}, {}, []
+        for p in model.params:
+            w = self.param_widgets[p.name]
+            start[p.name] = w['start'].value()
+            lower[p.name] = w['lower'].value()
+            upper[p.name] = w['upper'].value()
+            if w['fixed'].isChecked():
+                fixed.append(p.name)
+        return GIFTSettings(model=model.key, start=start, lower=lower, upper=upper,
+                            fixed=fixed, bssa=BSSASettings(seed=self.seed_spin.value()))
+
+    def _set_busy(self, busy):
+        self.compute_btn.setEnabled(not busy)
+        self.apply_btn.setEnabled(not busy and self.analysis is not None)
+        self.cancel_btn.setEnabled(busy)
+        self.model_combo.setEnabled(not busy)
+
+    def _start_gift(self):
+        if self._worker is not None:
+            return
+        gs = self._gift_settings()
+        for name in gs.start:
+            if not gs.lower[name] <= gs.start[name] <= gs.upper[name]:
+                QMessageBox.warning(self, tr('gift.run_gift'), tr('gift.start_outside', name=name))
+                return
+        self._worker = _GiftWorker(dict(self._analysis_kwargs(), gift_settings=gs), self)
+        self._worker.progress.connect(self._on_gift_progress)
+        self._worker.done.connect(self._on_gift_done)
+        self._worker.failed.connect(self._on_gift_failed)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._t_start = time.perf_counter()
+        self._set_busy(True)
+        self.gift_status.setText(tr('gift.gift_starting'))
+        self._worker.start()
+
+    def _on_gift_progress(self, n, temperature, md, cycle):
+        self.gift_status.setText(tr('gift.gift_running', n=n, T=f"{temperature:.3g}",
+                                    md=f"{md:.4g}", cycle=cycle + 1))
+
+    def _on_gift_done(self, analysis):
+        self.analysis = analysis
+        self._dirty = False
+        dt = time.perf_counter() - self._t_start
+        self.gift_status.setText(tr('gift.gift_done', n=analysis.gift.n_evals,
+                                    t=f"{dt:.1f}", cycles=len(analysis.gift.lambda_history) - 1))
+        self._show_analysis()
+        pending = getattr(self, '_pending_reproduction', None)
+        if pending is not None:
+            self._pending_reproduction = None
+            self._report_reproduction(pending)
+
+    def _on_gift_failed(self, message):
+        self._pending_reproduction = None
+        if message == _GiftWorker.CANCELLED:
+            self.gift_status.setText(tr('gift.gift_cancelled'))
+        else:
+            self.gift_status.setText(f"<span style='color:#c62828'>{tr('gift.error')}: {message}</span>")
+
+    def _on_worker_finished(self):
+        self._worker = None
+        self._set_busy(False)
+
+    def _cancel_gift(self):
+        if self._worker is not None:
+            self._worker.cancel()
+
+    def closeEvent(self, event):
+        if self._worker is not None:
+            self._worker.cancel()
+            self._worker.wait(10000)
+        super().closeEvent(event)
+
+    # ------------------------------------------------------------------
     # Plots
     # ------------------------------------------------------------------
 
     def _plot_all(self):
         self._plot_iq()
         self._plot_pr()
+        self._plot_sq()
         self._plot_lambda()
         self._plot_significance()
+        self._plot_bssa()
+
+    def _no_gift_text(self, fig, canvas):
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.text(0.5, 0.5, tr('gift.only_gift'), ha='center', va='center',
+                transform=ax.transAxes)
+        ax.set_axis_off()
+        canvas.draw_idle()
+
+    def _plot_sq(self):
+        g = self.analysis.gift
+        if g is None:
+            self._no_gift_text(self.fig_sq, self.canvas_sq)
+            return
+        s = g.solution
+        self.fig_sq.clear()
+        ax1 = self.fig_sq.add_subplot(211)
+        ax1.plot(s.q, g.structure_factor, '-', color='#2e7d32', lw=1.6)
+        ax1.axhline(1.0, color='k', lw=0.6, ls=':')
+        ax1.set_xscale('log')
+        ax1.set_ylabel('S(q)')
+        ax1.set_title(tr(get_model(g.model_key).label_key), fontsize=9)
+        ax2 = self.fig_sq.add_subplot(212, sharex=ax1)
+        pos = s.intensity > 0
+        ax2.plot(s.q[pos], s.intensity[pos], 'o', ms=2.5, color=_CLR_DATA, alpha=0.6,
+                 label=tr('gift.legend_data'))
+        ax2.plot(s.q, s.i_fit, '-', color=_CLR_FIT, lw=1.4, label='I = S·P')
+        pq = g.form_factor
+        ax2.plot(s.q[pq > 0], pq[pq > 0], '--', color='#6a1b9a', lw=1.4, label='P(q)')
+        ax2.set_xscale('log')
+        ax2.set_yscale('log')
+        ax2.set_xlabel('q / nm⁻¹')
+        ax2.set_ylabel('I(q), P(q)')
+        ax2.legend(fontsize=8, loc='lower left')
+        self.canvas_sq.draw_idle()
+
+    def _plot_bssa(self):
+        g = self.analysis.gift
+        if g is None or not g.history:
+            self._no_gift_text(self.fig_bssa, self.canvas_bssa)
+            return
+        model = get_model(g.model_key)
+        h = g.history
+        ev = np.array([x['evals'] for x in h])
+        self.fig_bssa.clear()
+        ax1 = self.fig_bssa.add_subplot(211)
+        ax1.semilogy(ev, [x['md'] for x in h], '-', color=_CLR_FIT, label='MD')
+        ax1.set_ylabel(tr('gift.md_axis'), color=_CLR_FIT)
+        temps = np.array([x['T'] for x in h])
+        ax1b = ax1.twinx()
+        ax1b.semilogy(ev[temps > 0], temps[temps > 0], '--', color='#555555', label='T')
+        ax1b.set_ylabel('T', color='#555555')
+        ax1.set_title(tr('gift.bssa_title', evals=g.n_evals), fontsize=9)
+        ax2 = self.fig_bssa.add_subplot(212, sharex=ax1)
+        for p in model.params:
+            if p.name not in g.free:
+                continue
+            lo, hi = g.lower[p.name], g.upper[p.name]
+            vals = np.array([x['params'][p.name] for x in h])
+            ax2.plot(ev, (vals - lo) / (hi - lo), '-', lw=1.2, label=p.label)
+        ax2.set_ylim(-0.05, 1.05)
+        ax2.set_xlabel(tr('gift.bssa_evals'))
+        ax2.set_ylabel(tr('gift.bssa_normalized'))
+        ax2.legend(fontsize=8)
+        self.canvas_bssa.draw_idle()
 
     def _shade_excluded(self, ax, sel):
         q, _, _ = self._current_arrays()
@@ -690,8 +1053,8 @@ class GiftDialog(QDialog):
     # Provenance
     # ------------------------------------------------------------------
 
-    def _show_provenance(self):
-        rec = self.analysis.record
+    def _show_provenance(self, record=None):
+        rec = record or self.analysis.record
         self.record_label.setText(f"<b>record_id</b>: {rec.record_id}")
         self.prov_tree.clear()
         self._fill_tree(self.prov_tree.invisibleRootItem(), rec.to_dict())
@@ -725,6 +1088,11 @@ class GiftDialog(QDialog):
             return
         p = ift['parameters']
         qr = pre['parameters'].get('q_range', {})
+        load = next((a for a in acts if a['type'] == 'data_loading'), {'parameters': {}})
+        factor = float(load['parameters'].get('q_conversion_factor', 1.0))
+        idx_unit = self.qunit_combo.findData(factor)
+        if idx_unit >= 0 and idx_unit != self.qunit_combo.currentIndex():
+            self.qunit_combo.setCurrentIndex(idx_unit)
         self._updating = True
         self.dmax_spin.setValue(float(p['dmax']))
         self.nspl_spin.setValue(int(p['n_splines']))
@@ -748,6 +1116,25 @@ class GiftDialog(QDialog):
             self.qmin_spin.setValue(float(qr['q_min']))
         if qr.get('q_max') is not None:
             self.qmax_spin.setValue(float(qr['q_max']))
+        gift_act = next((a for a in acts if a['type'] == 'gift_bssa'), None)
+        if gift_act is not None:
+            gp = gift_act['parameters']
+            self.model_combo.setCurrentIndex(self.model_combo.findData(gp.get('model', 'none')))
+            self._rebuild_param_grid()
+            start = gp.get('start', {})
+            lo = gp.get('lower_effective', gp.get('lower', {}))
+            hi = gp.get('upper_effective', gp.get('upper', {}))
+            for name, w in self.param_widgets.items():
+                if name in lo:
+                    w['lower'].setValue(float(lo[name]))
+                if name in hi:
+                    w['upper'].setValue(float(hi[name]))
+                if name in start:
+                    w['start'].setValue(float(start[name]))
+                w['fixed'].setChecked(name in gp.get('fixed', []))
+            self.seed_spin.setValue(int(gp.get('bssa', {}).get('seed', 12345)))
+        else:
+            self.model_combo.setCurrentIndex(self.model_combo.findData('none'))
         if not self.has_errors:
             rel = pre['parameters'].get('sigma_relative')
             self.sigma_mode_combo.setCurrentIndex(
@@ -763,22 +1150,34 @@ class GiftDialog(QDialog):
         stored = [e.get('sha256') for e in rec.to_dict()['input']['entities']]
         if stored and current not in stored:
             QMessageBox.warning(self, tr('gift.load_sidecar'), tr('gift.sidecar_hash_mismatch'))
-        elif self.analysis is not None:
+        else:
             old = next((a['results_summary'] for a in acts if a['type'] == 'ift'), {})
             rg_old = old.get('rg_nm')
-            if rg_old is not None:
-                QMessageBox.information(
-                    self, tr('gift.load_sidecar'),
-                    tr('gift.sidecar_reproduced', rg_old=f"{rg_old:.5g}",
-                       rg_new=f"{self.analysis.solution.rg:.5g}"))
+            if rg_old is None:
+                return
+            if self._worker is not None:
+                # GIFT läuft asynchron: Vergleich nach Abschluss (_on_gift_done)
+                self._pending_reproduction = rg_old
+            elif self.analysis is not None:
+                self._report_reproduction(rg_old)
+
+    def _report_reproduction(self, rg_old):
+        QMessageBox.information(
+            self, tr('gift.load_sidecar'),
+            tr('gift.sidecar_reproduced', rg_old=f"{rg_old:.5g}",
+               rg_new=f"{self.analysis.solution.rg:.5g}"))
 
     # ------------------------------------------------------------------
     # Übernehmen
     # ------------------------------------------------------------------
 
     def apply(self):
-        """Neu rechnen (frischer Provenance-Record), exportieren, ans Hauptfenster melden."""
-        self.compute()
+        """Exportieren und ans Hauptfenster melden (IFT wird vorher frisch gerechnet)."""
+        if self._model_key() == 'none':
+            self.compute()
+        elif self.analysis is None or self.analysis.gift is None or self._dirty:
+            QMessageBox.information(self, tr('gift.apply'), tr('gift.need_compute'))
+            return
         if self.analysis is None:
             return
         paths = result_paths(self.dataset.filepath, self._out_dir())
@@ -793,10 +1192,15 @@ class GiftDialog(QDialog):
             written = export_ift_results(self.analysis, out_dir=self._out_dir(),
                                          source_file=self.dataset.filepath,
                                          write_w3c=self.w3c_check.isChecked())
+            # Veraltete S(q)/P(q)-Dateien einer früheren GIFT-Rechnung entfernen
+            # (sie gehörten nicht zu diesem Sidecar; das Überschreiben wurde bestätigt)
+            for key in ('sq', 'pq', 'prov_w3c'):
+                if key not in written and paths[key].exists():
+                    paths[key].unlink()
         except OSError as e:
             QMessageBox.critical(self, tr('messages.error'), str(e))
             return
-        self._show_provenance()
+        self._show_provenance(self.analysis.extras.get('exported_record'))
         self.results_applied.emit({
             'paths': written,
             'record_id': self.analysis.record.record_id,

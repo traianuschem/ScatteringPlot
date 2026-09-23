@@ -135,13 +135,64 @@ def _select_lambda(lam_rel, md, nc, md_tolerance, plateau_slope):
     return idx, abs_slope, False
 
 
-def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None):
+class IFTProblem:
+    """Vorbereitete (gewichtete) Designmatrix für viele schnelle Auswertungen mit
+    wechselndem Strukturfaktor S(q) und festem λ — Zielfunktion der GIFT-Optimierung.
+
+        I(q) = S(q) · Σ c_ν ψ_ν(q)   [+ Untergrund]            [BP97 Gl. 5–7]
+    """
+
+    def __init__(self, q, intensity, sigma, settings: IFTSettings, smearing=None):
+        self.q = np.asarray(q, dtype=float)
+        self.I = np.asarray(intensity, dtype=float)
+        self.s = np.asarray(sigma, dtype=float)
+        self.settings = settings
+        smearing = smearing or IdentitySmearing()
+        self.A = smearing.apply(cached_design_matrix(self.q, settings.dmax, settings.n_splines))
+        self.K = regularization_matrix(settings.n_splines, settings.k_type)
+        self.Aw = self.A / self.s[:, None]
+        self.yw = self.I / self.s
+        if settings.background:
+            self.w = 1.0 / self.s
+            self.w_norm2 = float(self.w @ self.w)
+            self.yw_p = self.yw - self.w * (self.w @ self.yw) / self.w_norm2
+        else:
+            self.yw_p = self.yw
+        self.trace_k = float(np.trace(self.K))
+        self.n_eval = 0
+
+    def _project(self, M):
+        if not self.settings.background:
+            return M
+        return M - np.outer(self.w, self.w @ M) / self.w_norm2
+
+    def md(self, structure_factor, lam_rel):
+        """Mittlere Abweichung χ²/M für gegebenes S(q) und festes λ_rel (inf bei Fehlern)."""
+        self.n_eval += 1
+        S = np.asarray(structure_factor, dtype=float)
+        if not np.all(np.isfinite(S)):
+            return np.inf
+        Aw_p = self._project(self.Aw * S[:, None])
+        B = Aw_p.T @ Aw_p
+        lam = lam_rel * np.trace(B) / self.trace_k
+        try:
+            L = np.linalg.cholesky(B + lam * self.K)
+        except np.linalg.LinAlgError:
+            return np.inf
+        c = np.linalg.solve(L.T, np.linalg.solve(L, Aw_p.T @ self.yw_p))
+        r = Aw_p @ c - self.yw_p
+        return float(r @ r) / len(self.q)
+
+
+def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure_factor=None):
     """Führt eine IFT durch.
 
     Args:
         q, intensity, sigma: Daten im Fitbereich (q in nm⁻¹, σ > 0)
         settings: IFTSettings
         smearing: Verschmierungsoperator (Standard: Pinhole/Identität)
+        structure_factor: optional S(q) auf dem q-Gitter (GIFT): I = S·P [BP97 Gl. 5];
+            p(r), Rg und I(0) beziehen sich dann auf den Formfaktor P(q)
     """
     q = np.asarray(q, dtype=float)
     I = np.asarray(intensity, dtype=float)
@@ -156,7 +207,15 @@ def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None):
 
     smearing = smearing or IdentitySmearing()
     basis = SplineBasis(settings.dmax, settings.n_splines)
-    A = smearing.apply(cached_design_matrix(q, settings.dmax, settings.n_splines))
+    A_form = smearing.apply(cached_design_matrix(q, settings.dmax, settings.n_splines))
+    if structure_factor is not None:
+        S_q = np.asarray(structure_factor, dtype=float)
+        if S_q.shape != q.shape or not np.all(np.isfinite(S_q)):
+            raise ValueError("S(q) muss endlich sein und dieselbe Länge wie q haben")
+        A = A_form * S_q[:, None]          # ψ̃_ν(q) = ψ_ν(q)·S(q)  [BP97 Gl. 6]
+    else:
+        S_q = None
+        A = A_form
     K = regularization_matrix(settings.n_splines, settings.k_type)
     n_spl = settings.n_splines
 
@@ -258,13 +317,21 @@ def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None):
     else:
         bg, bg_err = None, None
 
+    extras = {}
+    if S_q is not None:
+        # Formfaktor P(q) = Σ c_ν ψ_ν(q) (ohne S, ohne Untergrund) mit Fehlerband
+        extras['structure_factor'] = S_q
+        extras['form_factor'] = A_form @ c
+        extras['form_factor_err'] = np.sqrt(np.maximum(
+            np.einsum('ij,jk,ik->i', A_form, cov_c, A_form), 0.0))
+
     return IFTSolution(
         settings=settings, q=q, intensity=I, sigma=s,
         lam_rel=lam_rel, lam=lam, lam_manual=lam_manual,
         coefficients=c, covariance=cov_all, background=bg, background_err=bg_err,
         r=r, pr=pr, pr_err=pr_err, i_fit=fit, i_fit_err=fit_err,
         chi2=chi2, md=chi2 / len(q), rg=rg, rg_err=rg_err, i0=i0, i0_err=i0_err,
-        scan=scan,
+        scan=scan, extras=extras,
     )
 
 

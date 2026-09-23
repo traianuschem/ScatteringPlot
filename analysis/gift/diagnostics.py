@@ -298,6 +298,66 @@ def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
     return [f for f in flags if f is not None]
 
 
+def diagnose_gift(result, model):
+    """Zusätzliche Flags für eine GIFT-Rechnung [B00, W99]."""
+    flags = []
+    labels = {p.name: p.label for p in model.params}
+    at_bound = []
+    for name in result.free:
+        rng = result.upper[name] - result.lower[name]
+        v = result.params[name]
+        if min(v - result.lower[name], result.upper[name] - v) < 0.01 * rng:
+            at_bound.append(f"{labels[name]} = {v:.4g}")
+    if at_bound:
+        names = ', '.join(at_bound)
+        flags.append(Flag('gift_bound', LEVEL_WARNING,
+                          f"Parameter am Rand der erlaubten Grenzen ({names}) — Grenzen "
+                          f"erweitern oder das Modell ist ungeeignet [B00].", None, None,
+                          'at_bound', {'names': names}))
+    elif result.free:
+        flags.append(Flag('gift_bound', LEVEL_OK, "Alle freien Parameter innerhalb der Grenzen"))
+
+    s_min = float(np.min(result.structure_factor))
+    if s_min < 0:
+        flags.append(Flag('gift_structure_factor', LEVEL_WARNING,
+                          f"S(q) wird negativ (min {s_min:.3g}) — unphysikalisch.", s_min, 0.0,
+                          'negative', {'min': f"{s_min:.3g}"}))
+
+    if result.md_without_sq is not None and np.isfinite(result.md_without_sq):
+        ratio = result.md_without_sq / max(result.md, np.finfo(float).tiny)
+        params = {'md_ift': f"{result.md_without_sq:.3g}", 'md_gift': f"{result.md:.3g}"}
+        if ratio < 1.2:
+            flags.append(Flag('gift_improvement', LEVEL_INFO,
+                              f"S(q) verbessert die Anpassung kaum (MD {result.md_without_sq:.3g} "
+                              f"→ {result.md:.3g}) — Wechselwirkung evtl. vernachlässigbar.",
+                              ratio, 1.2, 'small', params))
+        else:
+            flags.append(Flag('gift_improvement', LEVEL_OK,
+                              f"MD ohne S(q) = {result.md_without_sq:.3g} → mit S(q) = "
+                              f"{result.md:.3g}", ratio, 1.2, 'improved', params))
+
+    if not result.lambda_converged:
+        flags.append(Flag('gift_lambda', LEVEL_WARNING,
+                          "λ hat sich zwischen den GIFT-Zyklen nicht stabilisiert — Ergebnis "
+                          "prüfen (λ manuell setzen oder mehr Zyklen).", variant='not_converged'))
+
+    undetermined = [labels[n] for n in result.free
+                    if not np.isfinite(result.param_errors.get(n, np.nan))]
+    if undetermined:
+        names = ', '.join(undetermined)
+        flags.append(Flag('gift_errors', LEVEL_INFO,
+                          f"Fehler aus der MD-Krümmung nicht bestimmbar für {names} (flache "
+                          f"oder nicht konvexe MD-Fläche).", None, None, 'undetermined',
+                          {'names': names}))
+
+    if model.apparent_parameters:
+        flags.append(Flag('gift_apparent', LEVEL_INFO,
+                          "S_ave-Parameter sind scheinbare Modellparameter mit begrenzter "
+                          "physikalischer Bedeutung; das Ergebnis ist p(r) bzw. P(q) [W99].",
+                          variant='apparent'))
+    return flags
+
+
 def worst_level(flags):
     order = {LEVEL_OK: 0, LEVEL_INFO: 1, LEVEL_WARNING: 2}
     return max((f.level for f in flags), key=lambda lv: order[lv], default=LEVEL_OK)

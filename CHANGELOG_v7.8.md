@@ -32,7 +32,8 @@ Datensatz) oder per Rechtsklick auf einen Datensatz. Der nicht-modale Dialog bie
 - **Spline-Anzahl aus den Shannon-Kanälen:** Der Startwert von N ist
   ≈ 1.2·N_s + 5 (N_s = Dmax·(q_max − q_min)/π, zwischen 20 und 200), dazu gibt es einen
   „Vorschlag“-Knopf. Ist N < N_s, erscheint eine Warnung mit empfohlenem N. Anlass war
-  eine simulierte Kugel mit R = 142 nm und q bis 1 nm⁻¹ (N_s ≈ 90–125): Mit zu wenigen
+  eine SasView-Simulation einer Kugel (R = 142 Å; als nm⁻¹ eingelesen formal R = 142 nm,
+  siehe v7.9 „q-Einheit“) mit N_s ≈ 90–125: Mit zu wenigen
   Splines ist MD ≫ 1, mit dem Vorschlag wird Rg auf < 0.01 % genau bestimmt.
 - **σ ohne Fehlerspalte:** Wählbar ist „aus Rauschen schätzen“ oder „relativ annehmen“
   (σ = x %·|I|). Letzteres ist für rauschfreie Simulationen gedacht; der Modus wird im

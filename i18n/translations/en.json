@@ -1042,6 +1042,9 @@
     "dataset": "Dataset",
     "file": "File",
     "points": "Points",
+    "qunit": "q unit of the file",
+    "qunit_angstrom": "Å⁻¹ (e.g. SasView) → ×10",
+    "qunit_tooltip": "ScatterForge works in nm⁻¹ and nm. SasView data are in Å⁻¹ — choose “Å⁻¹”, otherwise all lengths (Dmax, Rg, R_HS) are too large by a factor of 10.",
     "sigma_source": "Errors σ",
     "sigma_measured": "from error column",
     "sigma_estimated": "no error column — estimated",
@@ -1051,6 +1054,36 @@
     "sigma_mode_tooltip": "Noise-free simulations have no noise to estimate — assume σ as a fixed fraction of |I| instead.",
     "nsplines_suggest": "Suggest",
     "nsplines_suggest_tooltip": "Derive N from the number of Shannon channels Dmax·(q_max−q_min)/π",
+    "group_sq": "Structure factor (GIFT)",
+    "model": "Model",
+    "model_tooltip": "S(q) model for the generalized IFT. “None” = plain IFT (dilute systems).",
+    "model_none": "None (IFT, S = 1)",
+    "model_hs_py": "Hard spheres, Percus-Yevick",
+    "model_hs_py_avg": "Hard spheres, averaged S_ave (recommended)",
+    "param_start": "Start",
+    "param_lower": "min",
+    "param_upper": "max",
+    "param_fixed": "fixed",
+    "from_ift": "Start values from IFT",
+    "from_ift_tooltip": "R_HS from the IFT Rg (equivalent sphere √(5/3)·Rg), φ and μ at defaults. Rather overestimated start values converge better (Brunner-Popela & Glatter 1997).",
+    "seed": "Seed",
+    "seed_tooltip": "Random seed of the BSSA search (reproducible, documented in the sidecar)",
+    "apparent_hint": "S_ave parameters are apparent model parameters; the actual result is p(r) or P(q) (Weyerich et al. 1999).",
+    "run_gift": "Run GIFT",
+    "cancel": "Cancel",
+    "gift_stale": "Settings changed — press “Run GIFT”.",
+    "gift_starting": "Starting BSSA search …",
+    "gift_running": "BSSA running: {n} evaluations, T = {T}, MD = {md} (cycle {cycle})",
+    "gift_done": "Done: {n} evaluations in {t} s, {cycles} λ cycle(s)",
+    "gift_cancelled": "Cancelled.",
+    "start_outside": "The start value of {name} lies outside the bounds.",
+    "need_compute": "Please run GIFT with the current settings first (“Run GIFT”).",
+    "tab_sq": "S(q) & P(q)",
+    "tab_bssa": "BSSA history",
+    "only_gift": "GIFT only (structure factor model ≠ “None”)",
+    "bssa_title": "Boltzmann simplex simulated annealing ({evals} evaluations)",
+    "bssa_evals": "Function evaluations",
+    "bssa_normalized": "Parameters (normalized to bounds)",
     "keep_nonpositive": "Use values I ≤ 0 ({n} points)",
     "keep_nonpositive_tooltip": "After background subtraction, I ≤ 0 at high q is legitimate. The main plot hides such points for log scaling; the IFT should use them.",
     "group_qrange": "q fit range",
@@ -1110,6 +1143,26 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "gift_bound": {
+        "ok": "All free S(q) parameters within bounds",
+        "at_bound": "Parameter at the edge of the allowed bounds ({names}) — widen the bounds or the model is unsuitable (Bergmann et al. 2000)."
+      },
+      "gift_structure_factor": {
+        "negative": "S(q) becomes negative (min {min}) — unphysical."
+      },
+      "gift_improvement": {
+        "improved": "MD without S(q) = {md_ift} → with S(q) = {md_gift}",
+        "small": "S(q) hardly improves the fit (MD {md_ift} → {md_gift}) — interaction may be negligible."
+      },
+      "gift_lambda": {
+        "not_converged": "λ did not stabilize between the GIFT cycles — check the result (set λ manually)."
+      },
+      "gift_errors": {
+        "undetermined": "Errors from the MD curvature could not be determined for {names} (flat or non-convex MD surface)."
+      },
+      "gift_apparent": {
+        "apparent": "S_ave parameters are apparent model parameters of limited physical meaning; the result is p(r) or P(q) (Weyerich et al. 1999)."
+      },
       "dmax_qmin": {
         "ok": "Dmax ≤ π/q_min = {limit} nm (Dmax·q_min/π = {ratio})",
         "exceeded": "Dmax = {dmax} nm > π/q_min = {limit} nm (Dmax·q_min/π = {ratio}): the largest distances are not covered by the measured q range."

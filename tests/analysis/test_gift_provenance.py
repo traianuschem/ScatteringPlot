@@ -121,6 +121,22 @@ class TestPipelineExport(unittest.TestCase):
         codes = {f.code: f.level for f in analysis.flags}
         self.assertEqual(codes['sigma_estimated'], 'warning')
 
+    def test_non_ascii_filename_and_q_conversion(self):
+        """Regression: Umlaute im Dateinamen und die q-Umrechnung (Å⁻¹ → nm⁻¹) dürfen den
+        Export nicht abbrechen (np.savetxt nutzt unter Windows sonst cp1252)."""
+        f = self.tmp / "Kapillare_ä_µ.dat"
+        np.savetxt(f, np.column_stack([self.q / 10.0, self.I, self.s]))   # q in Å⁻¹
+        a = run_ift_analysis(self.q, self.I, self.s, IFTSettings(dmax=30.0, n_splines=25),
+                             source_file=f,
+                             source_metadata={'q_unit_file': 'A^-1', 'q_conversion_factor': 10.0})
+        paths = export_ift_results(a)
+        self.assertIn('data', paths)
+        data = np.loadtxt(paths['data'], encoding='utf-8')
+        np.testing.assert_allclose(data[:, 0], self.q)
+        self.assertIn("Kapillare_ä_µ.dat", paths['pr'].read_text(encoding='utf-8'))
+        rec = ProvenanceRecord.load(paths['prov'])
+        self.assertTrue(all(r['status'] == 'ok' for r in rec.verify_outputs()))
+
     def test_json_has_no_nan(self):
         paths = export_ift_results(self._analyze())
         text = paths['prov'].read_text(encoding='utf-8')

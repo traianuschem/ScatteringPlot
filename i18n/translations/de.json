@@ -1042,6 +1042,9 @@
     "dataset": "Datensatz",
     "file": "Datei",
     "points": "Punkte",
+    "qunit": "q-Einheit der Datei",
+    "qunit_angstrom": "Å⁻¹ (z. B. SasView) → ×10",
+    "qunit_tooltip": "ScatterForge rechnet in nm⁻¹ und nm. Daten aus SasView liegen in Å⁻¹ vor — dann „Å⁻¹“ wählen, sonst sind alle Längen (Dmax, Rg, R_HS) um den Faktor 10 zu groß.",
     "sigma_source": "Fehler σ",
     "sigma_measured": "aus Fehlerspalte",
     "sigma_estimated": "keine Fehlerspalte — wird geschätzt",
@@ -1051,6 +1054,36 @@
     "sigma_mode_tooltip": "Rauschfreie Simulationen haben kein schätzbares Rauschen — dann σ als festen Anteil von |I| annehmen.",
     "nsplines_suggest": "Vorschlag",
     "nsplines_suggest_tooltip": "N aus der Zahl der Shannon-Kanäle Dmax·(q_max−q_min)/π ableiten",
+    "group_sq": "Strukturfaktor (GIFT)",
+    "model": "Modell",
+    "model_tooltip": "S(q)-Modell für die generalisierte IFT. „Kein“ = reine IFT (verdünnte Systeme).",
+    "model_none": "Kein (IFT, S = 1)",
+    "model_hs_py": "Harte Kugeln, Percus-Yevick",
+    "model_hs_py_avg": "Harte Kugeln, gemittelt S_ave (empfohlen)",
+    "param_start": "Start",
+    "param_lower": "min",
+    "param_upper": "max",
+    "param_fixed": "fix",
+    "from_ift": "Startwerte aus IFT",
+    "from_ift_tooltip": "R_HS aus dem Rg der IFT (äquivalente Kugel √(5/3)·Rg), φ und μ auf Standardwerte. Eher überschätzte Startwerte konvergieren besser (Brunner-Popela & Glatter 1997).",
+    "seed": "Seed",
+    "seed_tooltip": "Startwert des Zufallszahlengenerators der BSSA-Suche (reproduzierbar, im Sidecar dokumentiert)",
+    "apparent_hint": "S_ave-Parameter sind scheinbare Modellparameter; das eigentliche Ergebnis ist p(r) bzw. P(q) (Weyerich et al. 1999).",
+    "run_gift": "GIFT starten",
+    "cancel": "Abbrechen",
+    "gift_stale": "Einstellungen geändert — „GIFT starten“ drücken.",
+    "gift_starting": "BSSA-Suche wird gestartet …",
+    "gift_running": "BSSA läuft: {n} Auswertungen, T = {T}, MD = {md} (Zyklus {cycle})",
+    "gift_done": "Fertig: {n} Auswertungen in {t} s, {cycles} λ-Zyklus/Zyklen",
+    "gift_cancelled": "Abgebrochen.",
+    "start_outside": "Der Startwert von {name} liegt außerhalb der Grenzen.",
+    "need_compute": "Bitte zuerst GIFT mit den aktuellen Einstellungen rechnen („GIFT starten“).",
+    "tab_sq": "S(q) & P(q)",
+    "tab_bssa": "BSSA-Verlauf",
+    "only_gift": "Nur bei GIFT (Strukturfaktor-Modell ≠ „Kein“)",
+    "bssa_title": "Boltzmann-Simplex-Simulated-Annealing ({evals} Auswertungen)",
+    "bssa_evals": "Funktionsauswertungen",
+    "bssa_normalized": "Parameter (normiert auf Grenzen)",
     "keep_nonpositive": "Werte I ≤ 0 verwenden ({n} Punkte)",
     "keep_nonpositive_tooltip": "Nach Untergrundabzug sind I ≤ 0 bei großen q legitim. Im Hauptplot werden sie für die log-Darstellung ausgeblendet, für die IFT sollten sie verwendet werden.",
     "group_qrange": "q-Fitbereich",
@@ -1110,6 +1143,26 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "gift_bound": {
+        "ok": "Alle freien S(q)-Parameter innerhalb der Grenzen",
+        "at_bound": "Parameter am Rand der erlaubten Grenzen ({names}) — Grenzen erweitern oder das Modell ist ungeeignet (Bergmann et al. 2000)."
+      },
+      "gift_structure_factor": {
+        "negative": "S(q) wird negativ (min {min}) — unphysikalisch."
+      },
+      "gift_improvement": {
+        "improved": "MD ohne S(q) = {md_ift} → mit S(q) = {md_gift}",
+        "small": "S(q) verbessert die Anpassung kaum (MD {md_ift} → {md_gift}) — Wechselwirkung evtl. vernachlässigbar."
+      },
+      "gift_lambda": {
+        "not_converged": "λ hat sich zwischen den GIFT-Zyklen nicht stabilisiert — Ergebnis prüfen (λ manuell setzen)."
+      },
+      "gift_errors": {
+        "undetermined": "Fehler aus der MD-Krümmung nicht bestimmbar für {names} (flache oder nicht konvexe MD-Fläche)."
+      },
+      "gift_apparent": {
+        "apparent": "S_ave-Parameter sind scheinbare Modellparameter mit begrenzter physikalischer Bedeutung; das Ergebnis ist p(r) bzw. P(q) (Weyerich et al. 1999)."
+      },
       "dmax_qmin": {
         "ok": "Dmax ≤ π/q_min = {limit} nm (Dmax·q_min/π = {ratio})",
         "exceeded": "Dmax = {dmax} nm > π/q_min = {limit} nm (Dmax·q_min/π = {ratio}): Die größten Abstände sind durch den Messbereich nicht abgedeckt."
