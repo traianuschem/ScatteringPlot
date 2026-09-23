@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.5.0
+# ScatterForge Plot v7.8.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.5.0-blue)
+![Version](https://img.shields.io/badge/version-7.8.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,8 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **P(r) per IFT (Glatter)** | Neues Menü „Analyse“: modellfreie Paarabstandsverteilung p(r) nach Glatter (1977) mit automatischer λ-Wahl (Wendepunkt-Methode), Fehlerbändern, Rg/I(0), q-Fitbereich per 1σ/2σ/3σ-Signifikanz, Plausibilitäts-Flags (u. a. Dmax ≤ π/q_min) | ✅ **v7.8.0** |
+| **Provenance-Sidecar** | Jede IFT-Auswertung schreibt ein JSON-Sidecar (SHA-256 der Ein-/Ausgaben, alle Parameter, Flags, record_id; optional W3C PROV-JSON), prüfbar und wiederholbar | ✅ **v7.8.0** |
 | **Subplot-Achsen-Editor** | Achsen und Limits-Dialog sowie Titel-Editor steuern jetzt auch die untere Subplot-Achse (PDDF/ASAXS-Cross-Term/Significance): Titel-Override, Limits, Y-Skala, eigener Subplot-Titel | ✅ **v7.7.0** |
 | **Plot-Typen** | 11 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, dlnI/dlnq, **Significance** | ✅ **v7.6.0** |
 | **Significance-Plot** | Subplot mit punktweiser Signifikanz \|I(q)/σ(q)\| (roh + median-geglättet) und einstellbaren σ-Schwellenlinien, um den vertrauenswürdigen q-Bereich einer Kurve abzulesen | ✅ **v7.6.0** |
@@ -89,6 +91,22 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.8?
+
+**Minor Release v7.8.0** — P(r) per indirekter Fourier-Transformation (IFT, Glatter 1977) mit Provenance-Sidecar
+
+### Hauptfeatures v7.8
+
+- 🔬 **Neues Menü „Analyse → P(r) berechnen (IFT/GIFT)…“** (`Strg+Umschalt+G`, auch per Rechtsklick auf einen Datensatz): modellfreie Berechnung der Paarabstandsverteilung p(r) mit kubischen B-Splines, automatischer Wahl des Stabilisierungsparameters λ nach Glatters Wendepunkt-Methode, Fehlerbändern für p(r) und Fit sowie Rg und I(0) mit Unsicherheiten
+- 📏 **q-Fitbereich aus der Signifikanzanalyse**: voller Bereich, 1σ/2σ/3σ-Voreinstellung (gleiche Rechnung wie im Significance-Plot) oder manuell
+- 🚦 **Plausibilitäts-Flags**: u. a. Dmax > π/q_min, Shannon-Kanäle, fehlender Wendepunkt, Anpassungsgüte, p(r) am Rand/negativ/oszillierend, Vergleich mit Guinier-Rg
+- 🧾 **Provenance-Sidecar** nach dem Vorbild von JADE-DLS: SHA-256 von Daten und Ergebnissen, lückenlose Aktivitätenkette, record_id in jeder Ergebnisdatei; „Analyse → Provenance-Sidecar prüfen…“ und „Einstellungen aus Sidecar…“ für die Reproduzierbarkeit
+- 📈 **Übernehmen** legt automatisch eine PDDF-Gruppe (Daten + IFT-Fit + p(r)) an und wechselt in den PDDF-Plot
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.8.md](CHANGELOG_v7.8.md)
 
 ---
 
@@ -1068,6 +1086,7 @@ Vollständige Referenz aller Tastaturkürzel.
 |----------|--------|
 | `Strg+K` | Kurven-Editor |
 | `Strg+T` | Titel bearbeiten |
+| `Strg+Umschalt+G` | P(r) berechnen (IFT/GIFT) |
 | `Strg+U` | Achsen-Einstellungen |
 | `Strg+I` | Grid-Einstellungen |
 | `Strg+M` | Legende bearbeiten |

@@ -350,6 +350,8 @@ class DataGroup:
         # Steuert, in welchem Axes-Bereich diese Gruppe gerendert wird,
         # wenn ein Subplot aktiv ist (ASAXS ± Subplot, PDDF).
         self.subplot_target = 'both'
+        # Provenance (v7.8): record_id des GIFT-Sidecars, aus dem die Gruppe stammt
+        self.provenance_record_id = None
 
     def add_dataset(self, dataset):
         """Datensatz hinzufügen"""
@@ -384,6 +386,7 @@ class DataGroup:
             'legend_italic': self.legend_italic,
             'display_label': self.display_label,
             'subplot_target': self.subplot_target,
+            'provenance_record_id': self.provenance_record_id,
             'datasets': [ds.to_dict() for ds in self.datasets]
         }
 
@@ -398,6 +401,7 @@ class DataGroup:
         group.legend_italic = data.get('legend_italic', False)
         group.display_label = data.get('display_label', group.name)
         group.subplot_target = data.get('subplot_target', 'both')
+        group.provenance_record_id = data.get('provenance_record_id')
         group.datasets = [DataSet.from_dict(ds_data) for ds_data in data.get('datasets', [])]
         return group
 

@@ -7,6 +7,11 @@
   },
 
   "menu": {
+    "analysis": {
+      "title": "Analysis",
+      "gift": "Compute P(r) (IFT/GIFT)...",
+      "verify_sidecar": "Verify provenance sidecar..."
+    },
     "file": {
       "title": "File",
       "load": "Load Data...",
@@ -51,6 +56,7 @@
   },
 
   "tree": {
+    "provenance_tooltip": "GIFT result · record_id {record_id}",
     "unassigned": "▼ Unassigned",
     "annotations": "▼ Annotations & Reference Lines",
     "section_2d": "▼ 2D Datasets"
@@ -113,6 +119,7 @@
   },
 
   "context_menu": {
+    "gift": "Compute P(r) (IFT/GIFT)...",
     "edit": "Edit...",
     "edit_curve": "🎨 Edit Curve...",
     "edit_group": "🎨 Edit Group...",
@@ -145,6 +152,16 @@
   },
 
   "messages": {
+    "gift_select_dataset": "Please select a 1D dataset in the tree first.",
+    "gift_not_loaded": "The data of '{name}' could not be loaded.",
+    "gift_verify_inputs": "Input files:",
+    "gift_verify_outputs": "Result files:",
+    "gift_status_ok": "unchanged",
+    "gift_status_modified": "MODIFIED",
+    "gift_status_missing": "missing",
+    "gift_status_no_hash": "no hash",
+    "gift_verify_ok": "All files match the sidecar.\nrecord_id: {record_id}",
+    "gift_verify_failed": "At least one file differs from the sidecar or is missing.\nrecord_id: {record_id}",
     "success": "Success",
     "info": "Information",
     "error": "Error",
@@ -1017,5 +1034,129 @@
     "dashed": "dashed",
     "dotted": "dotted",
     "dashdot": "dash-dot"
+  },
+
+  "gift": {
+    "title": "P(r) — Indirect Fourier Transformation",
+    "group_data": "Data",
+    "dataset": "Dataset",
+    "file": "File",
+    "points": "Points",
+    "sigma_source": "Errors σ",
+    "sigma_measured": "from error column",
+    "sigma_estimated": "no error column — estimated",
+    "sigma_mode": "σ without error column",
+    "sigma_mode_estimate": "estimate from noise",
+    "sigma_mode_relative": "assume relative",
+    "sigma_mode_tooltip": "Noise-free simulations have no noise to estimate — assume σ as a fixed fraction of |I| instead.",
+    "nsplines_suggest": "Suggest",
+    "nsplines_suggest_tooltip": "Derive N from the number of Shannon channels Dmax·(q_max−q_min)/π",
+    "keep_nonpositive": "Use values I ≤ 0 ({n} points)",
+    "keep_nonpositive_tooltip": "After background subtraction, I ≤ 0 at high q is legitimate. The main plot hides such points for log scaling; the IFT should use them.",
+    "group_qrange": "q fit range",
+    "qrange_mode": "Selection",
+    "qrange_full": "Full range",
+    "qrange_sigma": "{n}σ (significance)",
+    "qrange_manual": "Manual",
+    "qrange_sigma_disabled": "The σ presets require an error column.",
+    "window": "Smoothing window",
+    "window_tooltip": "Window (points) of the rolling median of the significance |I/σ| — as in the Significance plot.",
+    "qrange_info": "{n} of {total} points, q = {q_min} … {q_max} nm⁻¹",
+    "group_ift": "IFT (Glatter 1977)",
+    "dmax_limit_tooltip": "Set Dmax to the limit π/q_min",
+    "nsplines": "Splines N",
+    "nsplines_tooltip": "Number of cubic B-splines for p(r) (typically 20–30)",
+    "lambda_auto": "λ automatic (point of inflexion)",
+    "lambda_manual": "manual",
+    "lambda_inflexion": "point of inflexion",
+    "k_type": "Smoothing K",
+    "k_dirichlet": "1st differences, zero ends (default)",
+    "k_glatter": "1st differences (Glatter 1977)",
+    "k_curvature": "2nd differences (curvature)",
+    "k_tooltip": "Stabilisation norm of the spline coefficients. Glatter's original form does not penalise a constant component; with missing small-angle data the default variant is more stable.",
+    "background": "Fit constant background",
+    "background_tooltip": "Additionally fits a constant background. It is strongly correlated with p(r) at small r (large uncertainty).",
+    "background_value": "Background",
+    "group_output": "Output",
+    "out_dir": "Target folder: {path}",
+    "change_out_dir": "Change target folder...",
+    "write_w3c": "Also write W3C PROV-JSON",
+    "live_preview": "Live preview",
+    "tab_iq": "I(q) & fit",
+    "tab_pr": "p(r)",
+    "tab_lambda": "λ selection",
+    "tab_significance": "Significance",
+    "tab_provenance": "Provenance",
+    "prov_key": "Field",
+    "prov_value": "Value",
+    "compute": "Compute",
+    "load_sidecar": "Settings from sidecar...",
+    "load_sidecar_tooltip": "Loads all settings from a *_GIFT_prov.json and recomputes (reproducibility).",
+    "apply": "Apply",
+    "apply_tooltip": "Writes p(r), fit and provenance sidecar and creates a PDDF group.",
+    "error": "Computation not possible",
+    "legend_data": "Data (fit range)",
+    "legend_excluded": "excluded",
+    "legend_fit": "IFT fit",
+    "md_axis": "MD (mean deviation)",
+    "lambda_title": "Point of inflexion: log N_c and MD vs. λ",
+    "no_errors": "No error column — significance not available",
+    "sidecar_invalid": "Sidecar could not be read: {error}",
+    "sidecar_hash_mismatch": "Warning: the data file has changed since the stored analysis (SHA-256 differs).",
+    "sidecar_reproduced": "Settings loaded and recomputed.\nRg (sidecar) = {rg_old} nm\nRg (new) = {rg_new} nm",
+    "overwrite": "The following files already exist and will be overwritten:\n{files}\n\nContinue?",
+    "applied": "Results written to\n{dir}\n\n{files}",
+    "label_fit": "{name} – IFT fit",
+    "label_pr": "{name} – p(r)",
+    "group_name": "GIFT: {name}",
+    "flag": {
+      "dmax_qmin": {
+        "ok": "Dmax ≤ π/q_min = {limit} nm (Dmax·q_min/π = {ratio})",
+        "exceeded": "Dmax = {dmax} nm > π/q_min = {limit} nm (Dmax·q_min/π = {ratio}): the largest distances are not covered by the measured q range."
+      },
+      "shannon": {
+        "ok": "{ns} Shannon channels in the fit range",
+        "few": "Only {ns} Shannon channels in the fit range — very low information content.",
+        "coarse": "N = {n} splines < {ns} Shannon channels: the basis is coarser than the information content of the data (recommended: N ≥ {suggest})."
+      },
+      "q_range": {
+        "ok": "{selected} of {total} points in the fit range ({q_min}–{q_max} nm⁻¹)",
+        "excluded": "{excluded} of {total} points ({frac}) lie outside the fit range."
+      },
+      "sigma_estimated": {
+        "estimated": "No error column: σ was estimated from the data.",
+        "relative": "σ assumed as {pct} % of |I| (e.g. simulated data) — MD and error bands are only relatively meaningful."
+      },
+      "lambda": {
+        "ok": "λ determined by the point-of-inflexion method",
+        "manual": "λ set manually (point of inflexion not used)",
+        "not_found": "No point of inflexion found in log N_c(λ) — according to Glatter a hint of inconsistency between data and assumptions (Dmax, N, background)."
+      },
+      "fit_quality": {
+        "ok": "MD = {md}",
+        "estimated": "MD = {md} (σ estimated — only relatively meaningful)",
+        "high": "MD = {md} ≫ 1: the fit does not describe the data within the errors (Dmax too small, background, interaction?).",
+        "low": "MD = {md} ≪ 1: the errors σ are probably overestimated."
+      },
+      "pr_end": {
+        "ok": "p(r) approaches 0 before Dmax",
+        "high": "p(r) is still at {ratio} of its maximum shortly before Dmax — Dmax is probably too small."
+      },
+      "pr_tail": {
+        "ok": "No long zero tail before Dmax",
+        "long": "p(r) is not significantly different from 0 beyond r ≈ {r} nm ({frac} of the range) — Dmax may be too large."
+      },
+      "pr_negative": {
+        "ok": "No significantly negative p(r) values",
+        "negative": "p(r) is significantly negative (down to {depth} of the maximum) — background, inhomogeneity or unaccounted interaction (→ GIFT)?"
+      },
+      "pr_oscillation": {
+        "oscillating": "p(r) changes sign significantly {n}× — typical for interparticle interaction (→ GIFT with structure factor)."
+      },
+      "rg_consistency": {
+        "ok": "Rg(IFT) = {rg_ift} nm, Rg(Guinier) = {rg_guinier} nm",
+        "deviation": "Rg(IFT) = {rg_ift} nm deviates by {dev} from Rg(Guinier) = {rg_guinier} nm."
+      }
+    }
   }
 }

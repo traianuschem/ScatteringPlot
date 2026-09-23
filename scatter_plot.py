@@ -73,7 +73,9 @@ from dialogs.reference_lines_dialog import ReferenceLinesDialog
 from dialogs.plot_limits_dialog import PlotLimitsDialog
 from dialogs.axes_dialog import AxesSettingsDialog
 from dialogs.plot2d_dialog import Plot2DDialog
+from dialogs.gift_dialog import GiftDialog
 from utils.data_loader import load_scattering_data
+from analysis.significance import significance as compute_significance, rolling_median
 from utils.user_config import get_user_config
 from utils.logger import setup_logger, get_logger
 from utils.mathtext_formatter import preprocess_mathtext, format_legend_text
@@ -407,6 +409,18 @@ class ScatterPlotApp(QMainWindow):
         refline_action = QAction(tr("menu.plot.add_reference_line"), self)
         refline_action.triggered.connect(self.add_reference_line)
         plot_menu.addAction(refline_action)
+
+        # Analyse-Menü (v7.8): IFT/GIFT
+        analysis_menu = menubar.addMenu(tr("menu.analysis.title"))
+
+        gift_action = QAction(tr("menu.analysis.gift"), self)
+        gift_action.setShortcut(QKeySequence("Ctrl+Shift+G"))
+        gift_action.triggered.connect(lambda: self.show_gift_dialog())
+        analysis_menu.addAction(gift_action)
+
+        verify_action = QAction(tr("menu.analysis.verify_sidecar"), self)
+        verify_action.triggered.connect(self.verify_gift_sidecar)
+        analysis_menu.addAction(verify_action)
 
         # Design-Menü
         design_menu = menubar.addMenu(tr("menu.design.title"))
@@ -1756,9 +1770,7 @@ class ScatterPlotApp(QMainWindow):
         (robust gegen einzelne Ausreißer-Rauschspitzen)."""
         if y_err is None or len(x) == 0:
             return
-        with np.errstate(invalid='ignore', divide='ignore'):
-            significance = np.abs(y) / np.abs(y_err)
-        significance[~np.isfinite(significance)] = np.nan
+        significance = compute_significance(y, y_err)
         ax_sub.plot(x, significance, '-', color=color,
                     linewidth=max(dataset.line_width * 0.6, 0.5), alpha=0.4)
         window_widget = getattr(self, 'significance_window_spin', None)
@@ -1768,14 +1780,8 @@ class ScatterPlotApp(QMainWindow):
 
     @staticmethod
     def _rolling_median(arr, window):
-        """Zentrierter gleitender Median über `window` Punkte (Fenster an den Rändern verkleinert)."""
-        n = len(arr)
-        half = window // 2
-        out = np.empty(n)
-        for i in range(n):
-            lo, hi = max(0, i - half), min(n, i + half + 1)
-            out[i] = np.nanmedian(arr[lo:hi])
-        return out
+        """Zentrierter gleitender Median (siehe analysis.significance.rolling_median)."""
+        return rolling_median(arr, window)
 
     def _compute_symlog_linthresh(self, abs_val_arrays, decades=4):
         """Bestimmt linthresh für die symlog-Skala aus der Anzahl gewünschter Dekaden.
@@ -2326,8 +2332,11 @@ class ScatterPlotApp(QMainWindow):
 
         # Kurve bearbeiten für Datensätze (v6.0)
         edit_curve_action = None
+        gift_action = None
         if data and data[0] == 'dataset':
             edit_curve_action = menu.addAction(tr("context_menu.edit_curve"))
+            # IFT/GIFT (v7.8)
+            gift_action = menu.addAction(tr("context_menu.gift"))
 
         # Gruppe bearbeiten (v6.2)
         edit_group_action = None
@@ -2446,6 +2455,9 @@ class ScatterPlotApp(QMainWindow):
         elif action == edit_curve_action and edit_curve_action:
             # Kurve bearbeiten (v6.0)
             self.edit_curve_settings(item)
+        elif action == gift_action and gift_action:
+            # IFT/GIFT (v7.8)
+            self.show_gift_dialog(data[1])
         elif action == edit_group_action and edit_group_action:
             # Gruppe bearbeiten (v6.2)
             self.edit_group_settings(item)
@@ -2927,6 +2939,114 @@ class ScatterPlotApp(QMainWindow):
         self.update_plot()
         self.logger.debug(f"Synchronisation abgeschlossen: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
 
+    # ------------------------------------------------------------------
+    # IFT/GIFT (v7.8)
+    # ------------------------------------------------------------------
+
+    def _selected_dataset(self):
+        """Erster ausgewählter 1D-Datensatz im Tree (oder None)."""
+        for item in self.tree.selectedItems():
+            data = item.data(0, Qt.UserRole)
+            if data and data[0] == 'dataset':
+                return data[1]
+        return None
+
+    def show_gift_dialog(self, dataset=None):
+        """Öffnet den IFT/GIFT-Dialog für einen Datensatz (nicht-modal)."""
+        dataset = dataset or self._selected_dataset()
+        if dataset is None:
+            QMessageBox.information(self, tr("menu.analysis.gift"),
+                                    tr("messages.gift_select_dataset"))
+            return
+        if not getattr(dataset, 'data_loaded', False):
+            QMessageBox.warning(self, tr("messages.error"),
+                                tr("messages.gift_not_loaded", name=dataset.name))
+            return
+        try:
+            window = self.significance_window_spin.value()
+        except AttributeError:
+            window = 9
+        try:
+            dlg = GiftDialog(dataset, parent=self, significance_window=window)
+        except (ValueError, IndexError) as e:
+            QMessageBox.critical(self, tr("messages.error"), str(e))
+            return
+        dlg.results_applied.connect(self.add_gift_results)
+        self._gift_dialogs = [d for d in getattr(self, '_gift_dialogs', []) if d.isVisible()]
+        self._gift_dialogs.append(dlg)
+        dlg.show()
+
+    def add_gift_results(self, info):
+        """Legt aus den GIFT-Ergebnisdateien eine PDDF-Gruppe an (Rohdaten + Fit + p(r))."""
+        source = info['dataset']
+        paths = info['paths']
+        name = source.display_label
+        try:
+            ds_data = DataSet(source.filepath, name=name)
+            if getattr(source, '_columns_configured', False):
+                ds_data.set_column_mapping(source.col_x, source.col_y, source.col_err)
+            ds_data.set_pddf_role('data')
+
+            ds_fit = DataSet(paths['fit'])
+            ds_fit.set_pddf_role('fit')
+            ds_fit.display_label = tr("gift.label_fit", name=name)
+
+            ds_pr = DataSet(paths['pr'], filter_nonpositive=False)
+            ds_pr.set_pddf_role('pofr')
+            ds_pr.display_label = tr("gift.label_pr", name=name)
+        except ValueError as e:
+            QMessageBox.critical(self, tr("messages.error"), str(e))
+            return
+
+        existing = {g.name for g in self.groups}
+        group_name = tr("gift.group_name", name=name)
+        base, i = group_name, 2
+        while group_name in existing:
+            group_name = f"{base} ({i})"
+            i += 1
+        group = DataGroup(group_name)
+        group.provenance_record_id = info.get('record_id')
+        for ds in (ds_data, ds_fit, ds_pr):
+            group.add_dataset(ds)
+        self.groups.append(group)
+        self.logger.info(f"GIFT-Ergebnisse als Gruppe '{group_name}' übernommen "
+                         f"(record_id {group.provenance_record_id})")
+
+        idx = self.plot_type_combo.findText('PDDF')
+        if idx >= 0 and self.plot_type_combo.currentIndex() != idx:
+            self.plot_type_combo.setCurrentIndex(idx)   # löst change_plot_type/update_plot aus
+        self.rebuild_tree()
+        self.update_plot()
+
+    def verify_gift_sidecar(self):
+        """Prüft die SHA-256 aller Dateien eines Provenance-Sidecars gegen die Platte."""
+        from analysis.gift.provenance import ProvenanceRecord
+        path, _ = QFileDialog.getOpenFileName(self, tr("menu.analysis.verify_sidecar"), "",
+                                              "Provenance (*_prov.json *.json)")
+        if not path:
+            return
+        try:
+            record = ProvenanceRecord.load(path)
+        except (OSError, ValueError) as e:
+            QMessageBox.critical(self, tr("messages.error"), str(e))
+            return
+        symbols = {'ok': '✔', 'modified': '✖', 'missing': '?', 'no_hash': '–'}
+        lines = [tr("messages.gift_verify_inputs")]
+        results = record.verify_inputs() + [None] + record.verify_outputs()
+        for r in results:
+            if r is None:
+                lines.append("")
+                lines.append(tr("messages.gift_verify_outputs"))
+                continue
+            name = r.get('filename') or r.get('label')
+            lines.append(f"  {symbols.get(r['status'], r['status'])} {name}  "
+                         f"({tr('messages.gift_status_' + r['status'])})")
+        all_ok = all(r['status'] == 'ok' for r in results if r is not None)
+        header = tr("messages.gift_verify_ok" if all_ok else "messages.gift_verify_failed",
+                    record_id=record.record_id)
+        box = QMessageBox.information if all_ok else QMessageBox.warning
+        box(self, tr("menu.analysis.verify_sidecar"), header + "\n\n" + "\n".join(lines))
+
     def rebuild_tree(self):
         """Baut Tree komplett neu auf"""
         self.tree.clear()
@@ -2962,6 +3082,9 @@ class ScatterPlotApp(QMainWindow):
             group_item.setFlags(group_item.flags() | Qt.ItemIsUserCheckable)
             group_item.setCheckState(0, Qt.Checked if group.visible else Qt.Unchecked)
             group_item.setData(0, Qt.UserRole, ('group', group))
+            record_id = getattr(group, 'provenance_record_id', None)
+            if record_id:
+                group_item.setToolTip(0, tr("tree.provenance_tooltip", record_id=record_id))
 
             for dataset in group.datasets:
                 item = QTreeWidgetItem(group_item, [dataset.display_label, ""])

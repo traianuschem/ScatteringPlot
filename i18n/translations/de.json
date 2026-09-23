@@ -7,6 +7,11 @@
   },
 
   "menu": {
+    "analysis": {
+      "title": "Analyse",
+      "gift": "P(r) berechnen (IFT/GIFT)...",
+      "verify_sidecar": "Provenance-Sidecar prüfen..."
+    },
     "file": {
       "title": "Datei",
       "load": "Daten laden...",
@@ -51,6 +56,7 @@
   },
 
   "tree": {
+    "provenance_tooltip": "GIFT-Ergebnis · record_id {record_id}",
     "unassigned": "▼ Nicht zugeordnet",
     "annotations": "▼ Annotations & Referenzlinien",
     "section_2d": "▼ 2D-Datensätze"
@@ -113,6 +119,7 @@
   },
 
   "context_menu": {
+    "gift": "P(r) berechnen (IFT/GIFT)...",
     "edit": "Bearbeiten...",
     "edit_curve": "🎨 Kurve bearbeiten...",
     "edit_group": "🎨 Gruppe bearbeiten...",
@@ -145,6 +152,16 @@
   },
 
   "messages": {
+    "gift_select_dataset": "Bitte zuerst einen 1D-Datensatz im Baum auswählen.",
+    "gift_not_loaded": "Die Daten von '{name}' konnten nicht geladen werden.",
+    "gift_verify_inputs": "Eingangsdateien:",
+    "gift_verify_outputs": "Ergebnisdateien:",
+    "gift_status_ok": "unverändert",
+    "gift_status_modified": "VERÄNDERT",
+    "gift_status_missing": "fehlt",
+    "gift_status_no_hash": "kein Hash",
+    "gift_verify_ok": "Alle Dateien stimmen mit dem Sidecar überein.\nrecord_id: {record_id}",
+    "gift_verify_failed": "Mindestens eine Datei weicht vom Sidecar ab oder fehlt.\nrecord_id: {record_id}",
     "success": "Erfolg",
     "info": "Info",
     "error": "Fehler",
@@ -1017,5 +1034,129 @@
     "dashed": "gestrichelt",
     "dotted": "gepunktet",
     "dashdot": "strich-punkt"
+  },
+
+  "gift": {
+    "title": "P(r) — Indirekte Fourier-Transformation",
+    "group_data": "Daten",
+    "dataset": "Datensatz",
+    "file": "Datei",
+    "points": "Punkte",
+    "sigma_source": "Fehler σ",
+    "sigma_measured": "aus Fehlerspalte",
+    "sigma_estimated": "keine Fehlerspalte — wird geschätzt",
+    "sigma_mode": "σ ohne Fehlerspalte",
+    "sigma_mode_estimate": "aus Rauschen schätzen",
+    "sigma_mode_relative": "relativ annehmen",
+    "sigma_mode_tooltip": "Rauschfreie Simulationen haben kein schätzbares Rauschen — dann σ als festen Anteil von |I| annehmen.",
+    "nsplines_suggest": "Vorschlag",
+    "nsplines_suggest_tooltip": "N aus der Zahl der Shannon-Kanäle Dmax·(q_max−q_min)/π ableiten",
+    "keep_nonpositive": "Werte I ≤ 0 verwenden ({n} Punkte)",
+    "keep_nonpositive_tooltip": "Nach Untergrundabzug sind I ≤ 0 bei großen q legitim. Im Hauptplot werden sie für die log-Darstellung ausgeblendet, für die IFT sollten sie verwendet werden.",
+    "group_qrange": "q-Fitbereich",
+    "qrange_mode": "Auswahl",
+    "qrange_full": "Voller Bereich",
+    "qrange_sigma": "{n}σ (Signifikanz)",
+    "qrange_manual": "Manuell",
+    "qrange_sigma_disabled": "Die σ-Voreinstellungen benötigen eine Fehlerspalte.",
+    "window": "Glättungsfenster",
+    "window_tooltip": "Fenster (Punkte) des gleitenden Medians der Signifikanz |I/σ| — wie im Significance-Plot.",
+    "qrange_info": "{n} von {total} Punkten, q = {q_min} … {q_max} nm⁻¹",
+    "group_ift": "IFT (Glatter 1977)",
+    "dmax_limit_tooltip": "Dmax auf die Grenze π/q_min setzen",
+    "nsplines": "Splines N",
+    "nsplines_tooltip": "Anzahl der kubischen B-Splines für p(r) (typisch 20–30)",
+    "lambda_auto": "λ automatisch (Wendepunkt-Methode)",
+    "lambda_manual": "manuell",
+    "lambda_inflexion": "Wendepunkt",
+    "k_type": "Glättung K",
+    "k_dirichlet": "1. Differenzen, Ränder 0 (Standard)",
+    "k_glatter": "1. Differenzen (Glatter 1977)",
+    "k_curvature": "2. Differenzen (Krümmung)",
+    "k_tooltip": "Stabilisierungsnorm der Spline-Koeffizienten. Die Originalform nach Glatter bestraft einen konstanten Anteil nicht; bei fehlenden Kleinwinkeldaten ist die Standardvariante stabiler.",
+    "background": "Konstanten Untergrund anpassen",
+    "background_tooltip": "Fittet zusätzlich einen konstanten Untergrund. Er ist stark mit p(r) bei kleinen r korreliert (große Unsicherheit).",
+    "background_value": "Untergrund",
+    "group_output": "Ausgabe",
+    "out_dir": "Zielordner: {path}",
+    "change_out_dir": "Zielordner ändern...",
+    "write_w3c": "Zusätzlich W3C PROV-JSON schreiben",
+    "live_preview": "Live-Vorschau",
+    "tab_iq": "I(q) & Fit",
+    "tab_pr": "p(r)",
+    "tab_lambda": "λ-Wahl",
+    "tab_significance": "Signifikanz",
+    "tab_provenance": "Provenance",
+    "prov_key": "Feld",
+    "prov_value": "Wert",
+    "compute": "Berechnen",
+    "load_sidecar": "Einstellungen aus Sidecar...",
+    "load_sidecar_tooltip": "Übernimmt alle Einstellungen aus einem *_GIFT_prov.json und rechnet neu (Reproduzierbarkeit).",
+    "apply": "Übernehmen",
+    "apply_tooltip": "Schreibt p(r), Fit und Provenance-Sidecar und legt eine PDDF-Gruppe an.",
+    "error": "Rechnung nicht möglich",
+    "legend_data": "Daten (Fitbereich)",
+    "legend_excluded": "außerhalb",
+    "legend_fit": "IFT-Fit",
+    "md_axis": "MD (mittlere Abweichung)",
+    "lambda_title": "Wendepunkt-Methode: log N_c und MD über λ",
+    "no_errors": "Keine Fehlerspalte — Signifikanz nicht verfügbar",
+    "sidecar_invalid": "Sidecar konnte nicht gelesen werden: {error}",
+    "sidecar_hash_mismatch": "Achtung: Die Datendatei hat sich seit der gespeicherten Analyse verändert (SHA-256 weicht ab).",
+    "sidecar_reproduced": "Einstellungen übernommen und neu gerechnet.\nRg (Sidecar) = {rg_old} nm\nRg (neu) = {rg_new} nm",
+    "overwrite": "Folgende Dateien existieren bereits und werden überschrieben:\n{files}\n\nFortfahren?",
+    "applied": "Ergebnisse geschrieben nach\n{dir}\n\n{files}",
+    "label_fit": "{name} – IFT-Fit",
+    "label_pr": "{name} – p(r)",
+    "group_name": "GIFT: {name}",
+    "flag": {
+      "dmax_qmin": {
+        "ok": "Dmax ≤ π/q_min = {limit} nm (Dmax·q_min/π = {ratio})",
+        "exceeded": "Dmax = {dmax} nm > π/q_min = {limit} nm (Dmax·q_min/π = {ratio}): Die größten Abstände sind durch den Messbereich nicht abgedeckt."
+      },
+      "shannon": {
+        "ok": "{ns} Shannon-Kanäle im Fitbereich",
+        "few": "Nur {ns} Shannon-Kanäle im Fitbereich — sehr geringer Informationsgehalt.",
+        "coarse": "N = {n} Splines < {ns} Shannon-Kanäle: Die Basis ist gröber als der Informationsgehalt der Daten (empfohlen: N ≥ {suggest})."
+      },
+      "q_range": {
+        "ok": "{selected} von {total} Punkten im Fitbereich ({q_min}–{q_max} nm⁻¹)",
+        "excluded": "{excluded} von {total} Punkten ({frac}) liegen außerhalb des Fitbereichs."
+      },
+      "sigma_estimated": {
+        "estimated": "Keine Fehlerspalte: σ wurde aus den Daten geschätzt.",
+        "relative": "σ als {pct} % von |I| angenommen (z. B. simulierte Daten) — MD und Fehlerbänder sind nur relativ aussagekräftig."
+      },
+      "lambda": {
+        "ok": "λ über die Wendepunkt-Methode bestimmt",
+        "manual": "λ manuell vorgegeben (Wendepunkt nicht verwendet)",
+        "not_found": "Kein Wendepunkt in log N_c(λ) gefunden — nach Glatter ein Hinweis auf Inkonsistenz zwischen Daten und Annahmen (Dmax, N, Untergrund)."
+      },
+      "fit_quality": {
+        "ok": "MD = {md}",
+        "estimated": "MD = {md} (σ geschätzt — nur relativ aussagekräftig)",
+        "high": "MD = {md} ≫ 1: Die Anpassung beschreibt die Daten nicht innerhalb der Fehler (Dmax zu klein, Untergrund, Wechselwirkung?).",
+        "low": "MD = {md} ≪ 1: Die Fehler σ sind vermutlich überschätzt."
+      },
+      "pr_end": {
+        "ok": "p(r) läuft vor Dmax gegen 0",
+        "high": "p(r) ist kurz vor Dmax noch bei {ratio} des Maximums — Dmax ist vermutlich zu klein gewählt."
+      },
+      "pr_tail": {
+        "ok": "Kein langer Null-Ausläufer vor Dmax",
+        "long": "p(r) ist ab r ≈ {r} nm nicht mehr signifikant von 0 verschieden ({frac} des Bereichs) — Dmax ist evtl. zu groß."
+      },
+      "pr_negative": {
+        "ok": "Keine signifikant negativen p(r)-Werte",
+        "negative": "p(r) ist signifikant negativ (bis {depth} des Maximums) — Untergrund, Inhomogenität oder nicht berücksichtigte Wechselwirkung (→ GIFT)?"
+      },
+      "pr_oscillation": {
+        "oscillating": "p(r) wechselt {n}× signifikant das Vorzeichen — typisch für Wechselwirkung zwischen den Teilchen (→ GIFT mit Strukturfaktor)."
+      },
+      "rg_consistency": {
+        "ok": "Rg(IFT) = {rg_ift} nm, Rg(Guinier) = {rg_guinier} nm",
+        "deviation": "Rg(IFT) = {rg_ift} nm weicht um {dev} von Rg(Guinier) = {rg_guinier} nm ab."
+      }
+    }
   }
 }
