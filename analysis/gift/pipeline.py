@@ -22,6 +22,7 @@ from .gift import GIFTSettings, GIFTResult, run_gift
 from .structure_factors import get_model
 from .provenance import ProvenanceRecord, default_agent, compute_sha256
 from .uncertainty import UncertaintySettings, UncertaintyResult, run_uncertainty, QUANTILES
+from .explorer import solution_metrics
 from ..significance import select_q_range, QRANGE_FULL
 
 RESULT_SUBDIR = 'GIFT'
@@ -37,10 +38,13 @@ class QRangeSettings:
     min_run: Optional[int] = None
     q_min: Optional[float] = None
     q_max: Optional[float] = None
+    # Artefakte am Kurvenanfang automatisch ausschließen (v7.13); nur ohne manuelles q_min
+    auto_qmin: bool = True
 
     def to_kwargs(self):
         return dict(mode=self.mode, n_sigma=self.n_sigma, window=self.window,
-                    min_run=self.min_run, q_min=self.q_min, q_max=self.q_max)
+                    min_run=self.min_run, q_min=self.q_min, q_max=self.q_max,
+                    auto_qmin=self.auto_qmin)
 
 
 @dataclass
@@ -57,6 +61,7 @@ class IFTAnalysis:
     source_file: Optional[Path] = None
     gift: Optional[GIFTResult] = None
     uncertainty: Optional[UncertaintyResult] = None       # DREAM (auf Knopfdruck)
+    metrics: Dict[str, float] = field(default_factory=dict)   # Kennzahlen (explorer.py)
     extras: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -178,8 +183,9 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
 
     # 4) IFT-Ergebnis und Diagnose
     guinier = guinier_rg(q[mask], I[mask], sigma_arr[mask])
+    metrics = solution_metrics(solution)
     flags = diagnose_ift(solution, selection, guinier=guinier, sigma_source=sigma_source,
-                         sigma_relative=sigma_relative)
+                         sigma_relative=sigma_relative, metrics=metrics)
     if gift is not None:
         flags += diagnose_gift(gift, get_model(model_key))
     record.add_activity(
@@ -191,7 +197,12 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
         results_summary={
             'lambda_rel': solution.lam_rel, 'lambda_abs': solution.lam,
             'lambda_manual': solution.lam_manual,
+            'lambda_method': solution.scan.method,
+            'lambda_rel_scan_min': float(solution.scan.lam_rel[0]),
             'inflexion_found': bool(solution.scan.inflexion_found),
+            'lambda_rel_inflexion': float(solution.scan.lam_rel[solution.scan.index_inflexion]),
+            'lambda_rel_evidence': float(solution.scan.lam_rel[solution.scan.index_evidence]),
+            'metrics': metrics,
             'md': solution.md, 'chi2': solution.chi2,
             'rg_nm': solution.rg, 'rg_err_nm': solution.rg_err,
             'i0': solution.i0, 'i0_err': solution.i0_err,
@@ -220,7 +231,7 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
                        sigma_estimated=sigma_estimated, record=record,
                        sigma_source=sigma_source,
                        sigma_relative=sigma_relative if sigma_source == SIGMA_RELATIVE else None,
-                       source_file=source_file, gift=gift)
+                       source_file=source_file, gift=gift, metrics=metrics)
 
 
 def run_uncertainty_analysis(analysis: IFTAnalysis, settings: UncertaintySettings,
@@ -294,17 +305,29 @@ def _header(analysis: IFTAnalysis, title: str, columns: List[str]) -> str:
         f"{analysis.record.agent.get('version')} / analysis.gift {MODULE_VERSION}",
         f"# Quelle: {analysis.source_file.name if analysis.source_file else '-'}",
         f"# Dmax = {st.dmax:g} nm, N = {st.n_splines}, K = {st.k_type}, "
-        f"lambda_rel = {s.lam_rel:.4g} ({'manuell' if s.lam_manual else 'Wendepunkt'})",
+        f"lambda_rel = {s.lam_rel:.4g} ({_lambda_label(s)})",
         f"# q-Bereich: {analysis.selection.q_min:.6g} - {analysis.selection.q_max:.6g} nm^-1 "
         f"({analysis.selection.mode})",
         f"# Rg = {s.rg:.6g} +- {s.rg_err:.3g} nm, I(0) = {s.i0:.6g} +- {s.i0_err:.3g}, "
         f"MD = {s.md:.4g}",
+        *([f"# Kennzahlen: Oszillation = {analysis.metrics['oscillation']:.3g}, "
+           f"Positive Fraction = {analysis.metrics['positive_fraction']:.3g}, "
+           f"1sigma-Positive = {analysis.metrics['positive_1sigma']:.3g}, "
+           f"Maxima = {analysis.metrics['n_peaks']:.0f}, N_g = {analysis.metrics['n_good']:.3g}, "
+           f"log-Evidenz = {analysis.metrics['log_evidence']:.6g}"]
+          if analysis.metrics else []),
         *([_gift_header_line(analysis)] if analysis.gift is not None else []),
         *([_dream_header_line(analysis)] if analysis.uncertainty is not None else []),
         f"# Flags: " + ", ".join(f"{f.code}={f.level}" for f in analysis.all_flags),
         "# " + "\t".join(columns),
     ]
     return "\n".join(lines)
+
+
+def _lambda_label(s) -> str:
+    if s.lam_manual:
+        return 'manuell'
+    return 'Evidenz-Maximum' if s.scan.method == 'evidence' else 'Wendepunkt'
 
 
 def _gift_header_line(analysis: IFTAnalysis) -> str:

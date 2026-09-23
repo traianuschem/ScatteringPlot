@@ -1072,6 +1072,82 @@
     "seed_tooltip": "Startwert des Zufallszahlengenerators der BSSA-Suche (reproduzierbar, im Sidecar dokumentiert)",
     "workers": "Prozesse",
     "workers_tooltip": "Parallele Prozesse für die BSSA-Mehrfachstarts und DREAM. Das Ergebnis ist von der Anzahl unabhängig (bitgleich). 0 = im Hauptprozess rechnen (Diagnose, nicht bitgleich zu den Pool-Ergebnissen).",
+    "tab_explorer": "Explorer",
+    "auto_qmin": "Artefakte bei kleinem q automatisch ausschließen",
+    "auto_qmin_tooltip": "Erkennt einen führenden Block mit I ≤ 0 bzw. Vorzeichenwechseln (z. B. Beamstop-Bereich, Separationsartefakte) und anschließende nicht signifikante Punkte und setzt q_min dahinter. Manuelle Grenzen haben Vorrang.",
+    "dmax_suggest": "Vorschlagen",
+    "dmax_suggest_tooltip": "Dmax aus dem Explorer: kleinstes Dmax mit glattem, vor Dmax auslaufendem p(r) (I(0) > 0) und voller Anpassung der Daten; N wird mitgesetzt.",
+    "dmax_suggest_none": "Kein Dmax mit glattem p(r) und guter Anpassung gefunden — Explorer (Karte Dmax × λ) verwenden.",
+    "lambda_method": "λ-Wahl",
+    "lambda_method_inflexion": "Wendepunkt (Glatter)",
+    "lambda_method_evidence": "Evidenz-Maximum (Bayes)",
+    "lambda_method_manual": "manuell",
+    "lambda_method_tooltip": "Wendepunkt: Plateau von log N_c vor dem MD-Anstieg (Glatter 1977, Standard). Evidenz-Maximum: wahrscheinlichstes λ nach Hansen (2000), dieselbe Größe wie in DREAM. Manuell: Wert unten, z. B. aus dem Explorer oder aus DREAM.",
+    "lambda_label_inflexion": "Wendepunkt",
+    "lambda_label_evidence": "Evidenz-Maximum",
+    "lambda_label_manual": "manuell",
+    "lambda_chosen": "gewählt",
+    "lambda_evidence_axis": "log-Evidenz − Maximum",
+    "dream_adopt": "λ und Dmax aus DREAM übernehmen",
+    "dream_adopt_tooltip": "Setzt λ (manuell) und Dmax auf die Posterior-Mediane der DREAM-Analyse; danach neu rechnen.",
+    "dream_adopted": "λ/Dmax aus DREAM übernommen — neu rechnen.",
+    "explorer_mode": "Scan",
+    "explorer_mode_map": "Karte Dmax × λ",
+    "explorer_mode_dmax": "Scan über Dmax",
+    "explorer_mode_lam": "Scan über λ",
+    "explorer_mode_n_splines": "Scan über N",
+    "explorer_metric": "Kennzahl",
+    "explorer_run": "Berechnen",
+    "explorer_points": "Punkte",
+    "explorer_osc": "Oszillation",
+    "explorer_osc_tooltip": "Schwelle für „glattes p(r)“ im grünen Bereich (SasView-Definition; Kugel ≈ 1.1).",
+    "explorer_hint": "Klick in die Grafik übernimmt Dmax bzw. λ (manuell) bzw. N. Grün: glattes p(r) (Oszillation ≤ Schwelle, I(0) > 0, p(r) läuft vor Dmax aus) bei voller Anpassung.",
+    "explorer_done": "Berechnet in {t} s.",
+    "explorer_empty": "Noch kein Scan — „Berechnen“. Grundlage ist die aktuelle Rechnung (q-Bereich, N, K, Untergrund, bei GIFT S(q) am Optimum).",
+    "explorer_adopted": "Werte übernommen.",
+    "explorer_stale": "veraltet (Einstellungen geändert) — neu berechnen",
+    "explorer_map_title": "weiß: Wendepunkt-λ · cyan gepunktet: Evidenz-Maximum · grün: guter Bereich · ★ aktuell",
+    "explorer_no_inflexion": "kein Wendepunkt",
+    "explorer_current": "aktuell",
+    "explorer_good": "guter Bereich",
+    "batch": "Serie…",
+    "batch_tooltip": "Die aktuellen Einstellungen auf mehrere geladene Datensätze anwenden (je Datensatz Export mit Sidecar, Übersicht als CSV).",
+    "batch_title": "IFT/GIFT-Serie",
+    "batch_hint": "Wendet die Einstellungen des Dialogs (q-Bereich inkl. automatischem q_min, N, λ-Wahl, K, Untergrund, ggf. S(q)-Modell) auf die gewählten Datensätze an. Jeder Datensatz wird mit eigenem Sidecar in seinen GIFT-Ordner exportiert; die Übersicht wird als CSV gespeichert.",
+    "batch_all": "Alle",
+    "batch_none": "Keine",
+    "batch_dmax_suggest": "Dmax je Datensatz vorschlagen",
+    "batch_dmax_fixed": "Dmax und N wie im Dialog",
+    "batch_dmax_tooltip": "Vorschlagen: Dmax und N je Datensatz aus dem Explorer (sinnvoll, wenn sich die Teilchengröße ändert, z. B. Aggregation).",
+    "batch_groups": "Ergebnisse als Gruppen übernehmen",
+    "batch_start": "Serie starten",
+    "batch_status": "Status",
+    "batch_running": "Datensatz {k}/{n}: {name} …",
+    "batch_done": "{n} Datensätze in {t} s ausgewertet. Übersicht: {path}",
+    "batch_cancelled": "Serie abgebrochen.",
+    "batch_plot_title": "p(r)/I(0) der Serie (* = Dmax vorgeschlagen)",
+    "metric": {
+      "oscillation": "Oszillation",
+      "md": "MD",
+      "chi2_dof": "χ²/dof",
+      "log_evidence": "log-Evidenz",
+      "positive_fraction": "Positive Fraction",
+      "positive_1sigma": "1σ-Positive Fraction",
+      "n_peaks": "Maxima",
+      "end_fraction": "Randanteil p(0.9·Dmax…Dmax)",
+      "rg": "Rg",
+      "i0": "I(0)",
+      "n_good": "N_g (eff. Parameter)",
+      "background": "Untergrund"
+    },
+    "cause": {
+      "no_inflexion": "kein Wendepunkt gefunden",
+      "dmax_small": "Dmax vermutlich zu klein (Teilchen > π/q_min)",
+      "md_high": "MD ≫ 1 (Modell, σ oder Untergrund prüfen)",
+      "many_splines": "viele Splines im Verhältnis zu den Shannon-Kanälen",
+      "lambda_small": "λ mehr als eine Dekade unter dem Evidenz-Optimum",
+      "none": "Explorer (Dmax × λ) prüfen"
+    },
     "tab_uncertainty": "Unsicherheit",
     "group_dream": "Unsicherheit (DREAM)",
     "dream_hint": "MCMC-Analyse (DREAM(ZS)) der fertigen Rechnung: Die Spline-Koeffizienten sind analytisch herausintegriert (Hansen 2000); abgetastet werden die gewählten S(q)-Parameter, log λ und Dmax. Ergebnis: Intervalle, Korrelationen und Posterior-Bänder.",
@@ -1190,6 +1266,23 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "lowq_artifacts": {
+        "excluded": "{n} Punkte bei kleinem q (bis {q} nm⁻¹) als Artefakte erkannt und ausgeschlossen (Vorzeichenwechsel bzw. nicht signifikanter Übergang, z. B. Beamstop-Bereich). q_min = {q_min} nm⁻¹; bei Bedarf manuell anpassen."
+      },
+      "lowq_rise": {
+        "rise": "I(q) steigt am Anfang des Fitbereichs bis q = {q} nm⁻¹ an — Beamstop-Randschatten (q_min erhöhen) oder repulsive Wechselwirkung (→ GIFT)."
+      },
+      "guinier_missing": {
+        "missing": "Kein Guinier-Bereich gefunden: Die Teilchen sind vermutlich größer als π/q_min = {limit} nm. Ein Dmax ≤ π/q_min erzwingt dann ein oszillierendes p(r) — Dmax mit dem Explorer bzw. „Vorschlagen“ bestimmen; die größten Abstände bleiben unsicher."
+      },
+      "pr_smoothness": {
+        "ok": "Oszillation {osc} (Kugel ≈ 1.1)",
+        "elevated": "p(r) oszilliert leicht (Oszillation {osc}, Kugel ≈ 1.1). Wahrscheinliche Ursache: {causes}.",
+        "oscillating": "p(r) oszilliert (Oszillation {osc}, Kugel ≈ 1.1). Wahrscheinliche Ursache: {causes}."
+      },
+      "pr_peaks": {
+        "several": "p(r) hat {n} Maxima — Kern-Schale-Struktur, Aggregate oder Oszillation (mit der Oszillations-Kennzahl vergleichen)."
+      },
       "dream_convergence": {
         "ok": "DREAM konvergiert (max. R̂ = {rhat}, {evals} Auswertungen).",
         "not_converged": "DREAM nicht konvergiert: R̂ ≥ {target} für {names} nach {evals} Auswertungen — Budget erhöhen; die Intervalle sind nur vorläufig.",
@@ -1271,6 +1364,7 @@
         "relative": "σ als {pct} % von |I| angenommen (z. B. simulierte Daten) — MD und Fehlerbänder sind nur relativ aussagekräftig."
       },
       "lambda": {
+        "evidence": "λ über das Evidenz-Maximum bestimmt (log λ_rel = {lam_ev}; Wendepunkt: {lam_infl}).",
         "ok": "λ über die Wendepunkt-Methode bestimmt",
         "manual": "λ manuell vorgegeben (Wendepunkt nicht verwendet)",
         "not_found": "Kein Wendepunkt in log N_c(λ) gefunden — nach Glatter ein Hinweis auf Inkonsistenz zwischen Daten und Annahmen (Dmax, N, Untergrund)."
@@ -1291,7 +1385,7 @@
       },
       "pr_negative": {
         "ok": "Keine signifikant negativen p(r)-Werte",
-        "negative": "p(r) ist signifikant negativ (bis {depth} des Maximums) — Untergrund, Inhomogenität oder nicht berücksichtigte Wechselwirkung (→ GIFT)?"
+        "negative": "p(r) ist signifikant negativ (bis {depth} des Maximums) — Untergrund, Oszillation, nicht berücksichtigte Wechselwirkung (→ GIFT) oder (selten) ein Kontrastwechsel im Teilchen?"
       },
       "pr_oscillation": {
         "oscillating": "p(r) wechselt {n}× signifikant das Vorzeichen — typisch für Wechselwirkung zwischen den Teilchen (→ GIFT mit Strukturfaktor)."

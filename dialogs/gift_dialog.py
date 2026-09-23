@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, QTabWidget, QWidget,
     QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QMessageBox,
     QFileDialog, QScrollArea, QSizePolicy, QFrame, QGridLayout, QTableWidget,
-    QTableWidgetItem, QHeaderView, QAbstractItemView,
+    QTableWidgetItem, QHeaderView, QAbstractItemView, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QThread
 from PySide6.QtGui import QColor, QBrush
@@ -41,9 +41,13 @@ from matplotlib.figure import Figure
 from i18n import tr
 from utils.data_loader import select_columns
 from analysis.significance import (significance, rolling_median, QRANGE_FULL,
-                                   QRANGE_SIGMA, QRANGE_MANUAL)
+                                   QRANGE_SIGMA, QRANGE_MANUAL, detect_lowq_artifacts,
+                                   select_q_range)
 from analysis.gift.ift import (IFTSettings, LAMBDA_AUTO, K_DIRICHLET, K_GLATTER,
-                               K_CURVATURE, estimate_sigma)
+                               K_CURVATURE, estimate_sigma, LAMBDA_INFLEXION,
+                               LAMBDA_EVIDENCE)
+from analysis.gift.explorer import (suggest_dmax, scan_1d, scan_map, METRICS, OSC_GOOD,
+                                    md_acceptable, _physical)
 from analysis.gift.diagnostics import (guinier_rg, dmax_qmin_ratio, shannon_channels,
                                        suggest_n_splines, LEVEL_OK, LEVEL_INFO, LEVEL_WARNING,
                                        SIGMA_RELATIVE)
@@ -59,6 +63,28 @@ from analysis.gift.uncertainty import (UncertaintySettings, run_uncertainty, Dre
 from analysis.gift.dream import DreamSettings
 
 _MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py', 'rmsa')
+LAMBDA_MANUAL = 'manual'
+
+
+def dataset_arrays(ds):
+    """q, I, σ (oder None) eines Datensatzes aus den Rohdaten — OHNE den log-Plot-Filter
+    (I ≤ 0 nach Untergrundabzug ist für die IFT legitim); sortiert, q > 0, eindeutig."""
+    if getattr(ds, 'raw_data', None) is None:
+        ds.load_data()
+    data = select_columns(ds.raw_data, ds.col_x, ds.col_y, ds.col_err,
+                          filter_nonpositive=False)
+    q = data[:, 0]
+    I = data[:, 1]
+    err = data[:, 2] if data.shape[1] > 2 else None
+    keep = np.isfinite(q) & np.isfinite(I) & (q > 0)
+    if err is not None:
+        keep &= np.isfinite(err)
+    order = np.argsort(q[keep])
+    q, I = q[keep][order], I[keep][order]
+    err = err[keep][order] if err is not None else None
+    # Doppelte q-Werte entfernen (q muss streng monoton sein)
+    q, idx = np.unique(q, return_index=True)
+    return q, I[idx], (err[idx] if err is not None else None)
 
 _LEVEL_STYLE = {
     LEVEL_OK: ('✔', '#2e7d32'),
@@ -73,7 +99,13 @@ _CLR_EXCL = '#b0b0b0'
 def flag_text(flag):
     """Übersetzter Flag-Text (Fallback: deutsche Klartextmeldung aus dem Kern)."""
     key = f"gift.flag.{flag.code}.{flag.variant}"
-    text = tr(key, **flag.params) if flag.params else tr(key)
+    params = dict(flag.params)
+    if 'cause_codes' in params:
+        # Ursachenliste (pr_smoothness) je Ursache übersetzen
+        codes = [c for c in params['cause_codes'].split(',') if c]
+        params['causes'] = '; '.join(tr(f"gift.cause.{c}") for c in codes) or \
+            tr('gift.cause.none')
+    text = tr(key, **params) if params else tr(key)
     return flag.message if text == key else text
 
 
@@ -153,9 +185,11 @@ class GiftDialog(QDialog):
 
     results_applied = Signal(object)   # dict: paths, record_id, dataset, flags
 
-    def __init__(self, dataset, parent=None, significance_window=9):
+    def __init__(self, dataset, parent=None, significance_window=9, datasets=None):
         super().__init__(parent)
         self.dataset = dataset
+        # Callable → Liste aller geladenen Datensätze (für die Serienauswertung)
+        self._datasets_provider = datasets
         self.setWindowTitle(f"{tr('gift.title')} — {dataset.display_label}")
         self.resize(1250, 860)
         self.setModal(False)
@@ -184,24 +218,7 @@ class GiftDialog(QDialog):
     def _load_arrays(self):
         """Holt q, I, σ aus den Rohdaten des Datensatzes — OHNE den log-Plot-Filter
         (I ≤ 0 nach Untergrundabzug ist für die IFT legitim)."""
-        ds = self.dataset
-        if getattr(ds, 'raw_data', None) is None:
-            ds.load_data()
-        data = select_columns(ds.raw_data, ds.col_x, ds.col_y, ds.col_err,
-                              filter_nonpositive=False)
-        q = data[:, 0]
-        I = data[:, 1]
-        err = data[:, 2] if data.shape[1] > 2 else None
-        keep = np.isfinite(q) & np.isfinite(I) & (q > 0)
-        if err is not None:
-            keep &= np.isfinite(err)
-        order = np.argsort(q[keep])
-        q, I = q[keep][order], I[keep][order]
-        err = err[keep][order] if err is not None else None
-        # Doppelte q-Werte entfernen (q muss streng monoton sein)
-        q, idx = np.unique(q, return_index=True)
-        self.q_all, self.I_all = q, I[idx]
-        self.err_all = err[idx] if err is not None else None
+        self.q_all, self.I_all, self.err_all = dataset_arrays(self.dataset)
         self.has_errors = self.err_all is not None and np.all(self.err_all > 0)
         self.n_nonpositive = int(np.count_nonzero(self.I_all <= 0))
 
@@ -297,6 +314,10 @@ class GiftDialog(QDialog):
         self.qmax_spin = self._q_spin()
         f.addRow('q_min / nm⁻¹:', self.qmin_spin)
         f.addRow('q_max / nm⁻¹:', self.qmax_spin)
+        self.auto_qmin_check = QCheckBox(tr('gift.auto_qmin'))
+        self.auto_qmin_check.setChecked(True)
+        self.auto_qmin_check.setToolTip(tr('gift.auto_qmin_tooltip'))
+        f.addRow(self.auto_qmin_check)
         self.qrange_info = QLabel()
         self.qrange_info.setWordWrap(True)
         f.addRow(self.qrange_info)
@@ -316,6 +337,10 @@ class GiftDialog(QDialog):
         self.dmax_limit_btn.setToolTip(tr('gift.dmax_limit_tooltip'))
         self.dmax_limit_btn.clicked.connect(self._set_dmax_to_limit)
         dmax_row.addWidget(self.dmax_limit_btn)
+        self.dmax_suggest_btn = QPushButton(tr('gift.dmax_suggest'))
+        self.dmax_suggest_btn.setToolTip(tr('gift.dmax_suggest_tooltip'))
+        self.dmax_suggest_btn.clicked.connect(self._set_dmax_suggested)
+        dmax_row.addWidget(self.dmax_suggest_btn)
         f.addRow('Dmax:', dmax_row)
         self.dmax_info = QLabel()
         self.dmax_info.setWordWrap(True)
@@ -331,11 +356,14 @@ class GiftDialog(QDialog):
         self.nspl_suggest_btn.clicked.connect(self._set_suggested_n)
         nspl_row.addWidget(self.nspl_suggest_btn)
         f.addRow(tr('gift.nsplines') + ':', nspl_row)
-        self.lam_auto_check = QCheckBox(tr('gift.lambda_auto'))
-        self.lam_auto_check.setChecked(True)
-        f.addRow(self.lam_auto_check)
+        self.lam_method_combo = QComboBox()
+        self.lam_method_combo.addItem(tr('gift.lambda_method_inflexion'), LAMBDA_INFLEXION)
+        self.lam_method_combo.addItem(tr('gift.lambda_method_evidence'), LAMBDA_EVIDENCE)
+        self.lam_method_combo.addItem(tr('gift.lambda_method_manual'), LAMBDA_MANUAL)
+        self.lam_method_combo.setToolTip(tr('gift.lambda_method_tooltip'))
+        f.addRow(tr('gift.lambda_method') + ':', self.lam_method_combo)
         self.lam_spin = QDoubleSpinBox()
-        self.lam_spin.setRange(-14.0, 4.0)
+        self.lam_spin.setRange(-30.0, 4.0)
         self.lam_spin.setDecimals(2)
         self.lam_spin.setSingleStep(0.25)
         self.lam_spin.setPrefix('log₁₀ λ_rel = ')
@@ -495,6 +523,7 @@ class GiftDialog(QDialog):
         self.fig_lam, self.canvas_lam = self._add_plot_tab(tr('gift.tab_lambda'))
         self.fig_sig, self.canvas_sig = self._add_plot_tab(tr('gift.tab_significance'))
         self.fig_bssa, self.canvas_bssa = self._add_plot_tab(tr('gift.tab_bssa'))
+        self._build_explorer_tab()
         # Unsicherheit (DREAM): Übersicht, Corner-Plot, Ketten, Posterior-Bänder
         self.unc_tabs = QTabWidget()
         ov = QWidget()
@@ -503,6 +532,11 @@ class GiftDialog(QDialog):
         self.unc_info.setWordWrap(True)
         self.unc_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
         ovl.addWidget(self.unc_info)
+        self.dream_adopt_btn = QPushButton(tr('gift.dream_adopt'))
+        self.dream_adopt_btn.setToolTip(tr('gift.dream_adopt_tooltip'))
+        self.dream_adopt_btn.clicked.connect(self._adopt_from_dream)
+        self.dream_adopt_btn.setEnabled(False)
+        ovl.addWidget(self.dream_adopt_btn, 0, Qt.AlignLeft)
         self.unc_table = QTableWidget(0, 7)
         self.unc_table.setHorizontalHeaderLabels(
             [tr('gift.dream_col_param'), tr('gift.dream_col_reference'), tr('gift.dream_col_median'),
@@ -562,6 +596,11 @@ class GiftDialog(QDialog):
         load_btn.setToolTip(tr('gift.load_sidecar_tooltip'))
         load_btn.clicked.connect(self._load_settings_from_sidecar)
         btn_row.addWidget(load_btn)
+        self.batch_btn = QPushButton(tr('gift.batch'))
+        self.batch_btn.setToolTip(tr('gift.batch_tooltip'))
+        self.batch_btn.clicked.connect(self._open_batch)
+        self.batch_btn.setEnabled(self._datasets_provider is not None)
+        btn_row.addWidget(self.batch_btn)
         btn_row.addStretch()
         self.apply_btn = QPushButton(tr('gift.apply'))
         self.apply_btn.setToolTip(tr('gift.apply_tooltip'))
@@ -574,7 +613,8 @@ class GiftDialog(QDialog):
 
         # --- Signale ---------------------------------------------------------------
         self.qmode_combo.currentIndexChanged.connect(self._on_qmode_changed)
-        self.lam_auto_check.toggled.connect(self._on_lam_auto_toggled)
+        self.lam_method_combo.currentIndexChanged.connect(self._on_lam_method_changed)
+        self.auto_qmin_check.toggled.connect(self._on_auto_qmin_toggled)
         for w in (self.window_spin, self.qmin_spin, self.qmax_spin, self.dmax_spin,
                   self.nspl_spin, self.lam_spin):
             w.valueChanged.connect(self._schedule)
@@ -614,15 +654,24 @@ class GiftDialog(QDialog):
     def _init_defaults(self):
         self._updating = True
         q, I, err = self._current_arrays()
-        self.qmin_spin.setValue(q[0])
+        self.qmin_spin.setValue(self._auto_qmin())
         self.qmax_spin.setValue(q[-1])
-        sig = err if err is not None else estimate_sigma(q, I)
-        guinier = guinier_rg(q, I, sig)
-        limit = np.pi / q[0]
-        dmax = limit if guinier is None else min(limit, 3.5 * guinier[0])
-        self.dmax_spin.setValue(float(f"{dmax:.3g}"))
         # Standard: 2σ-Voreinstellung, falls Fehler vorhanden
         self.qmode_combo.setCurrentIndex(2 if self.has_errors else 0)
+        qf, If, sf, sel = self._fit_arrays()
+        guinier = guinier_rg(qf, If, sf)
+        limit = np.pi / sel.q_min
+        if guinier is not None:
+            dmax = min(limit, 3.5 * guinier[0])
+        else:
+            # Kein Guinier-Bereich: Teilchen vermutlich > π/q_min. Dmax aus dem Explorer
+            # statt stillschweigend π/q_min (erzwingt sonst ein oszillierendes p(r)).
+            st = IFTSettings(dmax=limit, n_splines=suggest_n_splines(limit, sel.q_min, sel.q_max))
+            try:
+                dmax = suggest_dmax(qf, If, sf, st)[0] or limit
+            except (ValueError, np.linalg.LinAlgError):
+                dmax = limit
+        self.dmax_spin.setValue(float(f"{dmax:.3g}"))
         self._updating = False
         self._on_qmode_changed()
         # Spline-Anzahl aus den Shannon-Kanälen des (vorläufigen) Fitbereichs
@@ -653,15 +702,63 @@ class GiftDialog(QDialog):
         if mode == QRANGE_FULL:
             q, _, _ = self._current_arrays()
             self._updating = True
-            self.qmin_spin.setValue(q[0])
+            self.qmin_spin.setValue(self._auto_qmin())
             self.qmax_spin.setValue(q[-1])
             self._updating = False
         self.qmin_spin.setEnabled(mode != QRANGE_FULL)
+        self.auto_qmin_check.setEnabled(mode != QRANGE_MANUAL)
         self._update_dmax_info()
         self._schedule()
 
-    def _on_lam_auto_toggled(self, checked):
-        self.lam_spin.setEnabled(not checked)
+    def _lam_method(self):
+        return self.lam_method_combo.currentData()
+
+    def _set_lam_method(self, method):
+        idx = self.lam_method_combo.findData(method)
+        if idx >= 0:
+            self.lam_method_combo.setCurrentIndex(idx)
+
+    def _on_lam_method_changed(self, *_):
+        self.lam_spin.setEnabled(self._lam_method() == LAMBDA_MANUAL)
+        self._schedule()
+
+    def _set_manual(self, dmax=None, lam_rel=None, n_splines=None):
+        """Übernimmt Werte (Explorer-Klick, DREAM) in die Einstellungen."""
+        self._updating = True
+        try:
+            if dmax is not None:
+                self.dmax_spin.setValue(float(f"{dmax:.4g}"))
+            if n_splines is not None:
+                self.nspl_spin.setValue(int(n_splines))
+            if lam_rel is not None:
+                self._set_lam_method(LAMBDA_MANUAL)
+                self.lam_spin.setEnabled(True)
+                self.lam_spin.setValue(float(np.log10(lam_rel)))
+        finally:
+            self._updating = False
+        self._update_dmax_info()
+        self._schedule()
+
+    # --- automatisches q_min ---------------------------------------------------------
+
+    def _auto_first(self):
+        """Index des ersten vertrauenswürdigen Punkts (Artefakterkennung) bzw. 0."""
+        if not self.auto_qmin_check.isChecked():
+            return 0
+        _q, I, err = self._current_arrays()
+        return detect_lowq_artifacts(I, err)
+
+    def _auto_qmin(self):
+        q, _, _ = self._current_arrays()
+        return float(q[self._auto_first()])
+
+    def _on_auto_qmin_toggled(self, *_):
+        mode, _n = self.qmode_combo.currentData()
+        if mode != QRANGE_MANUAL:
+            self._updating = True
+            self.qmin_spin.setValue(self._auto_qmin())
+            self._updating = False
+        self._update_dmax_info()
         self._schedule()
 
     def _on_qunit_changed(self, *_):
@@ -684,13 +781,8 @@ class GiftDialog(QDialog):
         return self.sigma_rel_spin.value() / 100.0
 
     def _set_suggested_n(self):
-        q, _, _ = self._current_arrays()
-        q_min = self._effective_qmin()
-        q_max = q[-1] if self.qmode_combo.currentData()[0] != QRANGE_MANUAL \
-            else min(q[-1], self.qmax_spin.value())
-        if self.analysis is not None and self.qmode_combo.currentData()[0] == QRANGE_SIGMA:
-            q_max = self.analysis.selection.q_max
-        self.nspl_spin.setValue(suggest_n_splines(self.dmax_spin.value(), q_min, q_max))
+        sel = self._fit_arrays()[3]          # voraussichtlicher Fitbereich (inkl. nσ-q_max)
+        self.nspl_spin.setValue(suggest_n_splines(self.dmax_spin.value(), sel.q_min, sel.q_max))
 
     def _set_dmax_to_limit(self):
         self.dmax_spin.setValue(float(f"{np.pi / self._effective_qmin():.4g}"))
@@ -699,8 +791,33 @@ class GiftDialog(QDialog):
         q, _, _ = self._current_arrays()
         mode, _n = self.qmode_combo.currentData()
         if mode == QRANGE_FULL:
-            return float(q[0])
+            return self._auto_qmin()
         return max(float(q[0]), self.qmin_spin.value())
+
+    def _fit_arrays(self):
+        """Daten im voraussichtlichen Fitbereich (vor der Rechnung, für Startwerte)."""
+        q, I, err = self._current_arrays()
+        sig = err if err is not None else self._sigma_for_display(q, I)
+        try:
+            sel = select_q_range(q, I, err, **self._qrange_settings().to_kwargs())
+        except ValueError:
+            sel = select_q_range(q, I, None, auto_qmin=self.auto_qmin_check.isChecked())
+        m = sel.mask(q)
+        return q[m], I[m], sig[m], sel
+
+    def _set_dmax_suggested(self):
+        """Dmax (und N) aus dem Explorer: kleinstes Dmax mit glattem, vor Dmax auslaufendem
+        p(r) und voller Anpassung (explorer.suggest_dmax)."""
+        q, I, s, sel = self._fit_arrays()
+        limit = np.pi / sel.q_min
+        n = suggest_n_splines(limit, sel.q_min, sel.q_max)
+        st = self._settings()
+        st.dmax, st.n_splines = limit, n
+        dmax, _scan = suggest_dmax(q, I, s, st)
+        if dmax is None:
+            QMessageBox.information(self, tr('gift.dmax_suggest'), tr('gift.dmax_suggest_none'))
+            return
+        self._set_manual(dmax=dmax, n_splines=suggest_n_splines(dmax, sel.q_min, sel.q_max))
 
     def _update_dmax_info(self, *_):
         q_min = self._effective_qmin()
@@ -728,21 +845,27 @@ class GiftDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _settings(self):
-        lam = LAMBDA_AUTO if self.lam_auto_check.isChecked() else 10 ** self.lam_spin.value()
+        method = self._lam_method()
+        manual = method == LAMBDA_MANUAL
+        lam = 10 ** self.lam_spin.value() if manual else LAMBDA_AUTO
         return IFTSettings(dmax=self.dmax_spin.value(), n_splines=self.nspl_spin.value(),
                            lam=lam, k_type=self.k_combo.currentData(),
-                           background=self.bg_check.isChecked())
+                           background=self.bg_check.isChecked(),
+                           lam_method=LAMBDA_INFLEXION if manual else method)
 
     def _qrange_settings(self):
         mode, n = self.qmode_combo.currentData()
         q, _, _ = self._current_arrays()
+        auto = self.auto_qmin_check.isChecked()
         if mode == QRANGE_FULL:
-            return QRangeSettings(mode=QRANGE_FULL)
+            return QRangeSettings(mode=QRANGE_FULL, auto_qmin=auto)
         q_min = self.qmin_spin.value()
-        q_min = None if q_min <= q[0] * (1 + 1e-9) else q_min
+        # q_min = Anfangswert bzw. automatisch erkannter Wert → nicht manuell
+        base = self._auto_qmin() if (auto and mode != QRANGE_MANUAL) else float(q[0])
+        q_min = None if q_min <= base * (1 + 1e-9) else q_min
         if mode == QRANGE_SIGMA:
             return QRangeSettings(mode=QRANGE_SIGMA, n_sigma=n, window=self.window_spin.value(),
-                                  q_min=q_min)
+                                  q_min=q_min, auto_qmin=auto)
         q_max = self.qmax_spin.value()
         q_max = None if q_max >= q[-1] * (1 - 1e-9) else q_max
         return QRangeSettings(mode=QRANGE_MANUAL, q_min=q_min, q_max=q_max)
@@ -797,12 +920,15 @@ class GiftDialog(QDialog):
         self._updating = True
         if self.qmode_combo.currentData()[0] == QRANGE_SIGMA:
             self.qmax_spin.setValue(sel.q_max)
-        if self.lam_auto_check.isChecked():
+        if self.qmode_combo.currentData()[0] != QRANGE_MANUAL and not sel.q_min_manual:
+            self.qmin_spin.setValue(sel.q_min)
+        if self._lam_method() != LAMBDA_MANUAL:
             self.lam_spin.setValue(np.log10(self.analysis.solution.lam_rel))
         self._updating = False
         self.qrange_info.setText(tr('gift.qrange_info', n=sel.n_selected, total=sel.n_total,
                                     q_min=f"{sel.q_min:.4g}", q_max=f"{sel.q_max:.4g}"))
         self._update_dmax_info()
+        self._set_explorer_ranges()
         self._set_prior_defaults()
         if self.analysis.uncertainty is None:
             self.dream_status.setText('')
@@ -820,8 +946,15 @@ class GiftDialog(QDialog):
         if a.guinier:
             rows.append(f"Rg<sub>Guinier</sub> = {a.guinier[0]:.4g} nm ({a.guinier[2]} Pkt.)")
         rows.append(f"<b>MD</b> = {s.md:.3g}")
-        rows.append(f"λ<sub>rel</sub> = {s.lam_rel:.3g}"
-                    f" ({tr('gift.lambda_manual') if s.lam_manual else tr('gift.lambda_inflexion')})")
+        method = 'manual' if s.lam_manual else s.scan.method
+        rows.append(f"λ<sub>rel</sub> = {s.lam_rel:.3g} ({tr('gift.lambda_label_' + method)})")
+        m = a.metrics
+        if m:
+            rows.append(f"{tr('gift.metric.oscillation')} = {m['oscillation']:.2f} · "
+                        f"{tr('gift.metric.n_peaks')} = {m['n_peaks']:.0f} · "
+                        f"{tr('gift.metric.positive_fraction')} = {m['positive_fraction']:.2f} "
+                        f"({m['positive_1sigma']:.2f})")
+            rows.append(f"N<sub>g</sub> = {m['n_good']:.1f} · log p(I) = {m['log_evidence']:.5g}")
         if s.background is not None:
             rows.append(f"{tr('gift.background_value')} = {s.background:.4g} ± {s.background_err:.2g}")
         ns = shannon_channels(s.settings.dmax, s.q[0], s.q[-1])
@@ -1043,7 +1176,7 @@ class GiftDialog(QDialog):
     def _prior_rows(self):
         model = get_model(self._model_key())
         rows = [(p.name, p.label, p.unit, p.lower, p.upper, p.decimals) for p in model.params]
-        rows.append((LOG_LAMBDA, 'log₁₀ λ_rel', '', -14.0, 4.0, 2))
+        rows.append((LOG_LAMBDA, 'log₁₀ λ_rel', '', -30.0, 4.0, 2))
         rows.append((DMAX, 'Dmax', 'nm', 0.1, 1e5, 2))
         return rows
 
@@ -1091,7 +1224,8 @@ class GiftDialog(QDialog):
         for name, _l, _u, _lo, _hi, _d in self._prior_rows():
             if name == LOG_LAMBDA:
                 c = np.log10(a.solution.lam_rel) if a is not None else self.lam_spin.value()
-                out[name] = (max(c - 4.0, -14.0), min(c + 4.0, 4.0), c, True)
+                lo = np.log10(a.solution.scan.lam_rel[0]) if a is not None else -14.0
+                out[name] = (max(c - 4.0, min(lo, -14.0)), min(c + 4.0, 4.0), c, True)
             elif name == DMAX:
                 d0 = a.solution.settings.dmax if a is not None else self.dmax_spin.value()
                 lo, hi = 0.75 * d0, 1.5 * d0
@@ -1235,6 +1369,294 @@ class GiftDialog(QDialog):
             self.dream_status.setText(
                 f"<span style='color:#c62828'>{tr('gift.error')}: {message}</span>")
 
+    def _adopt_from_dream(self):
+        """λ und/oder Dmax auf den Posterior-Median der DREAM-Analyse setzen (λ manuell)."""
+        u = self.analysis.uncertainty if self.analysis is not None else None
+        if u is None:
+            return
+        lam = 10 ** u.summary[LOG_LAMBDA]['median'] if LOG_LAMBDA in u.names else None
+        dmax = u.summary[DMAX]['median'] if DMAX in u.names else None
+        self._set_manual(dmax=dmax, lam_rel=lam)
+        self.dream_status.setText(tr('gift.dream_adopted'))
+
+    def _open_batch(self):
+        from dialogs.gift_batch_dialog import GiftBatchDialog
+        dlg = GiftBatchDialog(self, self._datasets_provider() if self._datasets_provider else [])
+        dlg.show()
+
+    # ------------------------------------------------------------------
+    # Explorer (Dmax × λ-Karte, 1D-Scans)
+    # ------------------------------------------------------------------
+
+    def _build_explorer_tab(self):
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(0, 0, 0, 0)
+        grid = QGridLayout()
+        self.exp_mode_combo = QComboBox()
+        for key in ('map', 'dmax', 'lam', 'n_splines'):
+            self.exp_mode_combo.addItem(tr(f'gift.explorer_mode_{key}'), key)
+        self.exp_metric_combo = QComboBox()
+        for key in METRICS:
+            self.exp_metric_combo.addItem(tr(f'gift.metric.{key}'), key)
+        self.exp_run_btn = QPushButton(tr('gift.explorer_run'))
+        self.exp_run_btn.clicked.connect(self._run_explorer)
+
+        def dspin(lo, hi, dec, val, suffix=''):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(dec)
+            sp.setValue(val)
+            if suffix:
+                sp.setSuffix(suffix)
+            return sp
+
+        def ispin(lo, hi, val):
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setValue(val)
+            return sp
+
+        self.exp_dmin_spin = dspin(0.1, 1e5, 1, 10.0, ' nm')
+        self.exp_dmax_spin = dspin(0.1, 1e5, 1, 100.0, ' nm')
+        self.exp_nd_spin = ispin(3, 200, 33)
+        self.exp_lmin_spin = dspin(-30.0, 4.0, 1, -12.0)
+        self.exp_lmax_spin = dspin(-30.0, 4.0, 1, 2.0)
+        self.exp_nl_spin = ispin(3, 200, 43)
+        self.exp_nmin_spin = ispin(5, 200, 10)
+        self.exp_nmax_spin = ispin(5, 200, 60)
+        self.exp_osc_spin = dspin(1.0, 10.0, 2, OSC_GOOD)
+        self.exp_osc_spin.setToolTip(tr('gift.explorer_osc_tooltip'))
+        row = 0
+        grid.addWidget(QLabel(tr('gift.explorer_mode') + ':'), row, 0)
+        grid.addWidget(self.exp_mode_combo, row, 1, 1, 2)
+        grid.addWidget(QLabel(tr('gift.explorer_metric') + ':'), row, 3)
+        grid.addWidget(self.exp_metric_combo, row, 4, 1, 2)
+        grid.addWidget(self.exp_run_btn, row, 6)
+        row += 1
+        grid.addWidget(QLabel('Dmax:'), row, 0)
+        grid.addWidget(self.exp_dmin_spin, row, 1)
+        grid.addWidget(self.exp_dmax_spin, row, 2)
+        grid.addWidget(QLabel(tr('gift.explorer_points') + ':'), row, 3)
+        grid.addWidget(self.exp_nd_spin, row, 4)
+        grid.addWidget(QLabel(tr('gift.explorer_osc') + ' ≤'), row, 5)
+        grid.addWidget(self.exp_osc_spin, row, 6)
+        row += 1
+        grid.addWidget(QLabel('log₁₀ λ_rel:'), row, 0)
+        grid.addWidget(self.exp_lmin_spin, row, 1)
+        grid.addWidget(self.exp_lmax_spin, row, 2)
+        grid.addWidget(QLabel(tr('gift.explorer_points') + ':'), row, 3)
+        grid.addWidget(self.exp_nl_spin, row, 4)
+        grid.addWidget(QLabel('N:'), row, 5)
+        nbox = QHBoxLayout()
+        nbox.addWidget(self.exp_nmin_spin)
+        nbox.addWidget(self.exp_nmax_spin)
+        grid.addLayout(nbox, row, 6)
+        v.addLayout(grid)
+        self.exp_status = QLabel(tr('gift.explorer_hint'))
+        self.exp_status.setWordWrap(True)
+        v.addWidget(self.exp_status)
+        self.fig_exp = Figure(figsize=(7, 5), layout='constrained')
+        self.canvas_exp = FigureCanvasQTAgg(self.fig_exp)
+        v.addWidget(NavigationToolbar2QT(self.canvas_exp, w))
+        v.addWidget(self.canvas_exp, 1)
+        self.canvas_exp.mpl_connect('button_press_event', self._on_explorer_click)
+        self.exp_metric_combo.currentIndexChanged.connect(lambda _: self._plot_explorer())
+        self.exp_osc_spin.valueChanged.connect(lambda _: self._plot_explorer())
+        self.tabs.addTab(w, tr('gift.tab_explorer'))
+        self._exp_result = None
+        self._exp_ranges_set = False
+        self._exp_ax = None
+
+    def _set_explorer_ranges(self, force=False):
+        if self.analysis is None or (self._exp_ranges_set and not force):
+            return
+        s = self.analysis.solution
+        d0 = s.settings.dmax
+        limit = np.pi / self.analysis.selection.q_min
+        self.exp_dmin_spin.setValue(float(f"{0.5 * min(d0, limit):.3g}"))
+        self.exp_dmax_spin.setValue(float(f"{2.5 * max(d0, limit):.3g}"))
+        self.exp_nmin_spin.setValue(max(5, s.settings.n_splines // 3))
+        lo = np.floor(min(np.log10(s.lam_rel), np.log10(s.scan.lam_rel[s.scan.index_evidence]))) - 4
+        self.exp_lmin_spin.setValue(float(min(-12.0, max(lo, -30.0))))
+        self.exp_lmax_spin.setValue(2.0)
+        self.exp_nmax_spin.setValue(min(200, 3 * s.settings.n_splines))
+        self._exp_ranges_set = True
+
+    def _run_explorer(self):
+        a = self.analysis
+        if a is None:
+            return
+        s = a.solution
+        sf = a.gift.structure_factor if a.gift is not None else None
+        mode = self.exp_mode_combo.currentData()
+        st = s.settings
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        t0 = time.perf_counter()
+        try:
+            if mode == 'map':
+                res = scan_map(s.q, s.intensity, s.sigma, st,
+                               np.linspace(self.exp_dmin_spin.value(), self.exp_dmax_spin.value(),
+                                           self.exp_nd_spin.value()),
+                               np.logspace(self.exp_lmin_spin.value(), self.exp_lmax_spin.value(),
+                                           self.exp_nl_spin.value()),
+                               structure_factor=sf)
+            elif mode == 'dmax':
+                res = scan_1d(s.q, s.intensity, s.sigma, st, 'dmax',
+                              np.linspace(self.exp_dmin_spin.value(), self.exp_dmax_spin.value(),
+                                          self.exp_nd_spin.value()), structure_factor=sf)
+            elif mode == 'lam':
+                res = scan_1d(s.q, s.intensity, s.sigma, st, 'lam',
+                              np.logspace(self.exp_lmin_spin.value(), self.exp_lmax_spin.value(),
+                                          self.exp_nl_spin.value()), structure_factor=sf)
+            else:
+                lo, hi = sorted((self.exp_nmin_spin.value(), self.exp_nmax_spin.value()))
+                res = scan_1d(s.q, s.intensity, s.sigma, st, 'n_splines',
+                              np.unique(np.linspace(lo, hi, min(hi - lo + 1, 30)).round()),
+                              structure_factor=sf)
+        except (ValueError, np.linalg.LinAlgError) as e:
+            self.exp_status.setText(f"<span style='color:#c62828'>{tr('gift.error')}: {e}</span>")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._exp_result = (mode, res, a)
+        self.exp_status.setText(tr('gift.explorer_done', t=f"{time.perf_counter() - t0:.2f}")
+                                + ' ' + tr('gift.explorer_hint'))
+        self._plot_explorer()
+
+    def _plot_explorer(self):
+        fig = self.fig_exp
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            fig.clear()
+        self._exp_ax = None
+        if self._exp_result is None:
+            ax = fig.add_subplot(111)
+            ax.text(0.5, 0.5, tr('gift.explorer_empty'), ha='center', va='center',
+                    transform=ax.transAxes, wrap=True)
+            ax.set_axis_off()
+            self.canvas_exp.draw_idle()
+            return
+        mode, res, a = self._exp_result
+        stale = self._explorer_stale(a)
+        if self.analysis is not None:
+            a_cur = self.analysis
+        else:
+            a_cur = a
+        key = self.exp_metric_combo.currentData()
+        label = tr(f'gift.metric.{key}')
+        osc_max = self.exp_osc_spin.value()
+        s = a_cur.solution
+        log_keys = ('oscillation', 'md', 'chi2_dof')
+        ax = fig.add_subplot(111)
+        self._exp_ax = ax
+        if mode == 'map':
+            Z = np.asarray(res.metrics[key], dtype=float)
+            if key in log_keys:
+                Z = np.log10(np.where(Z > 0, Z, np.nan))
+                label = 'log₁₀ ' + label
+            elif key == 'log_evidence':
+                Z = np.maximum(Z - np.nanmax(Z), -100.0)
+                label = tr('gift.lambda_evidence_axis')
+            L = np.log10(res.lam_rel)
+            extent = [res.dmax[0], res.dmax[-1], L[0], L[-1]]
+            cmap = 'magma_r' if key == 'oscillation' else 'viridis'
+            im = ax.imshow(Z, origin='lower', aspect='auto', extent=extent, cmap=cmap,
+                           interpolation='nearest')
+            fig.colorbar(im, ax=ax, label=label)
+            good = res.good_region(osc_max=osc_max)
+            if good.any() and not good.all():
+                ax.contour(res.dmax, L, good.astype(float), levels=[0.5], colors='lime',
+                           linewidths=1.5)
+            li = np.log10(res.lam_inflexion)
+            ax.plot(res.dmax, li, '-', color='w', lw=1.4, label=tr('gift.lambda_method_inflexion'))
+            nf = ~res.inflexion_found
+            if nf.any():
+                ax.plot(res.dmax[nf], li[nf], 'x', color='#c62828', ms=6,
+                        label=tr('gift.explorer_no_inflexion'))
+            ax.plot(res.dmax, np.log10(res.lam_evidence), ':', color='cyan', lw=1.4,
+                    label=tr('gift.lambda_method_evidence'))
+            ax.axvline(np.pi / res.q_min, color='#00bcd4', ls='--', lw=1.0, label='π/q_min')
+            ax.plot(s.settings.dmax, np.log10(s.lam_rel), '*', color='#ff9800', ms=14,
+                    mec='k', label=tr('gift.explorer_current'))
+            ax.set_xlim(extent[0], extent[1])
+            ax.set_ylim(extent[2], extent[3])
+            ax.set_xlabel('Dmax / nm')
+            ax.set_ylabel('log₁₀ λ_rel')
+            ax.legend(fontsize=7, loc='lower right', framealpha=0.7)
+            ax.set_title(tr('gift.explorer_map_title'), fontsize=9)
+        else:
+            m = res.metrics
+            x = np.log10(res.values) if mode == 'lam' else res.values
+            y = np.asarray(m[key], dtype=float)
+            if key == 'log_evidence':
+                y = y - np.nanmax(y)
+                label = tr('gift.lambda_evidence_axis')
+            ax.plot(x, y, 'o-', color=_CLR_DATA, ms=4, lw=1.2)
+            smooth = _physical(m) & (m['oscillation'] <= osc_max)
+            good = smooth & md_acceptable(m['md'], len(s.q), reference=smooth)
+            ax.plot(x[good], y[good], 'o', color='lime', mec='#2e7d32', ms=7,
+                    label=tr('gift.explorer_good'))
+            if key in log_keys:
+                ax.set_yscale('log')
+            if mode == 'dmax':
+                ax.axvline(np.pi / a.selection.q_min, color='#00bcd4', ls='--', lw=1.0,
+                           label='π/q_min')
+                ax.axvline(s.settings.dmax, color='#ff9800', lw=1.5,
+                           label=tr('gift.explorer_current'))
+                ax.set_xlabel('Dmax / nm')
+            elif mode == 'lam':
+                ax.axvline(np.log10(res.lam_inflexion[0]), color='k', ls='--', lw=1.0,
+                           label=tr('gift.lambda_method_inflexion'))
+                ax.axvline(np.log10(res.lam_evidence[0]), color='#2e7d32', ls=':', lw=1.4,
+                           label=tr('gift.lambda_method_evidence'))
+                ax.axvline(np.log10(s.lam_rel), color='#ff9800', lw=1.5,
+                           label=tr('gift.explorer_current'))
+                ax.set_xlabel('log₁₀ λ_rel')
+            else:
+                ax.axvline(s.settings.n_splines, color='#ff9800', lw=1.5,
+                           label=tr('gift.explorer_current'))
+                ax.set_xlabel(tr('gift.nsplines'))
+            ax.set_ylabel(label)
+            ax.legend(fontsize=7)
+            ax.set_title(tr(f'gift.explorer_mode_{mode}'), fontsize=9)
+        if stale:
+            ax.set_title(ax.get_title() + '  —  ' + tr('gift.explorer_stale'), fontsize=9,
+                         color='#c62828')
+        self.canvas_exp.draw_idle()
+
+    def _explorer_stale(self, a):
+        """Hängt die Karte von geänderten Einstellungen ab (q-Bereich, N, K, Untergrund,
+        S(q))? Dmax und λ selbst sind die Achsen und machen sie nicht ungültig."""
+        b = self.analysis
+        if b is None or b is a:
+            return False
+        sa, sb = a.solution, b.solution
+        if len(sa.q) != len(sb.q) or not np.array_equal(sa.q, sb.q):
+            return True
+        if (sa.settings.n_splines, sa.settings.k_type, sa.settings.background) !=                 (sb.settings.n_splines, sb.settings.k_type, sb.settings.background):
+            return True
+        fa = a.gift.structure_factor if a.gift is not None else None
+        fb = b.gift.structure_factor if b.gift is not None else None
+        return not ((fa is None and fb is None) or
+                    (fa is not None and fb is not None and np.array_equal(fa, fb)))
+
+    def _on_explorer_click(self, event):
+        if self._exp_ax is None or event.inaxes is not self._exp_ax or event.xdata is None:
+            return
+        if self.canvas_exp.toolbar is not None and self.canvas_exp.toolbar.mode:
+            return                           # Zoom/Pan aktiv
+        mode = self._exp_result[0]
+        if mode == 'map':
+            self._set_manual(dmax=event.xdata, lam_rel=10 ** event.ydata)
+        elif mode == 'dmax':
+            self._set_manual(dmax=event.xdata)
+        elif mode == 'lam':
+            self._set_manual(lam_rel=10 ** event.xdata)
+        else:
+            self._set_manual(n_splines=int(round(event.xdata)))
+        self.exp_status.setText(tr('gift.explorer_adopted'))
+
     def _report_dream_reproduction(self, old, result):
         lines = []
         for n in result.names:
@@ -1257,6 +1679,7 @@ class GiftDialog(QDialog):
         self._plot_significance()
         self._plot_bssa()
         self._plot_uncertainty()
+        self._plot_explorer()
 
     def _no_gift_text(self, fig, canvas):
         fig.clear()
@@ -1332,6 +1755,7 @@ class GiftDialog(QDialog):
         figs = ((self.fig_corner, self.canvas_corner), (self.fig_trace, self.canvas_trace),
                 (self.fig_band, self.canvas_band))
         if u is None:
+            self.dream_adopt_btn.setEnabled(False)
             self.unc_info.setText(tr('gift.dream_not_run'))
             self.unc_table.setRowCount(0)
             for fig, canvas in figs:
@@ -1353,6 +1777,7 @@ class GiftDialog(QDialog):
         return u.labels[n] + (f" / {u.units[n]}" if u.units[n] else '')
 
     def _show_uncertainty_table(self, u):
+        self.dream_adopt_btn.setEnabled(bool({LOG_LAMBDA, DMAX} & set(u.names)))
         d = u.dream
         self.unc_info.setText(tr(
             'gift.dream_info', evals=d.n_evals, gens=d.n_generations, chains=d.chains.shape[1],
@@ -1563,18 +1988,38 @@ class GiftDialog(QDialog):
     def _plot_lambda(self):
         sc = self.analysis.solution.scan
         s = self.analysis.solution
-        self.fig_lam.clear()
-        ax = self.fig_lam.add_subplot(111)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            self.fig_lam.clear()
+        ax = self.fig_lam.add_subplot(211)
         x = np.log10(sc.lam_rel)
         ax.plot(x, np.log10(sc.nc), '-', color=_CLR_DATA, label='log N_c')
-        ax.set_xlabel('log₁₀ λ_rel')
         ax.set_ylabel('log₁₀ N_c', color=_CLR_DATA)
         ax2 = ax.twinx()
         ax2.plot(x, sc.md, '-', color=_CLR_FIT, label='MD')
         ax2.set_yscale('log')
         ax2.set_ylabel(tr('gift.md_axis'), color=_CLR_FIT)
-        ax.axvline(np.log10(s.lam_rel), color='k', ls='--', lw=1.0)
         ax.set_title(tr('gift.lambda_title'), fontsize=10)
+        ax3 = self.fig_lam.add_subplot(212, sharex=ax)
+        if sc.log_evidence is not None:
+            ev = sc.log_evidence - np.max(sc.log_evidence)
+            ax3.plot(x, np.maximum(ev, -200), '-', color='#2e7d32')
+            ax3.set_ylim(max(-200, np.min(ev)) - 5, 5)
+            ax3.set_ylabel(tr('gift.lambda_evidence_axis'), color='#2e7d32')
+            ax4 = ax3.twinx()
+            ax4.plot(x, sc.n_good, '-', color='#6a1b9a')
+            ax4.set_ylabel('N_g', color='#6a1b9a')
+        ax3.set_xlabel('log₁₀ λ_rel')
+        for a_ in (ax, ax3):
+            if sc.index_inflexion is not None:
+                a_.axvline(x[sc.index_inflexion], color='k', ls='--', lw=0.9,
+                           label=tr('gift.lambda_method_inflexion'))
+            if sc.index_evidence is not None:
+                a_.axvline(x[sc.index_evidence], color='#2e7d32', ls=':', lw=1.2,
+                           label=tr('gift.lambda_method_evidence'))
+            a_.axvline(np.log10(s.lam_rel), color=_CLR_FIT, lw=1.2, alpha=0.6,
+                       label=tr('gift.lambda_chosen'))
+        ax3.legend(fontsize=7, loc='lower left')
         self.canvas_lam.draw_idle()
 
     def _plot_significance(self):
@@ -1657,9 +2102,13 @@ class GiftDialog(QDialog):
             self.k_combo.setCurrentIndex(idx)
         self.bg_check.setChecked(bool(p.get('background', False)))
         manual = p.get('lam') != LAMBDA_AUTO
-        self.lam_auto_check.setChecked(not manual)
+        self._set_lam_method(LAMBDA_MANUAL if manual
+                             else p.get('lam_method', LAMBDA_INFLEXION))
+        self.lam_spin.setEnabled(manual)
         if manual:
             self.lam_spin.setValue(np.log10(float(p['lam'])))
+        # Ältere Sidecars (< v7.13) kannten kein automatisches q_min
+        self.auto_qmin_check.setChecked(bool(qr.get('auto_qmin', False)))
         mode, n = qr.get('mode', QRANGE_FULL), qr.get('n_sigma')
         for i in range(self.qmode_combo.count()):
             m, nn = self.qmode_combo.itemData(i)

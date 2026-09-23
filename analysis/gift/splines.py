@@ -43,6 +43,17 @@ class SplineBasis:
             out[inside] = full[:, 1:-1]
         return out
 
+    def evaluate_derivative(self, r):
+        """Ableitungen dφ_ν/dr als Matrix (len(r) × N); außerhalb [0, Dmax] null."""
+        r = np.asarray(r, dtype=float)
+        out = np.zeros((len(r), self.n))
+        inside = (r >= 0.0) & (r <= self.dmax)
+        if inside.any():
+            n_full = len(self.knots) - DEGREE - 1
+            deriv = BSpline(self.knots, np.eye(n_full), DEGREE).derivative()
+            out[inside] = deriv(r[inside])[:, 1:-1]
+        return out
+
     def quadrature(self, points_per_interval=16):
         """Gauss-Legendre-Knoten und -Gewichte auf [0, Dmax], stückweise pro Knotenintervall.
 

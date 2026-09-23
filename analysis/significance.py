@@ -70,6 +70,46 @@ def sigma_cutoff_index(smoothed, n_sigma, min_run):
     return n - 1 - run if run > 0 else n - 1
 
 
+def detect_lowq_artifacts(y, y_err=None, max_frac=0.25, min_run=5, min_significance=3.0):
+    """Erkennt Artefakte am Anfang einer Kurve (Beamstop-Bereich, Separations-/Abzugs-
+    artefakte) und gibt den Index des ersten vertrauenswürdigen Punkts zurück (0 = keine).
+
+    Konservatives Kriterium (v7.13), nur innerhalb der ersten `max_frac` der Punkte:
+    1. Führender Block: Die Kurve beginnt mit nicht-positiven Punkten (I ≤ 0 ist bei
+       Kleinwinkelstreuung unphysikalisch) oder mit Vorzeichenwechseln. Er endet am letzten
+       nicht-positiven Punkt *vor* dem ersten Lauf von `min_run` positiven Punkten. Alles
+       davor wird verworfen — auch positive Ausreißer zwischen den Vorzeichenwechseln.
+       Ein negativer Punkt später (z. B. im verrauschten Formfaktor-Minimum) zählt nicht.
+    2. Nur nach einem solchen Block: anschließende Übergangspunkte mit |I/σ| <
+       `min_significance` werden ebenfalls verworfen.
+    Ein Anstieg von I(q) zu größerem q direkt danach wird *nicht* entfernt: Er kann ein
+    Beamstop-Randschatten sein, aber auch physikalisch (repulsive Wechselwirkung, S(q) < 1);
+    dafür gibt es ein Info-Flag.
+    """
+    y = np.asarray(y, dtype=float)
+    n = len(y)
+    limit = min(n, max(min_run + 1, int(np.ceil(max_frac * n))))
+    start = 0
+    run = 0
+    for i in range(limit):
+        if y[i] > 0:
+            run += 1
+            if run >= min_run:
+                break
+        else:
+            run = 0
+            start = i + 1
+    else:
+        return 0                                        # kein sauberer Lauf im Anfangsbereich
+    if start > 0 and y_err is not None:            # nur direkt nach einem Artefaktblock
+        e = np.asarray(y_err, dtype=float)
+        while start < limit and not (e[start] > 0 and y[start] / e[start] >= min_significance):
+            start += 1
+    if start >= limit:
+        return 0                                        # nichts Eindeutiges gefunden
+    return start
+
+
 @dataclass
 class QRangeSelection:
     """Ergebnis der q-Bereichs-Auswahl (vollständig reproduzierbar dokumentiert)."""
@@ -83,6 +123,8 @@ class QRangeSelection:
     min_run: Optional[int] = None
     q_min_manual: bool = False
     q_max_manual: bool = False
+    n_artifacts: int = 0             # automatisch verworfene Punkte bei kleinem q
+    q_artifacts: Optional[float] = None   # q des letzten verworfenen Punkts
 
     @property
     def n_excluded(self):
@@ -99,7 +141,7 @@ class QRangeSelection:
 
 
 def select_q_range(q, y, y_err=None, mode=QRANGE_FULL, n_sigma=2.0, window=9,
-                   min_run=None, q_min=None, q_max=None):
+                   min_run=None, q_min=None, q_max=None, auto_qmin=False):
     """Bestimmt den q-Fitbereich.
 
     Modi:
@@ -110,6 +152,8 @@ def select_q_range(q, y, y_err=None, mode=QRANGE_FULL, n_sigma=2.0, window=9,
 
     Args:
         min_run: Mindestlänge des Laufs unter der Schwelle (Standard: window // 2)
+        auto_qmin: ohne manuelles q_min Artefakte bei kleinem q erkennen und ausschließen
+            (detect_lowq_artifacts); gilt nicht im Modus 'manual'
 
     Raises:
         ValueError: bei 'sigma' ohne Fehlerspalte oder wenn der Bereich leer ist
@@ -126,6 +170,10 @@ def select_q_range(q, y, y_err=None, mode=QRANGE_FULL, n_sigma=2.0, window=9,
     lo = float(q[0]) if q_min is None else float(q_min)
     hi = float(q[-1]) if q_max is None else float(q_max)
     sel_n_sigma = sel_window = sel_min_run = None
+    first = 0
+    if auto_qmin and q_min is None and mode != QRANGE_MANUAL and y is not None:
+        first = detect_lowq_artifacts(y, y_err)
+        lo = float(q[first])
 
     if mode == QRANGE_SIGMA:
         if y_err is None:
@@ -133,8 +181,13 @@ def select_q_range(q, y, y_err=None, mode=QRANGE_FULL, n_sigma=2.0, window=9,
         sel_n_sigma = float(n_sigma)
         sel_window = int(window)
         sel_min_run = int(min_run) if min_run is not None else max(sel_window // 2, 1)
-        smoothed = rolling_median(significance(y, y_err), sel_window)
+        # Signifikanz erst ab dem ersten vertrauenswürdigen Punkt (Artefakte können |I/σ|
+        # künstlich groß machen)
+        smoothed = rolling_median(significance(np.asarray(y)[first:],
+                                               np.asarray(y_err)[first:]), sel_window)
         idx = sigma_cutoff_index(smoothed, sel_n_sigma, sel_min_run)
+        if idx >= 0:
+            idx += first
         if idx < 0:
             raise ValueError(
                 f"Die geglättete Signifikanz liegt schon am ersten Punkt unter {sel_n_sigma:g}σ")
@@ -153,4 +206,5 @@ def select_q_range(q, y, y_err=None, mode=QRANGE_FULL, n_sigma=2.0, window=9,
         mode=mode, q_min=lo, q_max=hi, n_total=len(q), n_selected=n_selected,
         n_sigma=sel_n_sigma, window=sel_window, min_run=sel_min_run,
         q_min_manual=q_min is not None, q_max_manual=q_max is not None,
+        n_artifacts=int(first), q_artifacts=float(q[first - 1]) if first else None,
     )

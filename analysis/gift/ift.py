@@ -4,10 +4,12 @@ Indirekte Fourier-Transformation nach Glatter (1977).
     I(q) ≈ Σ c_ν ψ_ν(q)  [+ Untergrund]
     (B + λK) c = b,   B = AᵀWA,  b = AᵀW·I,  W = diag(1/σ²)          [G77 Gl. 12–15]
 
-λ wird über die Wendepunkt-Methode [G77, Fig. 2] bestimmt: log N_c(λ) zeigt einen
-Wendepunkt (minimale |Steigung|) im Bereich kurz vor dem starken Anstieg der mittleren
-Abweichung MD(λ). λ wird intern relativ angegeben (λ_rel), damit der Scanbereich
-unabhängig von Intensitätsskala und Fehlergröße ist: λ = λ_rel · tr(B)/tr(K).
+λ wird standardmäßig über die Wendepunkt-Methode [G77, Fig. 2] bestimmt: log N_c(λ) zeigt
+einen Wendepunkt (minimale |Steigung|) im Bereich kurz vor dem starken Anstieg der
+mittleren Abweichung MD(λ). Alternativ (v7.13): Maximum der Bayes'schen Evidenz
+[Hansen 2000], dieselbe Größe wie in der DREAM-Analyse. λ wird intern relativ angegeben
+(λ_rel), damit der Scanbereich unabhängig von Intensitätsskala und Fehlergröße ist:
+λ = λ_rel · tr(B)/tr(K).
 """
 
 from dataclasses import dataclass, field, asdict
@@ -24,6 +26,10 @@ K_DIRICHLET = 'dirichlet'  # wie oben, zusätzlich c_0 = c_{N+1} = 0 (positiv de
 K_CURVATURE = 'curvature'  # Σ (c_{ν+1} − 2c_ν + c_{ν−1})², c_0 = c_{N+1} = 0
 
 LAMBDA_AUTO = 'auto'
+LAMBDA_INFLEXION = 'inflexion'   # Wendepunkt nach Glatter (Standard)
+LAMBDA_EVIDENCE = 'evidence'     # Maximum der Evidenz p(I | λ) [Hansen 2000]
+
+_LOG_2PI = float(np.log(2.0 * np.pi))
 
 
 @dataclass
@@ -43,6 +49,8 @@ class IFTSettings:
     k_type: str = K_DIRICHLET
     background: bool = False
     n_r: int = 201
+    # Verfahren für lam = 'auto': Wendepunkt (Standard) oder Evidenz-Maximum
+    lam_method: str = LAMBDA_INFLEXION
 
     def to_dict(self):
         return asdict(self)
@@ -58,6 +66,11 @@ class LambdaScan:
     index_opt: int
     inflexion_found: bool
     lam_scale: float
+    log_evidence: Optional[np.ndarray] = None   # log p(I | λ) [Hansen 2000]
+    n_good: Optional[np.ndarray] = None         # effektive Parameterzahl N_g = Σ β/(β+λ)
+    index_inflexion: Optional[int] = None
+    index_evidence: Optional[int] = None
+    method: str = LAMBDA_INFLEXION
 
 
 @dataclass
@@ -128,7 +141,15 @@ def _select_lambda(lam_rel, md, nc, md_tolerance, plateau_slope):
     ok = is_min & admissible[idx_all] & (abs_slope[idx_all] < plateau_slope)
     candidates = idx_all[ok]
     if len(candidates) > 0:
-        return int(candidates.max()), abs_slope, True
+        idx = int(candidates.max())
+        if idx == 0:
+            # Randplateau: log N_c ist ab dem linken Scanrand flach (z. B. grobe Basis bei
+            # großem Dmax). Gemeint ist das Plateau *vor* dem MD-Anstieg, also dessen
+            # rechtes Ende — nicht der willkürliche Scanrand (v7.13).
+            flat = plateau_slope / 6.0
+            while idx + 1 < len(x) - 1 and abs_slope[idx + 1] < flat and admissible[idx + 1]:
+                idx += 1
+        return idx, abs_slope, True
 
     # Kein Wendepunkt: größtes λ, das die MD-Toleranz noch einhält (Flag!)
     idx = int(np.nonzero(admissible)[0].max())
@@ -225,6 +246,132 @@ class IFTProblem:
         return out
 
 
+class IFTDecomposition:
+    """Vorbereitete IFT bei festem (q, Dmax, N, S(q)): gewichtete Designmatrix, optional
+    herausprojizierter Untergrund und die verallgemeinerte Eigenzerlegung von (B, K).
+
+    Mit K = LLᵀ und L⁻¹BL⁻ᵀ = U diag(β) Uᵀ ist (B + λK)⁻¹ = L⁻ᵀ U diag(1/(β+λ)) Uᵀ L⁻¹ —
+    numerisch stabil für alle λ > 0; jede λ-Lösung kostet nur O(N²). Grundlage für
+    run_ift() und den Explorer (Dmax × λ-Karten).
+    """
+
+    def __init__(self, q, intensity, sigma, settings: IFTSettings, smearing=None,
+                 structure_factor=None):
+        q = np.asarray(q, dtype=float)
+        I = np.asarray(intensity, dtype=float)
+        s = np.asarray(sigma, dtype=float)
+        if not (len(q) == len(I) == len(s)):
+            raise ValueError("q, I und σ müssen gleich lang sein")
+        if np.any(~np.isfinite(s)) or np.any(s <= 0):
+            raise ValueError("σ muss überall positiv und endlich sein")
+        n_params = settings.n_splines + (1 if settings.background else 0)
+        if len(q) <= n_params:
+            raise ValueError(f"Zu wenige Datenpunkte ({len(q)}) für {n_params} Parameter")
+        self.q, self.I, self.s, self.settings = q, I, s, settings
+        smearing = smearing or IdentitySmearing()
+        self.basis = SplineBasis(settings.dmax, settings.n_splines)
+        self.A_form = smearing.apply(cached_design_matrix(q, settings.dmax, settings.n_splines))
+        if structure_factor is not None:
+            S_q = np.asarray(structure_factor, dtype=float)
+            if S_q.shape != q.shape or not np.all(np.isfinite(S_q)):
+                raise ValueError("S(q) muss endlich sein und dieselbe Länge wie q haben")
+            self.A = self.A_form * S_q[:, None]      # ψ̃_ν(q) = ψ_ν(q)·S(q)  [BP97 Gl. 6]
+        else:
+            S_q = None
+            self.A = self.A_form
+        self.S_q = S_q
+        self.K = regularization_matrix(settings.n_splines, settings.k_type)
+        n_spl = settings.n_splines
+        self.Aw = self.A / s[:, None]
+        self.yw = I / s
+        if not (np.all(np.isfinite(self.Aw)) and np.all(np.isfinite(self.yw))):
+            raise ValueError("Nicht-endliche Werte in Daten oder Designmatrix")
+
+        # Optionaler konstanter Untergrund: wird analytisch herausprojiziert (gewichtete
+        # Projektion P = 1 − w wᵀ/‖w‖², w = 1/σ). Die Regularisierung wirkt dann nur auf die
+        # Splines, der Untergrund folgt exakt aus dem Residuum.
+        if settings.background:
+            w = 1.0 / s
+            self.w, self.w_norm2 = w, float(w @ w)
+            self.Aw_p = self.Aw - np.outer(w, w @ self.Aw) / self.w_norm2
+            self.yw_p = self.yw - w * (w @ self.yw) / self.w_norm2
+            m_eff = len(q) - 1
+        else:
+            self.Aw_p, self.yw_p = self.Aw, self.yw
+            m_eff = len(q)
+
+        # tr(B) = ‖Aw_p‖²_F (B selbst wird nicht gebildet)
+        self.lam_scale = float(np.sum(self.Aw_p ** 2)) / np.trace(self.K)
+        # Winziger Ridge: macht auch die (singuläre) Glatter-Form von K Cholesky-fähig
+        K_reg = self.K + 1e-10 * np.mean(np.diag(self.K)) * np.eye(n_spl)
+        L_inv = np.linalg.inv(np.linalg.cholesky(K_reg))
+        # Verallgemeinerte Zerlegung per SVD von Ã = Aw_p·L⁻ᵀ = W diag(σ) Vᵀ (v7.13) statt
+        # Eigenzerlegung von B = ÃᵀÃ: β = σ², z = σ·Wᵀy. Die SVD halbiert die Kondition in
+        # Dekaden — bei Daten ohne Kleinwinkelbereich reicht β über ~20 Dekaden, die kleinen
+        # Eigenwerte von B gingen im Rundungsfehler ε·β_max unter (MD stieg für kleine λ).
+        W, sv, Vt = np.linalg.svd(self.Aw_p @ L_inv.T, full_matrices=False)
+        self.beta = sv ** 2
+        self.z = sv * (W.T @ self.yw_p)
+        self.back = Vt @ L_inv                           # v ↦ c = backᵀ v
+        # back·Aw_pᵀ = diag(σ)·Wᵀ exakt aus der SVD (das Produkt verlöre die Genauigkeit)
+        self.sv, self.Wt = sv, W.T
+        # Konstante der Evidenz (Gauß-Normierung der Daten)
+        self.log_const = -0.5 * m_eff * _LOG_2PI - float(np.sum(np.log(s)))
+
+    def scan(self, lam_rel):
+        """Alle Größen für ein Gitter λ_rel (Λ,): Koeffizienten C (Λ, N), χ², MD, N_c, N_g
+        und log-Evidenz log p(I | λ) [Hansen 2000]."""
+        lam = np.atleast_1d(np.asarray(lam_rel, dtype=float)) * self.lam_scale
+        V = self.z[None, :] / (self.beta[None, :] + lam[:, None])
+        C = V @ self.back
+        resid = C @ self.Aw_p.T - self.yw_p[None, :]
+        chi2 = np.sum(resid ** 2, axis=1)
+        nc = np.sum(V ** 2, axis=1)                       # cᵀKc = ‖v‖²
+        n_good = np.sum(self.beta[None, :] / (self.beta[None, :] + lam[:, None]), axis=1)
+        # log det(λK) − log det(B + λK) = N log λ − Σ log(β + λ)   (K = LLᵀ kürzt sich)
+        log_ev = (self.log_const - 0.5 * (chi2 + lam * nc)
+                  + 0.5 * (len(self.beta) * np.log(lam)
+                           - np.sum(np.log(self.beta[None, :] + lam[:, None]), axis=1)))
+        return {'lam': lam, 'C': C, 'chi2': chi2, 'md': chi2 / len(self.q), 'nc': nc,
+                'n_good': n_good, 'log_evidence': log_ev}
+
+    def coefficient_variance_weights(self, lam):
+        """Kovarianz der Koeffizienten: Cov(c) = backᵀ diag(β/(β+λ)²) back (Einheits-
+        kovarianz der gewichteten Daten; Aw_p·backᵀ ist in dieser Basis diagonal)."""
+        return self.beta / (self.beta + lam) ** 2
+
+
+LAM_REL_FLOOR = 1e-30      # untere Grenze der automatischen Scan-Erweiterung
+MD0_EXTEND_MAX = 2.0       # Erweiterung nur, wenn die unregularisierte Lösung passt
+
+
+def lambda_grid(dec: 'IFTDecomposition', settings: IFTSettings):
+    """λ_rel-Gitter des Scans und Scan-Ergebnisse.
+
+    Standardbereich lam_rel_min … lam_rel_max. Liegt die MD am linken Rand noch deutlich über
+    dem Wert ohne Regularisierung MD₀ (MD ≤ 1.25·MD₀ + 3·√(2/M) verfehlt), wird der Bereich in
+    Schritten von 4 Dekaden bis 10⁻³⁰ nach unten erweitert (v7.13). Das tritt auf, wenn die
+    Eigenwerte β über viele Dekaden reichen (z. B. Daten ohne Kleinwinkelbereich): Die
+    Normierung λ_rel = λ·tr(K)/tr(B) wird dann von den größten β bestimmt.
+    Nur wenn die Daten überhaupt beschreibbar sind (MD₀ ≤ 2): Passt schon die
+    unregularisierte Lösung nicht (z. B. IFT bei Wechselwirkung), brächte ein kleineres λ nur
+    Überanpassung.
+    """
+    lo = float(np.log10(settings.lam_rel_min))
+    hi = float(np.log10(settings.lam_rel_max))
+    per_decade = (int(settings.n_lam) - 1) / (hi - lo)
+    floor = float(np.log10(LAM_REL_FLOOR))
+    md0 = float(dec.scan([LAM_REL_FLOOR])['md'][0])
+    tol = 0.25 * md0 + 3.0 * np.sqrt(2.0 / len(dec.q))
+    while True:
+        n = int(round((hi - lo) * per_decade)) + 1
+        grid = np.logspace(lo, hi, n)
+        g = dec.scan(grid)
+        if lo <= floor or md0 > MD0_EXTEND_MAX or g['md'][0] <= md0 + tol:
+            return grid, g
+        lo = max(lo - 4.0, floor)
+
+
 def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure_factor=None):
     """Führt eine IFT durch.
 
@@ -235,77 +382,28 @@ def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure
         structure_factor: optional S(q) auf dem q-Gitter (GIFT): I = S·P [BP97 Gl. 5];
             p(r), Rg und I(0) beziehen sich dann auf den Formfaktor P(q)
     """
-    q = np.asarray(q, dtype=float)
-    I = np.asarray(intensity, dtype=float)
-    s = np.asarray(sigma, dtype=float)
-    if not (len(q) == len(I) == len(s)):
-        raise ValueError("q, I und σ müssen gleich lang sein")
-    if np.any(~np.isfinite(s)) or np.any(s <= 0):
-        raise ValueError("σ muss überall positiv und endlich sein")
-    n_params = settings.n_splines + (1 if settings.background else 0)
-    if len(q) <= n_params:
-        raise ValueError(f"Zu wenige Datenpunkte ({len(q)}) für {n_params} Parameter")
-
-    smearing = smearing or IdentitySmearing()
-    basis = SplineBasis(settings.dmax, settings.n_splines)
-    A_form = smearing.apply(cached_design_matrix(q, settings.dmax, settings.n_splines))
-    if structure_factor is not None:
-        S_q = np.asarray(structure_factor, dtype=float)
-        if S_q.shape != q.shape or not np.all(np.isfinite(S_q)):
-            raise ValueError("S(q) muss endlich sein und dieselbe Länge wie q haben")
-        A = A_form * S_q[:, None]          # ψ̃_ν(q) = ψ_ν(q)·S(q)  [BP97 Gl. 6]
-    else:
-        S_q = None
-        A = A_form
-    K = regularization_matrix(settings.n_splines, settings.k_type)
+    dec = IFTDecomposition(q, intensity, sigma, settings, smearing, structure_factor)
+    q, I, s = dec.q, dec.I, dec.s
+    basis, A_form, A, S_q = dec.basis, dec.A_form, dec.A, dec.S_q
     n_spl = settings.n_splines
+    Aw, Aw_p, yw = dec.Aw, dec.Aw_p, dec.yw
+    beta, back, lam_scale = dec.beta, dec.back, dec.lam_scale
 
-    Aw = A / s[:, None]
-    yw = I / s
-    if not (np.all(np.isfinite(Aw)) and np.all(np.isfinite(yw))):
-        raise ValueError("Nicht-endliche Werte in Daten oder Designmatrix")
+    # λ-Scan (alle λ auf einmal; bei Bedarf nach unten erweitert)
+    lam_grid, grid = lambda_grid(dec, settings)
+    md_grid, nc_grid = grid['md'], grid['nc']
 
-    # Optionaler konstanter Untergrund: wird analytisch herausprojiziert (gewichtete
-    # Projektion P = 1 − w wᵀ/‖w‖², w = 1/σ). Die Regularisierung wirkt dann nur auf die
-    # Splines, der Untergrund folgt exakt aus dem Residuum.
-    if settings.background:
-        w = 1.0 / s
-        w_norm2 = float(w @ w)
-        def project(x):
-            return x - np.outer(w, w @ x) / w_norm2 if x.ndim == 2 else x - w * (w @ x) / w_norm2
-        Aw_p, yw_p = project(Aw), project(yw)
-    else:
-        Aw_p, yw_p = Aw, yw
-
-    B = Aw_p.T @ Aw_p
-    b = Aw_p.T @ yw_p
-    lam_scale = np.trace(B) / np.trace(K)
-
-    # Verallgemeinerte Eigenzerlegung von (B, K): mit K = LLᵀ und L⁻¹BL⁻ᵀ = U diag(β) Uᵀ
-    # ist (B + λK)⁻¹ = L⁻ᵀ U diag(1/(β+λ)) Uᵀ L⁻¹ — numerisch stabil für alle λ > 0 und
-    # jede λ-Lösung kostet nur O(N²).
-    # Winziger Ridge: macht auch die (singuläre) Glatter-Form von K Cholesky-fähig
-    K_reg = K + 1e-10 * np.mean(np.diag(K)) * np.eye(n_spl)
-    L_inv = np.linalg.inv(np.linalg.cholesky(K_reg))
-    beta, U = np.linalg.eigh(L_inv @ B @ L_inv.T)
-    beta = np.maximum(beta, 0.0)
-    z = U.T @ (L_inv @ b)
-    back = U.T @ L_inv                                 # v ↦ c = backᵀ v
-
-    # λ-Scan (alle λ auf einmal)
-    lam_grid = np.logspace(np.log10(settings.lam_rel_min), np.log10(settings.lam_rel_max),
-                           int(settings.n_lam))
-    V = z[None, :] / (beta[None, :] + (lam_grid * lam_scale)[:, None])
-    C = V @ back
-    resid = C @ Aw_p.T - yw_p[None, :]
-    chi2_grid = np.sum(resid ** 2, axis=1)
-    md_grid = chi2_grid / len(q)
-    nc_grid = np.sum(V ** 2, axis=1)                    # cᵀKc = ‖v‖²
-
-    idx, abs_slope, found = _select_lambda(lam_grid, md_grid, nc_grid,
-                                           settings.md_tolerance, settings.plateau_slope)
+    idx_infl, abs_slope, found = _select_lambda(lam_grid, md_grid, nc_grid,
+                                                settings.md_tolerance, settings.plateau_slope)
+    idx_ev = int(np.argmax(grid['log_evidence']))
+    method = getattr(settings, 'lam_method', LAMBDA_INFLEXION)
+    if method not in (LAMBDA_INFLEXION, LAMBDA_EVIDENCE):
+        raise ValueError(f"Unbekanntes λ-Verfahren: {method}")
+    idx = idx_ev if method == LAMBDA_EVIDENCE else idx_infl
     scan = LambdaScan(lam_rel=lam_grid, md=md_grid, nc=nc_grid, abs_slope=abs_slope,
-                      index_opt=idx, inflexion_found=found, lam_scale=lam_scale)
+                      index_opt=idx, inflexion_found=found, lam_scale=lam_scale,
+                      log_evidence=grid['log_evidence'], n_good=grid['n_good'],
+                      index_inflexion=idx_infl, index_evidence=idx_ev, method=method)
 
     lam_manual = settings.lam != LAMBDA_AUTO
     lam_rel = float(settings.lam) if lam_manual else float(lam_grid[idx])
@@ -314,9 +412,9 @@ def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure
     # Linearer Lösungsoperator G (c = G·yw). Da yw Einheitskovarianz hat, gilt Cov = G·Gᵀ
     # (ohne Untergrund identisch mit H⁻¹BH⁻¹).
     # Aw_pᵀ ist bereits projiziert (Aw_pᵀP = Aw_pᵀ), daher wirkt G direkt auf yw.
-    G = (back.T / (beta + lam)) @ back @ Aw_p.T         # (N × M)
+    G = back.T @ ((dec.sv / (beta + lam))[:, None] * dec.Wt)   # (N × M), = H⁻¹·Aw_pᵀ
     if settings.background:
-        g_bg = (w - (w @ Aw) @ G) / w_norm2              # bg = g_bg · yw
+        g_bg = (dec.w - (dec.w @ Aw) @ G) / dec.w_norm2  # bg = g_bg · yw
         G_all = np.vstack([G, g_bg])
         A_all = np.hstack([A, np.ones((len(q), 1))])
     else:
@@ -365,6 +463,10 @@ def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure
         extras['form_factor'] = A_form @ c
         extras['form_factor_err'] = np.sqrt(np.maximum(
             np.einsum('ij,jk,ik->i', A_form, cov_c, A_form), 0.0))
+    # Evidenz und effektive Parameterzahl beim gewählten λ
+    at = dec.scan([lam_rel])
+    extras['log_evidence'] = float(at['log_evidence'][0])
+    extras['n_good'] = float(at['n_good'][0])
 
     return IFTSolution(
         settings=settings, q=q, intensity=I, sigma=s,

@@ -144,8 +144,8 @@ def build_space(analysis, settings: UncertaintySettings):
     if settings.sample_lambda:
         center = float(np.log10(sol.lam_rel))
         st = sol.settings
-        l_ = settings.lower.get(LOG_LAMBDA, max(center - settings.lambda_decades,
-                                                np.log10(st.lam_rel_min)))
+        scan_lo = min(np.log10(st.lam_rel_min), np.log10(sol.scan.lam_rel[0]))
+        l_ = settings.lower.get(LOG_LAMBDA, max(center - settings.lambda_decades, scan_lo))
         h_ = settings.upper.get(LOG_LAMBDA, min(center + settings.lambda_decades,
                                                 np.log10(st.lam_rel_max)))
         names.append(LOG_LAMBDA)

@@ -1072,6 +1072,82 @@
     "seed_tooltip": "Random seed of the BSSA search (reproducible, documented in the sidecar)",
     "workers": "Processes",
     "workers_tooltip": "Parallel processes for the BSSA multi-starts and DREAM. The result does not depend on the number (bit-identical). 0 = compute in the main process (diagnostics, not bit-identical to pool results).",
+    "tab_explorer": "Explorer",
+    "auto_qmin": "Exclude low-q artefacts automatically",
+    "auto_qmin_tooltip": "Detects a leading block with I ≤ 0 or sign changes (e.g. beamstop region, separation artefacts) and subsequent insignificant points, and sets q_min behind them. Manual limits take precedence.",
+    "dmax_suggest": "Suggest",
+    "dmax_suggest_tooltip": "Dmax from the explorer: smallest Dmax with a smooth p(r) that decays before Dmax (I(0) > 0) and a full fit of the data; N is set as well.",
+    "dmax_suggest_none": "No Dmax with smooth p(r) and good fit found — use the explorer (Dmax × λ map).",
+    "lambda_method": "λ choice",
+    "lambda_method_inflexion": "Inflexion point (Glatter)",
+    "lambda_method_evidence": "Evidence maximum (Bayes)",
+    "lambda_method_manual": "manual",
+    "lambda_method_tooltip": "Inflexion point: plateau of log N_c before the MD rise (Glatter 1977, default). Evidence maximum: most probable λ after Hansen (2000), the same quantity as in DREAM. Manual: value below, e.g. from the explorer or from DREAM.",
+    "lambda_label_inflexion": "inflexion point",
+    "lambda_label_evidence": "evidence maximum",
+    "lambda_label_manual": "manual",
+    "lambda_chosen": "chosen",
+    "lambda_evidence_axis": "log evidence − maximum",
+    "dream_adopt": "Adopt λ and Dmax from DREAM",
+    "dream_adopt_tooltip": "Sets λ (manual) and Dmax to the posterior medians of the DREAM analysis; then recompute.",
+    "dream_adopted": "λ/Dmax adopted from DREAM — recompute.",
+    "explorer_mode": "Scan",
+    "explorer_mode_map": "Map Dmax × λ",
+    "explorer_mode_dmax": "Scan over Dmax",
+    "explorer_mode_lam": "Scan over λ",
+    "explorer_mode_n_splines": "Scan over N",
+    "explorer_metric": "Metric",
+    "explorer_run": "Compute",
+    "explorer_points": "Points",
+    "explorer_osc": "Oscillation",
+    "explorer_osc_tooltip": "Threshold for a “smooth p(r)” in the green region (SasView definition; sphere ≈ 1.1).",
+    "explorer_hint": "Clicking into the plot adopts Dmax or λ (manual) or N. Green: smooth p(r) (oscillation ≤ threshold, I(0) > 0, p(r) decays before Dmax) with a full fit.",
+    "explorer_done": "Computed in {t} s.",
+    "explorer_empty": "No scan yet — “Compute”. Based on the current calculation (q range, N, K, background, for GIFT S(q) at the optimum).",
+    "explorer_adopted": "Values adopted.",
+    "explorer_stale": "outdated (settings changed) — recompute",
+    "explorer_map_title": "white: inflexion λ · cyan dotted: evidence maximum · green: good region · ★ current",
+    "explorer_no_inflexion": "no inflexion point",
+    "explorer_current": "current",
+    "explorer_good": "good region",
+    "batch": "Series…",
+    "batch_tooltip": "Apply the current settings to several loaded datasets (export with sidecar per dataset, summary as CSV).",
+    "batch_title": "IFT/GIFT series",
+    "batch_hint": "Applies the dialog settings (q range incl. automatic q_min, N, λ choice, K, background, S(q) model if any) to the selected datasets. Each dataset is exported to its GIFT folder with its own sidecar; the summary is saved as CSV.",
+    "batch_all": "All",
+    "batch_none": "None",
+    "batch_dmax_suggest": "Suggest Dmax per dataset",
+    "batch_dmax_fixed": "Dmax and N as in the dialog",
+    "batch_dmax_tooltip": "Suggest: Dmax and N per dataset from the explorer (useful when the particle size changes, e.g. aggregation).",
+    "batch_groups": "Add results as groups",
+    "batch_start": "Start series",
+    "batch_status": "Status",
+    "batch_running": "Dataset {k}/{n}: {name} …",
+    "batch_done": "{n} datasets analysed in {t} s. Summary: {path}",
+    "batch_cancelled": "Series cancelled.",
+    "batch_plot_title": "p(r)/I(0) of the series (* = Dmax suggested)",
+    "metric": {
+      "oscillation": "Oscillation",
+      "md": "MD",
+      "chi2_dof": "χ²/dof",
+      "log_evidence": "log evidence",
+      "positive_fraction": "Positive fraction",
+      "positive_1sigma": "1σ positive fraction",
+      "n_peaks": "Maxima",
+      "end_fraction": "Edge fraction p(0.9·Dmax…Dmax)",
+      "rg": "Rg",
+      "i0": "I(0)",
+      "n_good": "N_g (eff. parameters)",
+      "background": "Background"
+    },
+    "cause": {
+      "no_inflexion": "no inflexion point found",
+      "dmax_small": "Dmax probably too small (particle > π/q_min)",
+      "md_high": "MD ≫ 1 (check model, σ or background)",
+      "many_splines": "many splines compared to the Shannon channels",
+      "lambda_small": "λ more than a decade below the evidence optimum",
+      "none": "check the explorer (Dmax × λ)"
+    },
     "tab_uncertainty": "Uncertainty",
     "group_dream": "Uncertainty (DREAM)",
     "dream_hint": "MCMC analysis (DREAM(ZS)) of the finished calculation: the spline coefficients are integrated out analytically (Hansen 2000); the selected S(q) parameters, log λ and Dmax are sampled. Result: intervals, correlations and posterior bands.",
@@ -1190,6 +1266,23 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "lowq_artifacts": {
+        "excluded": "{n} points at low q (up to {q} nm⁻¹) detected as artefacts and excluded (sign changes or insignificant transition, e.g. beamstop region). q_min = {q_min} nm⁻¹; adjust manually if needed."
+      },
+      "lowq_rise": {
+        "rise": "I(q) rises at the start of the fit range up to q = {q} nm⁻¹ — beamstop edge shadow (increase q_min) or repulsive interaction (→ GIFT)."
+      },
+      "guinier_missing": {
+        "missing": "No Guinier region found: the particles are probably larger than π/q_min = {limit} nm. A Dmax ≤ π/q_min then forces an oscillating p(r) — determine Dmax with the explorer or “Suggest”; the largest distances remain uncertain."
+      },
+      "pr_smoothness": {
+        "ok": "Oscillation {osc} (sphere ≈ 1.1)",
+        "elevated": "p(r) oscillates slightly (oscillation {osc}, sphere ≈ 1.1). Probable cause: {causes}.",
+        "oscillating": "p(r) oscillates (oscillation {osc}, sphere ≈ 1.1). Probable cause: {causes}."
+      },
+      "pr_peaks": {
+        "several": "p(r) has {n} maxima — core-shell structure, aggregates or oscillation (compare with the oscillation metric)."
+      },
       "dream_convergence": {
         "ok": "DREAM converged (max. R̂ = {rhat}, {evals} evaluations).",
         "not_converged": "DREAM not converged: R̂ ≥ {target} for {names} after {evals} evaluations — increase the budget; the intervals are preliminary.",
@@ -1271,6 +1364,7 @@
         "relative": "σ assumed as {pct} % of |I| (e.g. simulated data) — MD and error bands are only relatively meaningful."
       },
       "lambda": {
+        "evidence": "λ determined by the evidence maximum (log λ_rel = {lam_ev}; inflexion point: {lam_infl}).",
         "ok": "λ determined by the point-of-inflexion method",
         "manual": "λ set manually (point of inflexion not used)",
         "not_found": "No point of inflexion found in log N_c(λ) — according to Glatter a hint of inconsistency between data and assumptions (Dmax, N, background)."
@@ -1291,7 +1385,7 @@
       },
       "pr_negative": {
         "ok": "No significantly negative p(r) values",
-        "negative": "p(r) is significantly negative (down to {depth} of the maximum) — background, inhomogeneity or unaccounted interaction (→ GIFT)?"
+        "negative": "p(r) is significantly negative (down to {depth} of the maximum) — background, oscillation, unaccounted interaction (→ GIFT) or (rarely) a contrast change within the particle?"
       },
       "pr_oscillation": {
         "oscillating": "p(r) changes sign significantly {n}× — typical for interparticle interaction (→ GIFT with structure factor)."

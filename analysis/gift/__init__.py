@@ -10,7 +10,9 @@ IFT/GIFT-Modul (GUI-frei).
   vektorisierte Batch-Likelihood (0.4)
 - Statistische Absicherung: marginale Likelihood (Hansen 2000), LHS-Screening und
   DREAM(ZS) über S(q)-Parameter, log λ und Dmax; Posterior-Bänder (0.5)
-Dmax-Scan und Messserien folgen (siehe docs/GIFT/PLAN.md).
+- Explorer (Kennzahlen SasView-kompatibel, Dmax × λ-Karte, 1D-Scans, Dmax-Vorschlag),
+  Evidenz-λ, Artefakterkennung bei kleinem q, SVD-Zerlegung, Serienauswertung (0.6)
+S_eff, S_rod, HNC/RY folgen (siehe docs/GIFT/PLAN.md).
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"

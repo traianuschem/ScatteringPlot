@@ -187,6 +187,15 @@ def check_inflexion(scan, lam_manual):
     if lam_manual:
         return Flag('lambda', LEVEL_INFO, "λ manuell vorgegeben (Wendepunkt nicht verwendet)",
                     variant='manual')
+    if scan is not None and getattr(scan, 'method', 'inflexion') == 'evidence':
+        infl = scan.lam_rel[scan.index_inflexion]
+        ev = scan.lam_rel[scan.index_evidence]
+        params = {'lam_ev': f"{np.log10(ev):.2f}", 'lam_infl': f"{np.log10(infl):.2f}"}
+        return Flag('lambda', LEVEL_INFO,
+                    f"λ über das Evidenz-Maximum bestimmt (log λ_rel = {params['lam_ev']}; "
+                    f"Wendepunkt: {params['lam_infl']}"
+                    + ("" if scan.inflexion_found else ", nicht gefunden") + ").",
+                    variant='evidence', params=params)
     if scan is not None and not scan.inflexion_found:
         return Flag('lambda', LEVEL_WARNING,
                     "Kein Wendepunkt in log N_c(λ) gefunden — nach Glatter ein Hinweis auf "
@@ -231,13 +240,16 @@ def check_pr_tail(r, pr, pr_err, dmax):
 
 
 def check_pr_negative(r, pr, pr_err):
+    """Signifikant negatives p(r). Nur Hinweis (v7.13): Bei Kontrastwechsel (z. B. Kern und
+    Schale mit entgegengesetztem Kontrast) ist das physikalisch möglich, wenn auch selten."""
     neg = (pr < 0) & _significant(pr, pr_err)
     if neg.any():
         depth = float(-np.min(pr[neg]) / np.max(np.abs(pr)))
-        return Flag('pr_negative', LEVEL_WARNING,
+        return Flag('pr_negative', LEVEL_INFO,
                     f"p(r) ist signifikant negativ (bis {depth:.0%} des Maximums) — "
-                    f"Untergrund, Inhomogenität oder nicht berücksichtigte Wechselwirkung "
-                    f"(→ GIFT)?", depth, None, 'negative', {'depth': f"{depth:.0%}"})
+                    f"Untergrund, Oszillation, nicht berücksichtigte Wechselwirkung (→ GIFT) "
+                    f"oder (selten) ein Kontrastwechsel im Teilchen?", depth, None, 'negative',
+                    {'depth': f"{depth:.0%}"})
     return Flag('pr_negative', LEVEL_OK, "Keine signifikant negativen p(r)-Werte")
 
 
@@ -251,6 +263,106 @@ def check_pr_oscillation(r, pr, pr_err):
                     f"p(r) wechselt {changes}× signifikant das Vorzeichen — typisch für "
                     f"Wechselwirkung zwischen den Teilchen (→ GIFT mit Strukturfaktor).",
                     float(changes), 2.0, 'oscillating', {'n': str(changes)})
+    return None
+
+
+def check_lowq_artifacts(selection):
+    """Automatisch ausgeschlossene Punkte am Kurvenanfang (analysis.significance)."""
+    n = getattr(selection, 'n_artifacts', 0) if selection is not None else 0
+    if not n:
+        return None
+    q_a = selection.q_artifacts
+    return Flag('lowq_artifacts', LEVEL_INFO,
+                f"{n} Punkte bei kleinem q (bis {q_a:.4g} nm⁻¹) als Artefakte erkannt und "
+                f"ausgeschlossen (Vorzeichenwechsel bzw. nicht signifikanter Übergang, z. B. "
+                f"Beamstop-Bereich). q_min = {selection.q_min:.4g} nm⁻¹; bei Bedarf manuell "
+                f"anpassen.", float(n), None, 'excluded',
+                {'n': str(n), 'q': f"{q_a:.4g}", 'q_min': f"{selection.q_min:.4g}"})
+
+
+def check_lowq_rise(q, intensity, sigma, n_check=6):
+    """I(q) steigt am Anfang des Fitbereichs zu größerem q an: Beamstop-Randschatten oder
+    repulsive Wechselwirkung (S(q) < 1). Wird nicht automatisch ausgeschlossen."""
+    k = min(n_check, len(q))
+    if k < 3:
+        return None
+    i_max = int(np.argmax(intensity[:k]))
+    if i_max > 0 and intensity[i_max] - intensity[0] > 3.0 * np.hypot(sigma[0], sigma[i_max]):
+        return Flag('lowq_rise', LEVEL_INFO,
+                    f"I(q) steigt am Anfang des Fitbereichs bis q = {q[i_max]:.4g} nm⁻¹ an — "
+                    f"Beamstop-Randschatten (q_min erhöhen) oder repulsive Wechselwirkung "
+                    f"(→ GIFT).", float(q[i_max]), None, 'rise', {'q': f"{q[i_max]:.4g}"})
+    return None
+
+
+def check_guinier_missing(guinier, q_min, dmax):
+    """Ohne Guinier-Bereich (q_min·Rg ≳ 1.3) ist das Teilchen vermutlich größer als π/q_min;
+    ein auf π/q_min begrenztes Dmax erzwingt dann ein oszillierendes p(r)."""
+    if guinier is not None:
+        return None
+    limit = np.pi / q_min
+    return Flag('guinier_missing', LEVEL_WARNING,
+                f"Kein Guinier-Bereich gefunden: Die Teilchen sind vermutlich größer als "
+                f"π/q_min = {limit:.3g} nm. Ein Dmax ≤ π/q_min erzwingt dann ein oszillierendes "
+                f"p(r) — Dmax mit dem Explorer bzw. „Dmax vorschlagen“ bestimmen; die größten "
+                f"Abstände bleiben unsicher.", dmax * q_min / np.pi, 1.0, 'missing',
+                {'limit': f"{limit:.3g}"})
+
+
+OSC_INFO = 1.6        # SasView-Oszillation: Kugel ≈ 1.1
+OSC_WARNING = 2.5
+
+CAUSE_TEXTS = {
+    'no_inflexion': "kein Wendepunkt gefunden",
+    'dmax_small': "Dmax vermutlich zu klein (Teilchen > π/q_min)",
+    'md_high': "MD ≫ 1 (Modell, σ oder Untergrund prüfen)",
+    'many_splines': "viele Splines im Verhältnis zu den Shannon-Kanälen",
+    'lambda_small': "λ mehr als eine Dekade unter dem Evidenz-Optimum",
+}
+
+
+def check_pr_smoothness(metrics, solution, guinier=None):
+    """Oszillation nach SasView-Definition mit den wahrscheinlichsten Ursachen.
+
+    `cause_codes` (Parameter) listet die Ursachen als Schlüssel `gift.cause.<code>`."""
+    osc = metrics.get('oscillation', float('nan'))
+    if not np.isfinite(osc):
+        return None
+    st = solution.settings
+    q_min, q_max = float(np.min(solution.q)), float(np.max(solution.q))
+    params = {'osc': f"{osc:.2f}"}
+    if osc <= OSC_INFO:
+        return Flag('pr_smoothness', LEVEL_OK, f"Oszillation {osc:.2f} (Kugel ≈ 1.1)", osc,
+                    OSC_INFO, 'ok', params)
+    causes = []
+    scan = solution.scan
+    if scan is not None and not solution.lam_manual and not scan.inflexion_found:
+        causes.append('no_inflexion')
+    if guinier is None and st.dmax <= 1.05 * np.pi / q_min:
+        causes.append('dmax_small')
+    if metrics.get('md', 0) > 2.0:
+        causes.append('md_high')
+    if st.n_splines > 2.0 * shannon_channels(st.dmax, q_min, q_max) + 5:
+        causes.append('many_splines')
+    if scan is not None and scan.index_evidence is not None:
+        if solution.lam_rel < scan.lam_rel[scan.index_evidence] / 10.0:
+            causes.append('lambda_small')
+    cause_txt = '; '.join(CAUSE_TEXTS[c] for c in causes) or "Explorer (Dmax × λ) prüfen"
+    params.update(causes=cause_txt, cause_codes=','.join(causes))
+    level = LEVEL_WARNING if osc > OSC_WARNING else LEVEL_INFO
+    return Flag('pr_smoothness', level,
+                f"p(r) oszilliert (Oszillation {osc:.2f}, Kugel ≈ 1.1). Wahrscheinliche "
+                f"Ursache: {cause_txt}.", osc, OSC_INFO,
+                'oscillating' if level == LEVEL_WARNING else 'elevated', params)
+
+
+def check_pr_peaks(metrics):
+    n = metrics.get('n_peaks', float('nan'))
+    if np.isfinite(n) and n > 1:
+        return Flag('pr_peaks', LEVEL_INFO,
+                    f"p(r) hat {int(n)} Maxima — Kern-Schale-Struktur, Aggregate oder "
+                    f"Oszillation (mit der Oszillations-Kennzahl vergleichen).", n, 1.0,
+                    'several', {'n': str(int(n))})
     return None
 
 
@@ -274,8 +386,13 @@ def check_rg_consistency(rg_ift, rg_guinier):
 # ---------------------------------------------------------------------------
 
 def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
-                 sigma_source=None, sigma_relative=None):
-    """Alle Flags für eine IFT-Lösung (Reihenfolge = Anzeige-Reihenfolge)."""
+                 sigma_source=None, sigma_relative=None, metrics=None):
+    """Alle Flags für eine IFT-Lösung (Reihenfolge = Anzeige-Reihenfolge).
+
+    metrics: Kennzahlen (explorer.solution_metrics); werden sonst berechnet."""
+    if metrics is None:
+        from .explorer import solution_metrics
+        metrics = solution_metrics(solution)
     if sigma_source is None:
         sigma_source = SIGMA_ESTIMATED if sigma_estimated else SIGMA_MEASURED
     sigma_estimated = sigma_source != SIGMA_MEASURED
@@ -286,6 +403,9 @@ def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
         check_dmax_qmin(st.dmax, q_min),
         check_shannon(st.dmax, q_min, q_max, st.n_splines),
         check_q_range(selection),
+        check_lowq_artifacts(selection),
+        check_lowq_rise(solution.q, solution.intensity, solution.sigma),
+        check_guinier_missing(guinier, q_min, st.dmax),
         check_sigma(sigma_source, sigma_relative),
         check_inflexion(solution.scan, solution.lam_manual),
         check_fit_quality(solution.md, sigma_estimated),
@@ -293,6 +413,8 @@ def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
         check_pr_tail(solution.r, solution.pr, solution.pr_err, st.dmax),
         check_pr_negative(solution.r, solution.pr, solution.pr_err),
         check_pr_oscillation(solution.r, solution.pr, solution.pr_err),
+        check_pr_smoothness(metrics, solution, guinier),
+        check_pr_peaks(metrics),
         check_rg_consistency(solution.rg, rg_g),
     ]
     return [f for f in flags if f is not None]

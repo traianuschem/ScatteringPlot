@@ -554,7 +554,7 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
   (Bindung an Aufgaben statt Worker) und bleiben mit den Sidecars aus v7.10 kompatibel.
 - Screening, Dmax-Scan und Messserien nutzen den Pool ab Phase 3d bzw. 4.
 
-### Phase 3d — umgesetzt (ScatterForge Plot v7.12.0, Branch `feature/gift`, noch nicht committet)
+### Phase 3d — umgesetzt (ScatterForge Plot v7.12.0, Branch `feature/gift`, Commit `255056d`)
 - `likelihood.py`: marginale Likelihood nach [Hansen 2000] mit analytisch
   herausintegrierten Spline-Koeffizienten; geprüft gegen die direkte Gauß-Marginale
   (< 10⁻⁶). Dmax-Variation über die skalierte Tabelle g_ν(q·Dmax) wie in §5 geplant
@@ -587,3 +587,49 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
   Korrelations-Flag φ–R_HS (+0.95), φ–z (−0.93) wie in [F00] beschrieben; Dmax-Posterior
   27.86 nm (Kugeldurchmesser 28 nm).
 - Tests: 97 (16 neu), ≈ 66 s.
+
+### Phase 4 — umgesetzt (ScatterForge Plot v7.13.0, Branch `feature/gift`, noch nicht committet)
+Anlass: Testlauf mit echten Daten (ASAXS-Normalterme, ESRF, 20/60/20 °C), bei dem p(r) nur
+oszillierte. Vor der Umsetzung besprochen; Entscheidungen des Nutzers:
+- Standard bleibt der Wendepunkt; andere λ wählbar (Evidenz-Maximum, aus DREAM).
+- Kennzahlen SasView-kompatibel; Interpretationsunterschiede Moore vs. GIFT dokumentieren
+  (`docs/GIFT/KENNZAHLEN.md`).
+- 1D-Scans wie SasView, zusätzlich die 2D-Karte Dmax × λ.
+- Artefakte bei kleinem q automatisch ausschließen (manuelle Grenzen haben Vorrang).
+- Kontrastwechsel (negatives p(r), mehrere Maxima) nur als Info.
+- Serienauswertung vorerst rudimentär (Metadaten-Auslese später).
+
+Ursachen im Testfall: (1) Separationsartefakte im Beamstop-Bereich mit kleinem σ,
+(2) Teilchen > π/q_min ohne Guinier-Bereich bei voreingestelltem Dmax = π/q_min,
+(3) numerischer Verlust der kleinen Eigenwerte (β über ~20 Dekaden) und zu kurzer λ-Scan,
+(4) Wendepunkt-Regel wählte bei flachem Randplateau den Scanrand.
+
+Umgesetzt:
+- `explorer.py`: Kennzahlen (Oszillation, Positive Fraction, 1σ-Positive, Maxima, MD,
+  χ²/dof, N_g, log-Evidenz, Randanteil), 1D-Scans, Karte, „guter Bereich“,
+  `suggest_dmax()`. Kugel: Oszillation 1.14 (SasView: ≈ 1.1).
+- `significance.detect_lowq_artifacts()` + `auto_qmin` (Standard an).
+- `ift.py`: SVD-Zerlegung, adaptive Scan-Erweiterung (nur bei MD₀ ≤ 2), Randplateau-Regel,
+  Evidenz/N_g im Scan, `lam_method` (inflexion/evidence).
+- Flags `lowq_artifacts`, `lowq_rise`, `guinier_missing`, `pr_smoothness` (mit Ursache),
+  `pr_peaks`; `pr_negative` → Info.
+- Dialog: Explorer-Tab (Klick übernimmt Werte), „Vorschlagen“, λ-Wahl, Kennzahlen,
+  „λ und Dmax aus DREAM übernehmen“, „Serie…“.
+- `batch.py` + `gift_batch_dialog.py`: Serie mit Dmax je Datensatz, CSV-Übersicht.
+
+**Abweichungen vom ursprünglichen Plan (§4.1/§5):**
+- Der „Dmax-Scan“ ist als Explorer mit Kennzahlen umgesetzt; die MD-Hyperfläche über
+  zwei S(q)-Parameter (B00 Fig. 4) wurde nicht gebaut (der DREAM-Corner-Plot zeigt dieselbe
+  Information statistisch sauberer).
+- Die λ-Normierung λ_rel = λ·tr(K)/tr(B) bleibt (Kompatibilität); stattdessen wird der Scan
+  bei Bedarf erweitert.
+- Die „gut“-Kriterien sind Faustregeln: Oszillation ≤ 1.6, I(0) > 0, Randanteil ≤ 0.1,
+  MD ≤ MD_ref + max(25 %, 3·√(2/M)) mit MD_ref = beste *glatte* Lösung. Ein kleineres MD,
+  das nur ein oszillierendes/negatives p(r) erreicht (60 °C: Korrelationspeak bei
+  q ≈ 0.39 nm⁻¹), schließt den glatten Bereich nicht aus.
+
+Ergebnis Testserie (Dmax vorgeschlagen): 20 °C Rg 54 nm, 60 °C 56 nm, 20 °C nach Heizen 78 nm,
+jeweils glattes p(r).
+Tests: 114 (17 neu), ≈ 70 s.
+
+Offen: Phase 5 (S_eff nach Vrij, S_rod, HNC/RY); Serien-Verfeinerung mit Metadaten.

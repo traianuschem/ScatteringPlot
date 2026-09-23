@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.12.0
+# ScatterForge Plot v7.13.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.12.0-blue)
+![Version](https://img.shields.io/badge/version-7.13.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **p(r)-Explorer & Kennzahlen** | SasView-kompatible Kennzahlen (Oszillation, Positive Fraction, Maxima, χ²) plus N_g und Evidenz; Karte Dmax × λ mit „gutem Bereich“ und Klick-Übernahme, 1D-Scans über Dmax/λ/N, Dmax-Vorschlag, λ per Evidenz-Maximum, automatische Artefakterkennung bei kleinem q, Serienauswertung mit CSV-Übersicht | ✅ **v7.13.0** |
 | **Unsicherheit per DREAM** | MCMC-Analyse (DREAM(ZS)) der IFT/GIFT-Parameter auf Knopfdruck: S(q)-Parameter, log λ und Dmax mit analytisch herausintegrierten Spline-Koeffizienten (Hansen 2000); Intervalle, Korrelationen, Corner-Plot, p(r)-/I(q)-/S(q)-Bänder, eigene Flags, Ketten als .npz | ✅ **v7.12.0** |
 | **Parallele GIFT-Rechnung** | BSSA-Mehrfachstarts im Prozess-Pool, Ergebnis bitgleich unabhängig von der Prozesszahl; vektorisierte Batch-Likelihood | ✅ **v7.11.0** |
 | **GIFT für geladene Systeme** | RMSA-Strukturfaktor (Hayter-Penfold, Rescaling nach Hansen-Hayter) mit Ladung, Salz, Temperatur, ε_r; validiert gegen sasmodels/SasView; BSSA-Mehrfachstart | ✅ **v7.10.0** |
@@ -95,6 +96,23 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.13?
+
+**Minor Release v7.13.0** — Explorer und Kennzahlen gegen oszillierende p(r)
+
+### Hauptfeatures v7.13
+
+- 🗺️ **Explorer-Tab**: Karte Dmax × λ (Oszillation, MD, Evidenz, …) mit Wendepunkt-λ, Evidenz-Maximum, π/q_min und grünem „gutem Bereich“; Klick übernimmt die Werte; 1D-Scans über Dmax, λ und N wie in SasView
+- 📏 **Kennzahlen** in SasView-Definition (Oszillation, Positive Fraction, 1σ-Positive Fraction, Maxima) plus N_g, log-Evidenz und Randanteil — mit Hinweisen zur unterschiedlichen Interpretation (Moore vs. Glatter/GIFT, [docs/GIFT/KENNZAHLEN.md](docs/GIFT/KENNZAHLEN.md))
+- ✂️ **Artefakte bei kleinem q** (Beamstop, Separation) werden automatisch erkannt und ausgeschlossen
+- 🎯 **Dmax vorschlagen** und neue Voreinstellung, wenn kein Guinier-Bereich gemessen ist; **λ-Wahl** Wendepunkt (Standard), Evidenz-Maximum oder aus DREAM
+- 🧮 Robustere Numerik: SVD-Zerlegung, automatisch erweiterter λ-Scan, Randplateau-Regel
+- 📚 **Serienauswertung** (rudimentär): gleiche Einstellungen für mehrere Datensätze, Dmax je Datensatz, CSV-Übersicht
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.13.md](CHANGELOG_v7.13.md)
 
 ---
 

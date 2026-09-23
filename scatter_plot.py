@@ -2967,7 +2967,8 @@ class ScatterPlotApp(QMainWindow):
         except AttributeError:
             window = 9
         try:
-            dlg = GiftDialog(dataset, parent=self, significance_window=window)
+            dlg = GiftDialog(dataset, parent=self, significance_window=window,
+                             datasets=self._loaded_datasets)
         except (ValueError, IndexError) as e:
             QMessageBox.critical(self, tr("messages.error"), str(e))
             return
@@ -2975,6 +2976,11 @@ class ScatterPlotApp(QMainWindow):
         self._gift_dialogs = [d for d in getattr(self, '_gift_dialogs', []) if d.isVisible()]
         self._gift_dialogs.append(dlg)
         dlg.show()
+
+    def _loaded_datasets(self):
+        """Alle geladenen Datensätze (Gruppen + nicht zugeordnet), z. B. für die GIFT-Serie."""
+        out = [ds for g in self.groups for ds in g.datasets] + list(self.unassigned_datasets)
+        return [ds for ds in out if getattr(ds, 'data_loaded', False)]
 
     def add_gift_results(self, info):
         """Legt aus den GIFT-Ergebnisdateien eine PDDF-Gruppe an (Rohdaten + Fit + p(r))."""
