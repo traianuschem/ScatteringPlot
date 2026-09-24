@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.13.0
+# ScatterForge Plot v7.14.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.13.0-blue)
+![Version](https://img.shields.io/badge/version-7.14.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **Weitere GIFT-Strukturfaktoren** | S_eff polydisperser harter Kugeln (Vrij, Schulz), klebrige harte Kugeln (Baxter), fraktales Aggregat (Teixeira), Stäbchen (Mean-Field) — validiert gegen sasmodels bzw. PY-Grenzfälle, mit Flags zur Bestimmbarkeit | ✅ **v7.14.0** |
 | **p(r)-Explorer & Kennzahlen** | SasView-kompatible Kennzahlen (Oszillation, Positive Fraction, Maxima, χ²) plus N_g und Evidenz; Karte Dmax × λ mit „gutem Bereich“ und Klick-Übernahme, 1D-Scans über Dmax/λ/N, Dmax-Vorschlag, λ per Evidenz-Maximum, automatische Artefakterkennung bei kleinem q, Serienauswertung mit CSV-Übersicht | ✅ **v7.13.0** |
 | **Unsicherheit per DREAM** | MCMC-Analyse (DREAM(ZS)) der IFT/GIFT-Parameter auf Knopfdruck: S(q)-Parameter, log λ und Dmax mit analytisch herausintegrierten Spline-Koeffizienten (Hansen 2000); Intervalle, Korrelationen, Corner-Plot, p(r)-/I(q)-/S(q)-Bänder, eigene Flags, Ketten als .npz | ✅ **v7.12.0** |
 | **Parallele GIFT-Rechnung** | BSSA-Mehrfachstarts im Prozess-Pool, Ergebnis bitgleich unabhängig von der Prozesszahl; vektorisierte Batch-Likelihood | ✅ **v7.11.0** |
@@ -96,6 +97,22 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v7.14?
+
+**Minor Release v7.14.0** — Weitere Strukturfaktoren für GIFT
+
+### Hauptfeatures v7.14
+
+- 🧪 **S_eff nach Vrij**: polydisperse harte Kugeln (Percus-Yevick-Mischung, Schulz-Verteilung) als physikalische Alternative zum „scheinbaren“ S_ave
+- 🍯 **Klebrige harte Kugeln** (Baxter): kurzreichweitige Anziehung, Parametrisierung wie SasView (τ = stickiness, δ = perturb)
+- 🕸️ **Fraktales Aggregat** (Teixeira): p(r) beschreibt die Bausteine, S(q) die Aggregation (D_f, ξ, Zahl der Bausteine)
+- 🥢 **Stäbchen** (Mean-Field nach van der Schoot, [W99])
+- 🛡️ Robustere Numerik für sehr kleine λ in GIFT und DREAM
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.14.md](CHANGELOG_v7.14.md)
 
 ---
 

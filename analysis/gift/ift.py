@@ -198,9 +198,25 @@ class IFTProblem:
         lam = lam_rel * np.trace(B) / self.trace_k
         try:
             L = np.linalg.cholesky(B + lam * self.K)
+            d = np.diag(L)
+            ill = d.min() < 1e-7 * d.max()         # Kondition von B + λK > ~10¹⁴
         except np.linalg.LinAlgError:
-            return np.inf
-        c = np.linalg.solve(L.T, np.linalg.solve(L, Aw_p.T @ self.yw_p))
+            ill = True
+        if ill:
+            # Sehr kleines λ (erweiterter λ-Scan, v7.13): Normalgleichungen sind zu schlecht
+            # konditioniert. Stabil über QR/SVD des gestapelten Systems [Aw_p; √λ·Dᵀ].
+            if not (lam > 0 and np.isfinite(lam)):
+                return np.inf
+            self._chol_k = getattr(self, '_chol_k', None)
+            if self._chol_k is None:
+                n = self.K.shape[0]
+                self._chol_k = np.linalg.cholesky(
+                    self.K + 1e-10 * np.mean(np.diag(self.K)) * np.eye(n)).T
+            M_stack = np.vstack([Aw_p, np.sqrt(lam) * self._chol_k])
+            y_stack = np.concatenate([self.yw_p, np.zeros(self.K.shape[0])])
+            c = np.linalg.lstsq(M_stack, y_stack, rcond=None)[0]
+        else:
+            c = np.linalg.solve(L.T, np.linalg.solve(L, Aw_p.T @ self.yw_p))
         r = Aw_p @ c - self.yw_p
         return float(r @ r) / len(self.q)
 
@@ -232,6 +248,9 @@ class IFTProblem:
             md = np.full(len(B), np.inf)
             try:
                 L = np.linalg.cholesky(H)
+                dg = np.diagonal(L, axis1=1, axis2=2)
+                if np.any(dg.min(axis=1) < 1e-7 * dg.max(axis=1)):
+                    raise np.linalg.LinAlgError   # schlecht konditioniert → wie md()
                 c = np.linalg.solve(np.swapaxes(L, 1, 2),
                                     np.linalg.solve(L, b[..., None]))[..., 0]
                 r = np.matmul(Aw, c[..., None])[..., 0] - self.yw_p[None, :]

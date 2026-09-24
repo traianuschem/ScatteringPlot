@@ -1061,6 +1061,10 @@
     "model_hs_py": "Hard spheres, Percus-Yevick",
     "model_hs_py_avg": "Hard spheres, averaged S_ave (recommended)",
     "model_rmsa": "Charged spheres, RMSA (Hayter-Penfold)",
+    "model_hs_vrij": "Hard spheres, polydisperse: S_eff (Vrij, Schulz)",
+    "model_sticky": "Sticky hard spheres (Baxter)",
+    "model_fractal": "Fractal aggregate (Teixeira)",
+    "model_rod": "Rods, mean field (S_rod)",
     "rmsa_rescaled": "Hansen-Hayter rescaling",
     "param_start": "Start",
     "param_lower": "min",
@@ -1266,6 +1270,19 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "gift_sticky": {
+        "no_attraction": "Stickiness τ runs to the upper bound ({tau}): no attraction detectable — the model corresponds to hard spheres (PY)."
+      },
+      "gift_sticky_coupled": {
+        "coupled": "Well width δ and stickiness τ are both free — they are strongly coupled (only their combination can be determined). Keep δ fixed (SasView: 0.01–0.1)."
+      },
+      "gift_fractal": {
+        "aggregate": "Fractal aggregate: ≈ {n} building blocks, Rg ≈ {rg} nm. p(r) describes the building blocks; r₀ and p(r) are coupled (check the DREAM correlation).",
+        "xi_unresolved": "ξ exceeds ~2/q_min (q_min·ξ = {qxi}): the Guinier region of the aggregates is not measured, ξ (and the aggregate size) cannot be determined."
+      },
+      "gift_rod": {
+        "degenerate": "S_rod depends on q only through the rod form factor F(qL); the model-free p(r) can largely absorb the structure factor. The parameters can hardly be determined from the data alone — set c from the concentration and keep it fixed (c = (π/4)·n·L²·D). Valid only for thin rods (qR < 1, L ≫ R)."
+      },
       "lowq_artifacts": {
         "excluded": "{n} points at low q (up to {q} nm⁻¹) detected as artefacts and excluded (sign changes or insignificant transition, e.g. beamstop region). q_min = {q_min} nm⁻¹; adjust manually if needed."
       },

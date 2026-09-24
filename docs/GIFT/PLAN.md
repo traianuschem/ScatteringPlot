@@ -400,7 +400,9 @@ Werkzeuge beide lesen können):
 | 3c | Vektorisierte Batch-Likelihood, `parallel.py` (Pool, Seeds), parallele BSSA-Mehrfachläufe, Test 10 | schneller und robuster Fit |
 | 3d | Marginale Likelihood, LHS-Screening, DREAM(ZS), Posterior-Bänder, Unsicherheits-Tab, DREAM-Flags, Test 9, „Aus Sidecar wiederholen“ | statistisch abgesicherte Parameter |
 | 4 | Dmax-Scan, MD-Hyperfläche, Batch über Messserien | Komfort |
-| 5 | S_eff (Vrij-PY), S_rod, HNC/Rogers-Young | erweiterte Modelle |
+| 5 | S_eff (Vrij-PY, Schulz), S_rod, klebrige harte Kugeln (Baxter), fraktales Aggregat (Teixeira) | erweiterte Modelle |
+| 6 | Radiales Dichteprofil aus p(r) (DECON), Größenverteilung per IFT, Querschnitts- und Dicken-IFT | weitere Glatter-Auswertungen |
+| später | HNC/Rogers-Young, instrumentelle Verschmierung, gemeinsame ASAXS-GIFT (mehrere Kurven, ein S(q)), Serie mit Metadaten | zurückgestellt |
 
 ## 8. Konventionen
 - Einheiten wie in ScatteringPlot: q in nm⁻¹, r in nm.
@@ -588,7 +590,7 @@ DREAM-Analyse (Phase 3d) wird die tatsächliche Unsicherheit in diesen Fällen q
   27.86 nm (Kugeldurchmesser 28 nm).
 - Tests: 97 (16 neu), ≈ 66 s.
 
-### Phase 4 — umgesetzt (ScatterForge Plot v7.13.0, Branch `feature/gift`, noch nicht committet)
+### Phase 4 — umgesetzt (ScatterForge Plot v7.13.0, Branch `feature/gift`, Commit `04134b8`)
 Anlass: Testlauf mit echten Daten (ASAXS-Normalterme, ESRF, 20/60/20 °C), bei dem p(r) nur
 oszillierte. Vor der Umsetzung besprochen; Entscheidungen des Nutzers:
 - Standard bleibt der Wendepunkt; andere λ wählbar (Evidenz-Maximum, aus DREAM).
@@ -633,3 +635,32 @@ jeweils glattes p(r).
 Tests: 114 (17 neu), ≈ 70 s.
 
 Offen: Phase 5 (S_eff nach Vrij, S_rod, HNC/RY); Serien-Verfeinerung mit Metadaten.
+
+### Phase 5 — Entscheidungen (vor der Umsetzung, 23.09.2026)
+- Umfang: S_eff nach Vrij (polydisperse harte Kugeln, **Schulz-Verteilung** wie in der
+  Quelle [V79, W99]), S_rod [W99], klebrige harte Kugeln (Baxter; Parametrisierung wie
+  sasmodels `stickyhardsphere`), fraktaler Aggregat-Strukturfaktor (Teixeira 1988).
+- Fraktal: Bausteinradius r₀ **frei** (Startwert aus Rg der IFT), keine feste Kopplung an
+  p(r); die Korrelation zeigen DREAM und das Korrelations-Flag.
+- Baxter: Topfbreite δ standardmäßig fest (0.05), aber editierbar und freigebbar.
+- Keine Kombinationen von Strukturfaktoren.
+- HNC/RY zurückgestellt; DECON, Größenverteilung und Querschnitts-/Dicken-IFT → Phase 6.
+
+### Phase 5 — umgesetzt (ScatterForge Plot v7.14.0, Branch `feature/gift`, noch nicht committet)
+- `sf_models.py`: S_eff nach Vrij (PY-Mischung über Baxters Faktorisierung; Vrijs OCR-Text
+  war nicht zuverlässig lesbar, die Baxter-Form ist äquivalent und unabhängig prüfbar),
+  Schulz-Verteilung mit 24 Gauß-Legendre-Knoten (Gauß-Laguerre-Gewichte laufen für
+  schmale Verteilungen über); Stäbchen [W99 Gl. 16–17]; Baxter (Port sasmodels, BSD-3);
+  Fraktal (Teixeira).
+- Validierung: Vrij — 1 Komponente = PY, identische Spezies, Kompressibilität der Mischung
+  (10⁻⁹); Baxter und Fraktal — sasmodels (10⁻¹⁴ bzw. 10⁻⁸); GIFT-Rückgewinnung für Vrij,
+  Baxter und Fraktal.
+- **Befund S_rod:** bei freiem p(r) praktisch nicht bestimmbar (MD ändert sich zwischen
+  c = 0 und c = 10 um < 1 %), weil S_rod nur über F(qL) von q abhängt. Umgesetzt wie
+  beschlossen, mit Warn-Flag und der Empfehlung, c aus der Konzentration vorzugeben.
+- **Robustheit:** Durch die Scan-Erweiterung aus Phase 4 konnten λ ≪ 10⁻¹⁴ in die
+  GIFT-Suche gelangen (Cholesky von B + λK scheiterte → Zielfunktion überall ∞). QR- bzw.
+  SVD-Rückfall in GIFT-Zielfunktion und DREAM-Likelihood.
+- ESRF-Daten: keine Anziehung nachweisbar (τ → Grenze), schwache HS-Korrelationen
+  (R_HS ≈ 95–124 nm, φ ≈ 0.12–0.15); Fraktal wegen q_min nicht auflösbar.
+- Tests: 127 (13 neu).

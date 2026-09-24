@@ -12,7 +12,9 @@ IFT/GIFT-Modul (GUI-frei).
   DREAM(ZS) über S(q)-Parameter, log λ und Dmax; Posterior-Bänder (0.5)
 - Explorer (Kennzahlen SasView-kompatibel, Dmax × λ-Karte, 1D-Scans, Dmax-Vorschlag),
   Evidenz-λ, Artefakterkennung bei kleinem q, SVD-Zerlegung, Serienauswertung (0.6)
-S_eff, S_rod, HNC/RY folgen (siehe docs/GIFT/PLAN.md).
+- Weitere Strukturfaktoren: S_eff nach Vrij (Schulz), klebrige harte Kugeln, fraktales
+  Aggregat, Stäbchen (Mean-Field) (0.7)
+DECON, Größenverteilung, Querschnitts-/Dicken-IFT folgen (siehe docs/GIFT/PLAN.md).
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"

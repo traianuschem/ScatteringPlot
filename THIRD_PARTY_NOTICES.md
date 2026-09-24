@@ -3,12 +3,15 @@
 ScatterForge Plot steht unter der GPL-3.0 (siehe `LICENSE`). Folgende Bestandteile
 stammen aus Projekten mit anderer, GPL-kompatibler Lizenz:
 
-## sasmodels — Hayter-Penfold-RMSA-Strukturfaktor
+## sasmodels — Hayter-Penfold-RMSA-Strukturfaktor und klebrige harte Kugeln
 
-- **Datei:** `analysis/gift/rmsa.py`
-- **Herkunft:** Python-Portierung von `sasmodels/models/hayter_msa.c`
-  (sasmodels 1.0.12, https://github.com/SasView/sasmodels), das auf die
-  Fortran-Routinen von J. B. Hayter (ILL, 1981) zurückgeht
+- **Dateien:** `analysis/gift/rmsa.py`; Funktion `s_sticky` in `analysis/gift/sf_models.py`
+- **Herkunft:** Python-Portierungen von `sasmodels/models/hayter_msa.c` (geht auf die
+  Fortran-Routinen von J. B. Hayter, ILL, 1981 zurück) und
+  `sasmodels/models/stickyhardsphere.c` (sasmodels 1.0.12,
+  https://github.com/SasView/sasmodels). Das fraktale S(q) (`s_fractal`) folgt derselben
+  Formel wie `sasmodels/models/lib/fractal_sq.c` (Teixeira 1988, Gl. 15), ist aber
+  eigenständig implementiert.
 - **Lizenz:** BSD-3-Clause
 
 ```

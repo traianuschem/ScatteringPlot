@@ -297,18 +297,24 @@ class MarginalLikelihood:
         n = H.shape[-1]
         for j, row in enumerate(idx):
             # zeilenweise (und damit unabhängig von der Stapelgröße bitgleich)
-            try:
-                L = np.linalg.cholesky(H[j])
-            except np.linalg.LinAlgError:
-                continue
             if not (lam[j] > 0 and np.isfinite(lam[j])):
                 continue
-            y = _solve_lower(L, b[j])
-            ch = _solve_upper(L.T, y)
+            try:
+                L = np.linalg.cholesky(H[j])
+                d = np.diag(L)
+                ill = d.min() < 1e-7 * d.max()
+            except np.linalg.LinAlgError:
+                ill = True
+            if ill:
+                # Sehr kleines λ: Normalgleichungen zu schlecht konditioniert → SVD (v7.14)
+                ch, L, logdet_h = _solve_svd(Aw[j], c['yw_p'], c['K'], lam[j])
+            else:
+                y = _solve_lower(L, b[j])
+                ch = _solve_upper(L.T, y)
+                logdet_h = 2.0 * float(np.sum(np.log(np.diag(L))))
             r = Aw[j] @ ch - c['yw_p']
             chi2 = float(r @ r)
             reg = float(lam[j] * (ch @ c['K'] @ ch))
-            logdet_h = 2.0 * float(np.sum(np.log(np.diag(L))))
             logdet_lk = n * float(np.log(lam[j])) + c['logdet_k']
             logl[row] = c['const'] - 0.5 * (chi2 + reg) - 0.5 * logdet_h + 0.5 * logdet_lk
             md[row] = chi2 / len(self.q)
@@ -319,6 +325,23 @@ class MarginalLikelihood:
         if want_solution:
             res['A'] = (idx, A)
         return res
+
+
+def _solve_svd(Aw, y, K, lam):
+    """ĉ, Dreiecksfaktor L (H = LLᵀ) und log det H für H = AwᵀAw + λK über die SVD von
+    Aw·L_K⁻ᵀ (stabil auch bei Kondition ≫ 10¹⁴)."""
+    n = K.shape[0]
+    Lk = np.linalg.cholesky(K + 1e-12 * np.mean(np.diag(K)) * np.eye(n))
+    Lk_inv = np.linalg.inv(Lk)
+    W, sv, Vt = np.linalg.svd(Aw @ Lk_inv.T, full_matrices=False)
+    beta = sv ** 2
+    v = sv * (W.T @ y) / (beta + lam)
+    ch = Lk_inv.T @ (Vt.T @ v)
+    F = Lk @ (Vt.T * np.sqrt(beta + lam))                 # H = F Fᵀ
+    R = np.linalg.qr(F.T, mode='r')
+    L = (R * np.sign(np.diag(R))[:, None]).T              # untere Dreiecksmatrix, diag > 0
+    logdet_h = 2.0 * float(np.sum(np.log(np.diag(Lk)))) + float(np.sum(np.log(beta + lam)))
+    return ch, L, logdet_h
 
 
 def _solve_lower(L, b):

@@ -1061,6 +1061,10 @@
     "model_hs_py": "Harte Kugeln, Percus-Yevick",
     "model_hs_py_avg": "Harte Kugeln, gemittelt S_ave (empfohlen)",
     "model_rmsa": "Geladene Kugeln, RMSA (Hayter-Penfold)",
+    "model_hs_vrij": "Harte Kugeln, polydispers: S_eff (Vrij, Schulz)",
+    "model_sticky": "Klebrige harte Kugeln (Baxter)",
+    "model_fractal": "Fraktales Aggregat (Teixeira)",
+    "model_rod": "Stäbchen, Mean-Field (S_rod)",
     "rmsa_rescaled": "Hansen-Hayter-Rescaling",
     "param_start": "Start",
     "param_lower": "min",
@@ -1266,6 +1270,19 @@
     "label_pr": "{name} – p(r)",
     "group_name": "GIFT: {name}",
     "flag": {
+      "gift_sticky": {
+        "no_attraction": "Stickiness τ läuft an die obere Grenze ({tau}): keine Anziehung nachweisbar — das Modell entspricht harten Kugeln (PY)."
+      },
+      "gift_sticky_coupled": {
+        "coupled": "Topfbreite δ und Stickiness τ sind gleichzeitig frei — sie sind stark gekoppelt (nur ihre Kombination ist bestimmbar). δ festhalten (SasView: 0.01–0.1)."
+      },
+      "gift_fractal": {
+        "aggregate": "Fraktales Aggregat: ≈ {n} Bausteine, Rg ≈ {rg} nm. p(r) beschreibt die Bausteine; r₀ und p(r) sind gekoppelt (DREAM-Korrelation prüfen).",
+        "xi_unresolved": "ξ ist größer als ~2/q_min (q_min·ξ = {qxi}): Der Guinier-Bereich der Aggregate ist nicht gemessen, ξ (und die Aggregatgröße) sind nicht bestimmbar."
+      },
+      "gift_rod": {
+        "degenerate": "S_rod hängt nur über den Stäbchen-Formfaktor F(qL) von q ab; das modellfreie p(r) kann den Strukturfaktor weitgehend aufnehmen. Die Parameter sind aus den Daten allein kaum bestimmbar — c aus der Konzentration vorgeben und festhalten (c = (π/4)·n·L²·D). Gültig nur für dünne Stäbchen (qR < 1, L ≫ R)."
+      },
       "lowq_artifacts": {
         "excluded": "{n} Punkte bei kleinem q (bis {q} nm⁻¹) als Artefakte erkannt und ausgeschlossen (Vorzeichenwechsel bzw. nicht signifikanter Übergang, z. B. Beamstop-Bereich). q_min = {q_min} nm⁻¹; bei Bedarf manuell anpassen."
       },

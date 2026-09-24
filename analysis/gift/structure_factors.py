@@ -10,6 +10,11 @@ Phase 3b:
 - 'rmsa'       geladene Kugeln, Hayter-Penfold-MSA mit Rescaling nach Hansen-Hayter
                (monodispers wie in [F00]); Parameter φ, R_HS, z; T, Salz und ε_r
                standardmäßig fest (siehe rmsa.py)
+Phase 5 (sf_models.py):
+- 'hs_vrij'    S_eff polydisperser harter Kugeln (PY-Mischung, Schulz) [V79, W99]
+- 'sticky'     klebrige harte Kugeln (Baxter/Menon; wie sasmodels stickyhardsphere)
+- 'fractal'    fraktales Aggregat (Teixeira 1988)
+- 'rod'        dünne polydisperse Stäbchen, Mean-Field [W99 Gl. 16–17]
 
 Alle Modelle sind vektorisiert: Parameter dürfen Arrays der Form (K,) sein, das
 Ergebnis hat dann die Form (K, M) — Grundlage für die spätere Batch-Auswertung
@@ -117,6 +122,8 @@ def s_none(q):
 # Registry
 # ---------------------------------------------------------------------------
 
+from . import sf_models  # noqa: E402 (nutzt s_percus_yevick aus diesem Modul)
+
 @dataclass
 class ParamSpec:
     name: str            # interner Name (Funktionsargument)
@@ -131,6 +138,9 @@ class ParamSpec:
     relative_search: float = 0.0
     # Standardmäßig fest (z. B. Temperatur, Salz, ε_r bei der RMSA) — im Dialog änderbar
     fixed_default: bool = False
+    # Startwert aus der IFT („Startwerte aus IFT“): 'rg_sphere' = √(5/3)·Rg,
+    # 'rg_sphere_x10' = 10·√(5/3)·Rg, 'dmax' = Dmax; '' = Standardwert
+    start_rule: str = ''
 
 
 @dataclass
@@ -176,13 +186,15 @@ MODELS: Dict[str, StructureFactorModel] = {
         'hs_py', 'gift.model_hs_py',
         lambda q, phi, r_hs: s_percus_yevick(q, r_hs, phi),
         [ParamSpec('phi', 'φ', '', 0.10, 1e-4, 0.55, 4),
-         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0)],
+         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0,
+                   start_rule='rg_sphere')],
         'Percus-Yevick hard spheres (Brunner-Popela & Glatter 1997, §2.4)'),
     'hs_py_avg': StructureFactorModel(
         'hs_py_avg', 'gift.model_hs_py_avg',
         lambda q, phi, r_hs, mu: s_percus_yevick_avg(q, r_hs, phi, mu),
         [ParamSpec('phi', 'φ', '', 0.10, 1e-4, 0.55, 4),
-         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0),
+         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0,
+                   start_rule='rg_sphere'),
          ParamSpec('mu', 'μ', '', 0.20, 0.0, 0.9, 3)],
         'averaged PY structure factor S_ave (Brunner-Popela & Glatter 1997, Eq. 34; '
         'Weyerich et al. 1999, Eq. 8)', apparent_parameters=True),
@@ -191,7 +203,8 @@ MODELS: Dict[str, StructureFactorModel] = {
         lambda q, phi, r_hs, charge, temperature, salt, eps_r:
             s_hayter_msa(q, r_hs, phi, charge, temperature, salt, eps_r),
         [ParamSpec('phi', 'φ', '', 0.10, 1e-4, 0.55, 4),
-         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0),
+         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0,
+                   start_rule='rg_sphere'),
          ParamSpec('charge', 'z', 'e', 20.0, 0.01, 200.0, 2, relative_search=10.0),
          ParamSpec('temperature', 'T', 'K', 298.15, 250.0, 450.0, 2, fixed_default=True),
          ParamSpec('salt', 'c_Salz', 'mol/L', 0.01, 0.0, 5.0, 4, fixed_default=True),
@@ -202,6 +215,49 @@ MODELS: Dict[str, StructureFactorModel] = {
         info=lambda v: rmsa_coefficients(v['r_hs'], v['phi'], v['charge'], v['temperature'],
                                          v['salt'], v['eps_r'])[1],
         default_starts=8),
+    'hs_vrij': StructureFactorModel(
+        'hs_vrij', 'gift.model_hs_vrij',
+        lambda q, phi, r_hs, mu: sf_models.s_eff_vrij(q, r_hs, phi, mu),
+        [ParamSpec('phi', 'φ', '', 0.10, 1e-4, 0.55, 4),
+         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0,
+                   start_rule='rg_sphere'),
+         ParamSpec('mu', 'μ (Schulz)', '', 0.20, 0.0, 0.6, 3)],
+        'effective structure factor S_eff of polydisperse hard spheres, PY mixture with '
+        'Schulz distribution (Vrij 1979; Weyerich, Brunner-Popela & Glatter 1999)',
+        info=lambda v: {'schulz_z': (1.0 / v['mu'] ** 2 - 1.0) if v['mu'] > 0 else float('inf')}),
+    'sticky': StructureFactorModel(
+        'sticky', 'gift.model_sticky',
+        lambda q, phi, r_hs, stickiness, perturb:
+            sf_models.s_sticky(q, r_hs, phi, stickiness, perturb),
+        [ParamSpec('phi', 'φ', '', 0.10, 1e-4, 0.6, 4),
+         ParamSpec('r_hs', 'R_HS', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0,
+                   start_rule='rg_sphere'),
+         ParamSpec('stickiness', 'τ', '', 0.20, 0.01, 10.0, 3),
+         ParamSpec('perturb', 'δ', '', 0.05, 0.01, 0.1, 3, fixed_default=True)],
+        'sticky hard spheres, perturbative PY solution (Baxter 1968; Menon et al. 1991); '
+        'port of sasmodels stickyhardsphere (BSD-3); τ = SasView stickiness, '
+        'δ = SasView perturb'),
+    'fractal': StructureFactorModel(
+        'fractal', 'gift.model_fractal',
+        lambda q, r0, df, xi: sf_models.s_fractal(q, r0, df, xi),
+        [ParamSpec('r0', 'r₀', 'nm', 10.0, 0.1, 1e4, 3, relative_search=4.0,
+                   start_rule='rg_sphere'),
+         ParamSpec('df', 'D_f', '', 2.0, 1.01, 3.0, 3),
+         ParamSpec('xi', 'ξ', 'nm', 100.0, 0.1, 1e6, 2, relative_search=10.0,
+                   start_rule='rg_sphere_x10')],
+        'mass-fractal aggregate of building blocks (Teixeira 1988, Eq. 15), '
+        'as sasmodels fractal_sq',
+        info=lambda v: sf_models.fractal_info(v['r0'], v['df'], v['xi'])),
+    'rod': StructureFactorModel(
+        'rod', 'gift.model_rod',
+        lambda q, c, length, mu_l: sf_models.s_rod(q, c, length, mu_l),
+        [ParamSpec('c', 'c', '', 1.0, 0.0, 50.0, 3),
+         ParamSpec('length', 'L', 'nm', 50.0, 0.5, 1e5, 2, relative_search=4.0,
+                   start_rule='dmax'),
+         ParamSpec('mu_l', 'μ_L', '', 0.10, 0.0, 0.6, 3)],
+        'thin polydisperse rods, mean-field (van der Schoot 1992; Weyerich, Brunner-Popela '
+        '& Glatter 1999, Eqs. 16-17); valid for qR < 1 and L/R >> 1',
+        info=lambda v: {'s0': 1.0 / (1.0 + 2.0 * v['c'])}),
 }
 DEFAULT_GIFT_MODEL = 'hs_py_avg'
 

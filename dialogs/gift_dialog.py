@@ -62,7 +62,7 @@ from analysis.gift.uncertainty import (UncertaintySettings, run_uncertainty, Dre
                                        LOG_LAMBDA, DMAX)
 from analysis.gift.dream import DreamSettings
 
-_MODEL_ORDER = ('none', 'hs_py_avg', 'hs_py', 'rmsa')
+_MODEL_ORDER = ('none', 'hs_py_avg', 'hs_vrij', 'hs_py', 'sticky', 'rmsa', 'fractal', 'rod')
 LAMBDA_MANUAL = 'manual'
 
 
@@ -1070,7 +1070,8 @@ class GiftDialog(QDialog):
         self._updating = was
 
     def _starts_from_ift(self):
-        """Startwerte: R_HS aus dem Rg der IFT (äquivalente Kugel, R = √(5/3)·Rg); φ, μ Standard.
+        """Startwerte aus der IFT je nach `ParamSpec.start_rule`: Radien aus Rg (äquivalente
+        Kugel, R = √(5/3)·Rg), ξ = 10·R, Stäbchenlänge = Dmax; sonst Standardwerte.
 
         Nach [BP97] konvergiert die Suche mit eher überschätzten Startwerten besser.
         """
@@ -1078,12 +1079,13 @@ class GiftDialog(QDialog):
         rg = None
         if self.analysis is not None and np.isfinite(self.analysis.solution.rg):
             rg = self.analysis.solution.rg
+        r_eq = np.sqrt(5.0 / 3.0) * rg if rg else self.dmax_spin.value() / 2.0
+        rules = {'rg_sphere': r_eq, 'rg_sphere_x10': 10.0 * r_eq,
+                 'dmax': self.dmax_spin.value()}
         for p in model.params:
-            if p.name == 'r_hs':
-                start = np.sqrt(5.0 / 3.0) * rg if rg else self.dmax_spin.value() / 2.0
-                self._set_param(p, float(f"{start:.3g}"))
-            else:
-                self._set_param(p, p.default)
+            start = rules.get(p.start_rule, p.default)
+            start = min(max(start, p.lower), p.upper)
+            self._set_param(p, float(f"{start:.3g}"))
         self._schedule()
 
     def _gift_settings(self):

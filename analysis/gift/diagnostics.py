@@ -425,10 +425,14 @@ def diagnose_gift(result, model):
     flags = []
     labels = {p.name: p.label for p in model.params}
     at_bound = []
+    no_attraction = False
     for name in result.free:
         rng = result.upper[name] - result.lower[name]
         v = result.params[name]
         if min(v - result.lower[name], result.upper[name] - v) < 0.01 * rng:
+            if model.key == 'sticky' and name == 'stickiness' and v > result.lower[name] + 0.5 * rng:
+                no_attraction = True       # τ → ∞: harte Kugeln, eigenes Flag unten
+                continue
             at_bound.append(f"{labels[name]} = {v:.4g}")
     if at_bound:
         names = ', '.join(at_bound)
@@ -506,6 +510,45 @@ def diagnose_gift(result, model):
                               f"Rescaling nach Hansen & Hayter aktiv: effektiver Durchmesser "
                               f"σ' = {1 / s:.3g}·σ (MSA allein gäbe g(σ+) < 0).", 1 / s, None,
                               'rescaled', {'factor': f"{1 / s:.3g}"}))
+
+    if model.key == 'sticky':
+        if no_attraction:
+            tau = result.params['stickiness']
+            flags.append(Flag('gift_sticky', LEVEL_INFO,
+                              f"Stickiness τ läuft an die obere Grenze ({tau:.3g}): keine Anziehung "
+                              f"nachweisbar — das Modell entspricht harten Kugeln (PY).", tau, None,
+                              'no_attraction', {'tau': f"{tau:.3g}"}))
+        if 'perturb' in result.free and 'stickiness' in result.free:
+            flags.append(Flag('gift_sticky_coupled', LEVEL_WARNING,
+                              "Topfbreite δ und Stickiness τ sind gleichzeitig frei — sie sind "
+                              "stark gekoppelt (nur ihre Kombination ist bestimmbar). δ "
+                              "festhalten (SasView: 0.01–0.1).", variant='coupled'))
+    if model.key == 'fractal':
+        xi = result.params['xi']
+        q_min = float(np.min(result.solution.q))
+        info = result.model_info or {}
+        params = {'n': f"{info.get('n_aggregate', float('nan')):.3g}",
+                  'rg': f"{info.get('rg_aggregate_nm', float('nan')):.3g}",
+                  'qxi': f"{q_min * xi:.2g}"}
+        if q_min * xi > 2.0:
+            flags.append(Flag('gift_fractal', LEVEL_WARNING,
+                              f"ξ = {xi:.3g} nm ist größer als ~2/q_min (q_min·ξ = "
+                              f"{q_min * xi:.2g}): Der Guinier-Bereich der Aggregate ist nicht "
+                              f"gemessen, ξ (und die Aggregatgröße) sind nicht bestimmbar.",
+                              q_min * xi, 2.0, 'xi_unresolved', params))
+        else:
+            flags.append(Flag('gift_fractal', LEVEL_INFO,
+                              f"Fraktales Aggregat: ≈ {params['n']} Bausteine, Rg ≈ "
+                              f"{params['rg']} nm. p(r) beschreibt die Bausteine; r₀ und p(r) "
+                              f"sind gekoppelt (DREAM-Korrelation prüfen).", q_min * xi, 2.0,
+                              'aggregate', params))
+    if model.key == 'rod':
+        flags.append(Flag('gift_rod', LEVEL_WARNING,
+                          "S_rod hängt nur über den Stäbchen-Formfaktor F(qL) von q ab; das "
+                          "modellfreie p(r) kann den Strukturfaktor weitgehend aufnehmen. Die "
+                          "Parameter sind aus den Daten allein kaum bestimmbar — c aus der "
+                          "Konzentration vorgeben und festhalten (c = (π/4)·n·L²·D). Gültig "
+                          "nur für dünne Stäbchen (qR < 1, L ≫ R) [W99].", variant='degenerate'))
 
     if model.apparent_parameters:
         flags.append(Flag('gift_apparent', LEVEL_INFO,
