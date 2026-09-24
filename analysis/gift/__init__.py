@@ -14,7 +14,8 @@ IFT/GIFT-Modul (GUI-frei).
   Evidenz-λ, Artefakterkennung bei kleinem q, SVD-Zerlegung, Serienauswertung (0.6)
 - Weitere Strukturfaktoren: S_eff nach Vrij (Schulz), klebrige harte Kugeln, fraktales
   Aggregat, Stäbchen (Mean-Field) (0.7)
-DECON, Größenverteilung, Querschnitts-/Dicken-IFT folgen (siehe docs/GIFT/PLAN.md).
+- IFT-Arten: Querschnitt p_c(r), Dicke p_t(r), Größenverteilungen D_V(R) für Kugeln,
+  Zylinder, Lamellen (Glatter 1980a/b); DECON-Kontrastprofil (Glatter 1981) (0.8)
 """
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"

@@ -65,7 +65,8 @@ def _dmax_for(item, settings, q_range, sigma_relative, fallback):
     dmax, _scan = suggest_dmax(q[m], I[m], np.asarray(s)[m], settings)
     if dmax is None:
         return fallback, settings.n_splines, False
-    return dmax, suggest_n_splines(dmax, sel.q_min, sel.q_max), True
+    return dmax, suggest_n_splines(dmax, sel.q_min, sel.q_max,
+                                   kind=getattr(settings, 'kind', 'pddf')), True
 
 
 def run_batch(items: List[BatchItem], settings: IFTSettings, q_range: QRangeSettings,

@@ -14,10 +14,13 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from . import __version__ as MODULE_VERSION
-from .ift import IFTSettings, IFTSolution, run_ift, estimate_sigma
+from .ift import IFTSettings, IFTSolution, run_ift, estimate_sigma, settings_kind
+from .kernels import get_kernel, LABELS, PDDF
+from .sizes import size_statistics
+from .decon import DeconSettings, DeconResult, run_decon, optimize_step_model, GEOMETRIES
 from .diagnostics import (diagnose_ift, guinier_rg, worst_level, Flag, SIGMA_MEASURED,
                           SIGMA_ESTIMATED, SIGMA_RELATIVE)
-from .diagnostics import diagnose_gift
+from .diagnostics import diagnose_gift, check_size_distribution
 from .gift import GIFTSettings, GIFTResult, run_gift
 from .structure_factors import get_model
 from .provenance import ProvenanceRecord, default_agent, compute_sha256
@@ -61,12 +64,14 @@ class IFTAnalysis:
     source_file: Optional[Path] = None
     gift: Optional[GIFTResult] = None
     uncertainty: Optional[UncertaintyResult] = None       # DREAM (auf Knopfdruck)
+    decon: Optional[DeconResult] = None                   # Kontrastprofil (auf Knopfdruck)
     metrics: Dict[str, float] = field(default_factory=dict)   # Kennzahlen (explorer.py)
     extras: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def all_flags(self) -> List[Flag]:
-        return self.flags + (self.uncertainty.flags if self.uncertainty is not None else [])
+        return (self.flags + (self.uncertainty.flags if self.uncertainty is not None else [])
+                + (self.decon.flags if self.decon is not None else []))
 
     @property
     def worst_level(self):
@@ -182,14 +187,20 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
         solution = run_ift(q[mask], I[mask], sigma_arr[mask], settings)
 
     # 4) IFT-Ergebnis und Diagnose
-    guinier = guinier_rg(q[mask], I[mask], sigma_arr[mask])
+    guinier = guinier_rg(q[mask], I[mask], sigma_arr[mask],
+                         dim=get_kernel(settings_kind(settings)).guinier_dim)
     metrics = solution_metrics(solution)
     flags = diagnose_ift(solution, selection, guinier=guinier, sigma_source=sigma_source,
                          sigma_relative=sigma_relative, metrics=metrics)
     if gift is not None:
         flags += diagnose_gift(gift, get_model(model_key))
+    kind = settings_kind(settings)
+    sizes = size_statistics(solution) if get_kernel(kind).size else None
+    if sizes is not None:
+        flags.append(check_size_distribution(sizes))
     record.add_activity(
         "Indirekte Fourier-Transformation (Glatter 1977)"
+        + (f", {LABELS[kind]['title']}" if kind != PDDF else "")
         + (f" mit S(q) = {model_key}" if gift is not None else ""), "ift",
         parameters={**settings.to_dict(), 'basis': 'clamped cubic B-splines',
                     'lambda_selection': 'inflexion point (log N_c vs. log λ)',
@@ -209,6 +220,10 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
             'background': solution.background, 'background_err': solution.background_err,
             'rg_guinier_nm': guinier[0] if guinier else None,
             'guinier_points': guinier[2] if guinier else None,
+            'kind': kind,
+            **({'size_statistics': {k: v for k, v in sizes.items()
+                                    if not isinstance(v, (np.ndarray, dict))}}
+               if sizes else {}),
         })
     record.set_flags(flags)
     if gift is None:
@@ -226,6 +241,8 @@ def run_ift_analysis(q, intensity, sigma=None, settings: IFTSettings = None,
                  "bitgleich reproduzierbar.")
 
     extras = {'source_metadata': meta, 'q_all': q, 'I_all': I, 'sigma_all': sigma_arr}
+    if sizes is not None:
+        extras['size_statistics'] = sizes
     return IFTAnalysis(extras=extras,
                        solution=solution, selection=selection, flags=flags, guinier=guinier,
                        sigma_estimated=sigma_estimated, record=record,
@@ -241,6 +258,39 @@ def run_uncertainty_analysis(analysis: IFTAnalysis, settings: UncertaintySetting
     result = run_uncertainty(analysis, settings, progress=progress)
     analysis.uncertainty = result
     return result
+
+
+def run_decon_analysis(analysis: IFTAnalysis, settings: Optional[DeconSettings] = None,
+                       progress=None) -> DeconResult:
+    """DECON (Kontrastprofil, Glatter 1981) einer fertigen IFT/GIFT-Analyse; das Ergebnis hängt
+    danach an `analysis.decon` und wird mit exportiert."""
+    result = run_decon(analysis.solution, settings, progress=progress)
+    analysis.decon = result
+    return result
+
+
+def run_step_model_analysis(analysis: IFTAnalysis, n_steps=2) -> Dict:
+    """Stufenmodell mit variablen Breiten [Glatter & Hainisch 1984] zur vorhandenen
+    DECON-Rechnung (gleiche Polydispersität); Ergebnis in `analysis.decon.step_model`."""
+    d = analysis.decon
+    if d is None:
+        raise ValueError("Zuerst das Profil berechnen (DECON)")
+    sm = optimize_step_model(analysis.solution, n_steps, d.sigma_poly,
+                             d.settings.distribution, d.settings)
+    d.step_model = sm
+    return sm
+
+
+def _add_decon_provenance(rec: ProvenanceRecord, d: DeconResult):
+    rec.add_activity(
+        "DECON: radiales Kontrastprofil als Faltungswurzel von p(r) (Glatter 1981; Glatter & "
+        "Hainisch 1984; Polydispersität nach Mittelbach & Glatter 1998)", "decon",
+        parameters={**d.settings.to_dict(), 'geometry': d.geometry, 'radius_nm': d.radius,
+                    'overlap_integrals': 'analytic (Glatter & Hainisch 1984, eq. A2-A5)',
+                    'lambda_selection': 'point of inflexion (Glatter 1981)',
+                    'objective': 'sum ((c^T V(r) c - p(r))/sigma)^2 + lambda |Dc|^2',
+                    'starts': [s['start'] for s in d.starts]},
+        results_summary=d.results_summary())
 
 
 def _add_uncertainty_provenance(rec: ProvenanceRecord, u: UncertaintyResult):
@@ -295,9 +345,34 @@ def _save_uncertainty(u: UncertaintyResult, paths, analysis, rec):
 # Export
 # ---------------------------------------------------------------------------
 
+def _kind_lines(analysis: IFTAnalysis) -> List[str]:
+    """Kopfzeilen zur IFT-Art (v8.0): äquivalente homogene Größe bzw. Verteilungsmomente."""
+    s = analysis.solution
+    kind = settings_kind(s.settings)
+    lab = LABELS[kind]
+    if kind == PDDF:
+        return []
+    lines = [f"# IFT-Art: {kind} ({lab['title']})"]
+    if lab['equiv'] and np.isfinite(s.rg):
+        name, f = lab['equiv']
+        lines.append(f"# homogen äquivalent: {name} = {f * s.rg:.6g} +- {f * s.rg_err:.3g} nm")
+    z = analysis.extras.get('size_statistics')
+    if z:
+        x = lab['x']
+        lines.append(
+            f"# Verteilung: Modus = {z['mode']:.6g} nm, <{x}>_V = {z['mean_V']:.6g} +- "
+            f"{z['mean_V_err']:.3g} nm, sigma_V = {z['std_V']:.4g} nm, <{x}>_N = "
+            f"{z['mean_N']:.6g} +- {z['mean_N_err']:.3g} nm, sigma_N = {z['std_N']:.4g} nm"
+            + (f" (Anzahl nur fuer {x} >= {z['r_min']:.3g} nm und D_V >= 2 sigma)"
+               if z['number_restricted'] else " (D_N direkt bestimmt)")
+            + f", Negativanteil = {z['negative_fraction']:.3g}")
+    return lines
+
+
 def _header(analysis: IFTAnalysis, title: str, columns: List[str]) -> str:
     s = analysis.solution
     st = s.settings
+    lab = LABELS[settings_kind(st)]
     lines = [
         f"# {title}",
         f"# record_id: {analysis.record.record_id}",
@@ -308,8 +383,9 @@ def _header(analysis: IFTAnalysis, title: str, columns: List[str]) -> str:
         f"lambda_rel = {s.lam_rel:.4g} ({_lambda_label(s)})",
         f"# q-Bereich: {analysis.selection.q_min:.6g} - {analysis.selection.q_max:.6g} nm^-1 "
         f"({analysis.selection.mode})",
-        f"# Rg = {s.rg:.6g} +- {s.rg_err:.3g} nm, I(0) = {s.i0:.6g} +- {s.i0_err:.3g}, "
-        f"MD = {s.md:.4g}",
+        f"# {lab['rg']} = {s.rg:.6g} +- {s.rg_err:.3g} nm, {lab['i0']} = {s.i0:.6g} +- "
+        f"{s.i0_err:.3g}, MD = {s.md:.4g}",
+        *_kind_lines(analysis),
         *([f"# Kennzahlen: Oszillation = {analysis.metrics['oscillation']:.3g}, "
            f"Positive Fraction = {analysis.metrics['positive_fraction']:.3g}, "
            f"1sigma-Positive = {analysis.metrics['positive_1sigma']:.3g}, "
@@ -346,11 +422,15 @@ def _dream_header_line(analysis: IFTAnalysis) -> str:
             f"R-hat max = {float(np.max(u.dream.r_hat)):.3f}")
 
 
-def result_paths(source_file, out_dir=None) -> Dict[str, Path]:
-    """Standard-Dateinamen im Unterordner GIFT/ neben der Datendatei."""
+def result_paths(source_file, out_dir=None, kind=PDDF) -> Dict[str, Path]:
+    """Standard-Dateinamen im Unterordner GIFT/ neben der Datendatei.
+
+    Andere IFT-Arten (v8.0) erhalten eine Kennung, z. B. `probe-xs_GIFT_pr.dat`, damit
+    p(r)-, Querschnitts- und Größenauswertung derselben Datei nebeneinander bestehen."""
     source_file = Path(source_file)
     out_dir = Path(out_dir) if out_dir else source_file.parent / RESULT_SUBDIR
-    stem = source_file.stem
+    tag = LABELS[kind or PDDF]['tag']
+    stem = source_file.stem + (f"-{tag}" if tag else "")
     return {
         'pr': out_dir / f"{stem}_GIFT_pr.dat",
         'fit': out_dir / f"{stem}_GIFT_fit-PDDF.dat",
@@ -359,6 +439,7 @@ def result_paths(source_file, out_dir=None) -> Dict[str, Path]:
         'pq': out_dir / f"{stem}_GIFT_Pq.dat",
         'dream': out_dir / f"{stem}_GIFT_dream.npz",
         'pr_band': out_dir / f"{stem}_GIFT_pr_band.dat",
+        'decon': out_dir / f"{stem}_GIFT_decon.dat",
         'prov': out_dir / f"{stem}_GIFT_prov.json",
         'prov_w3c': out_dir / f"{stem}_GIFT.prov-w3c.json",
     }
@@ -374,9 +455,11 @@ def export_ift_results(analysis: IFTAnalysis, out_dir=None, source_file=None,
     source = source_file or analysis.source_file
     if source is None:
         raise ValueError("Ohne Quelldatei muss ein Zielpfad (source_file) angegeben werden")
-    paths = result_paths(source, out_dir)
-    paths['pr'].parent.mkdir(parents=True, exist_ok=True)
     s = analysis.solution
+    kind = settings_kind(s.settings)
+    lab = LABELS[kind]
+    paths = result_paths(source, out_dir, kind)
+    paths['pr'].parent.mkdir(parents=True, exist_ok=True)
     # Der Export arbeitet auf einer Kopie des Records: Die Analyse bleibt unverändert und
     # kann erneut (z. B. in einen anderen Ordner) exportiert werden.
     rec = copy.deepcopy(analysis.record)
@@ -384,16 +467,28 @@ def export_ift_results(analysis: IFTAnalysis, out_dir=None, source_file=None,
 
     if analysis.uncertainty is not None:
         _add_uncertainty_provenance(rec, analysis.uncertainty)
+    if analysis.decon is not None:
+        _add_decon_provenance(rec, analysis.decon)
+    if analysis.uncertainty is not None or analysis.decon is not None:
         rec.set_flags(analysis.all_flags)
     rec.add_activity("Export", "export",
                      parameters={'out_dir': paths['pr'].parent, 'write_w3c': write_w3c})
 
-    np.savetxt(paths['pr'], np.column_stack([s.r, s.pr, s.pr_err]), fmt='%.8e',
+    cols = [f"{lab['x']} / nm", lab['f'], f"sigma_{lab['f']}"]
+    keys = ['r_nm', 'p_r', 'sigma_p_r']
+    data = [s.r, s.pr, s.pr_err]
+    z = analysis.extras.get('size_statistics')
+    if z is not None:
+        # Größenverteilung: zusätzlich die abgeleiteten Verteilungen (je auf max = 1; eine
+        # aus D_V abgeleitete D_N nur im auswertbaren Bereich, sonst NaN)
+        for name, arr in z['derived'].items():
+            cols.append(f"{name} (norm.)")
+            keys.append(f"{name}_norm")
+            data.append(arr)
+    np.savetxt(paths['pr'], np.column_stack(data), fmt='%.8e',
                delimiter='\t', comments='', encoding='utf-8',
-               header=_header(analysis, "p(r) aus IFT (Glatter 1977)",
-                              ['r / nm', 'p(r)', 'sigma_p(r)']))
-    rec.add_output('pr', paths['pr'].name, paths['pr'],
-                   extra_fields={'columns': ['r_nm', 'p_r', 'sigma_p_r']})
+               header=_header(analysis, lab['title'], cols))
+    rec.add_output('pr', paths['pr'].name, paths['pr'], extra_fields={'columns': keys})
 
     np.savetxt(paths['fit'], np.column_stack([s.q, s.i_fit, s.i_fit_err]), fmt='%.8e',
                delimiter='\t', comments='', encoding='utf-8',
@@ -436,6 +531,33 @@ def export_ift_results(analysis: IFTAnalysis, out_dir=None, source_file=None,
     if analysis.uncertainty is not None:
         _save_uncertainty(analysis.uncertainty, paths, analysis, rec)
         written.update({'dream': paths['dream'], 'pr_band': paths['pr_band']})
+    if analysis.decon is not None:
+        d = analysis.decon
+        cols = ['x / nm', 'Delta_rho (rel.)', 'sigma']
+        data = [d.x, d.rho, d.rho_err]
+        for i, alt in enumerate(d.alternatives):
+            cols.append(f"Alternative {i + 1} ({alt['start']})")
+            data.append(alt['rho'])
+        sm = d.step_model
+        if sm is not None:
+            cols.append(f"Stufenmodell ({len(sm['edges'])} Stufen)")
+            data.append(np.interp(d.x, sm['x'], sm['rho'], right=0.0))
+        poly = (f"Polydispersitaet P = {d.p_percent:.1f} % (sigma = {d.sigma_poly:.4g}, "
+                f"{d.settings.distribution}, {d.settings.polydispersity})"
+                if d.settings.polydispersity != 'none' else "monodispers")
+        steps = ("; Stufenmodell: Grenzen " + ", ".join(f"{e:.4g}" for e in sm['edges'])
+                 + " nm, Hoehen " + ", ".join(f"{h:.4g}" for h in sm['heights'])
+                 + f", MD(p) = {sm['md_pr']:.4g}") if sm is not None else ""
+        np.savetxt(paths['decon'], np.column_stack(data), fmt='%.8e', delimiter='\t',
+                   comments='', encoding='utf-8',
+                   header=_header(analysis, f"Kontrastprofil DECON ({d.geometry}, "
+                                            f"{d.settings.basis}, R = {d.radius:g} nm); "
+                                            f"Vorzeichen: Integral > 0; {poly}; "
+                                            f"MD(p) = {d.md_pr:.4g}, MD(I) = {d.md_q:.4g}"
+                                            f"{steps}", cols))
+        rec.add_output('decon', paths['decon'].name, paths['decon'],
+                       extra_fields={'columns': cols})
+        written['decon'] = paths['decon']
     if write_w3c:
         rec.export_prov_json_to_file(paths['prov_w3c'])
         rec.add_output('provenance_prov_json', paths['prov_w3c'].name, paths['prov_w3c'])

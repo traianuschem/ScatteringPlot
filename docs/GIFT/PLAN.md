@@ -1,6 +1,6 @@
 # GIFT/IFT-Modul für ScatterForge Plot (ScatteringPlot) — Plan
 
-Stand: 2026-09-23 · Status: Entwurf v6 (+ q-Fitbereich per Signifikanz-Voreinstellung)
+Stand: 2026-09-24 · Status: Entwurf v6 (+ q-Fitbereich per Signifikanz-Voreinstellung)
 
 ## 0. Entscheidungen (Runde 1)
 | Punkt | Entscheidung |
@@ -33,6 +33,12 @@ Quellen (`GIFT/0_Sources/`):
 - [HP81] Hayter & Penfold (1981). *Mol. Phys.* **42**, 109 — MSA, analytisch
 - [HH82] Hansen & Hayter (1982). *Mol. Phys.* **46**, 651 — RMSA (Rescaling bei kleinem φ)
 - [V79] Vrij (1979). *J. Chem. Phys.* **71**, 3267 — PY für polydisperse HS-Mischungen (S_eff)
+- [G79] Glatter (1979). *J. Appl. Cryst.* **12**, 166 — Interpretation von p(r)
+- [G80a] Glatter (1980). *J. Appl. Cryst.* **13**, 7 — Größenverteilungen per IFT
+- [G80b] Glatter (1980). *J. Appl. Cryst.* **13**, 577 — lamellare/zylindrische Teilchen
+- [G81] Glatter (1981). *J. Appl. Cryst.* **14**, 101 — Faltungswurzel (DECON)
+- [GH84] Glatter & Hainisch (1984). *J. Appl. Cryst.* **17**, 435 — Überlappungsintegrale, Stufenmodell
+- [MG98] Mittelbach & Glatter (1998). *J. Appl. Cryst.* **31**, 600 — DECON für polydisperse Teilchen
 - extern, nicht im Ordner: Vrugt (2016). *Environ. Model. Softw.* **75**, 273 (DREAM);
   ter Braak & Vrugt (2008). *Stat. Comput.* **18**, 435 (DREAM(ZS));
   Hansen (2000). *J. Appl. Cryst.* **33**, 1415 (Bayes'sche IFT, marginale Likelihood)
@@ -646,7 +652,7 @@ Offen: Phase 5 (S_eff nach Vrij, S_rod, HNC/RY); Serien-Verfeinerung mit Metadat
 - Keine Kombinationen von Strukturfaktoren.
 - HNC/RY zurückgestellt; DECON, Größenverteilung und Querschnitts-/Dicken-IFT → Phase 6.
 
-### Phase 5 — umgesetzt (ScatterForge Plot v7.14.0, Branch `feature/gift`, noch nicht committet)
+### Phase 5 — umgesetzt (ScatterForge Plot v7.14.0, Branch `feature/gift`, Commit `b3a986f`)
 - `sf_models.py`: S_eff nach Vrij (PY-Mischung über Baxters Faktorisierung; Vrijs OCR-Text
   war nicht zuverlässig lesbar, die Baxter-Form ist äquivalent und unabhängig prüfbar),
   Schulz-Verteilung mit 24 Gauß-Legendre-Knoten (Gauß-Laguerre-Gewichte laufen für
@@ -664,3 +670,26 @@ Offen: Phase 5 (S_eff nach Vrij, S_rod, HNC/RY); Serien-Verfeinerung mit Metadat
 - ESRF-Daten: keine Anziehung nachweisbar (τ → Grenze), schwache HS-Korrelationen
   (R_HS ≈ 95–124 nm, φ ≈ 0.12–0.15); Fraktal wegen q_min nicht auflösbar.
 - Tests: 127 (13 neu).
+
+### Phase 6 — umgesetzt (ScatterForge Plot v8.0.0, Branch `feature/gift`)
+Versionierung ab 8.0.0: Bugfixes als 8.0.x.
+Quellen ergänzt: [G79], [G80a], [G80b], [G81], [GH84], [MG98] (`GIFT/0_Sources/`).
+- `kernels.py`: IFT-Arten `pddf`, `cross_section`, `thickness`, `size_sphere|cylinder|lamella`
+  (D_V) und `…_n` (D_N, Primärgröße nach [G80a]); Kerne wie [G80a Gl. 1], [G80b Gl. 15].
+  λ-Wahl, Explorer, GIFT, DREAM (mit Dmax), Export und Sidecar arbeiten mit jeder Art.
+- `sizes.py`: D_V/D_N/D_I, Momente mit Fehlern; negative Werte nicht unterdrückt [G80a].
+- `decon.py`: exakte Überlappungsintegrale [GH84 Anhang], Spline-Basis als feine Stufen
+  [MG98] oder Stufen [G81], Wendepunkt-λ [G81] (Scanrand zählt nicht), Polydispersität
+  (verschobene Schulz/Gauß, P-Scan über das MD-Minimum [MG98]), Stufenmodell mit variablen
+  Breiten [GH84]. Kontrolle: MD(p) [G81] und MD(I) gegen die entschmierte Kurve [MG98].
+- Flags: `size_distribution`, `cross_section_lowq` [G80b], `decon_ambiguous`, `decon_fit`,
+  `decon_poly`.
+- Validierung: Querschnitt/Dicke/Größen aus Simulationen auf 1–2 %; DECON-Stufenmodell exakt
+  wie [GH84]; P-Scan findet σ = 0.1/0.2/0.3 wie [MG98]; SasView-Referenz Kern-Schale + Sticky:
+  GIFT exakt, Kern:Schale 2.0, Stufen 33/50.6 nm.
+- ESRF: 20 °C P = 28 %, dichter Kern bis ≈ 22–25 nm, Hülle mit geringem Kontrast
+  (außen ≈ 57 nm); 60 °C und 20 °C nach Heizen P ≥ 40 % (stark polydispers/aggregiert).
+- Tests: 150 (23 neu).
+- Offen/optional: Formerkennung aus p(r) und f(r) = p(r)/r nach [G79] (Stäbchen: linearer
+  Abfall, Lamellen: f(r) linear, Hohlkugeln: Plateau); R_min > 0 für Größenverteilungen;
+  korrelierte Polydispersität (feste Schalendicke) [MG98 §4].

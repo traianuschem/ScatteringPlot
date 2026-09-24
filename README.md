@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.14.0
+# ScatterForge Plot v8.0.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.14.0-blue)
+![Version](https://img.shields.io/badge/version-8.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **Weitere Glatter-Auswertungen** | IFT-Arten Querschnitt p_c(r) und Dicke p_t(r), Größenverteilungen D_V(R)/D_N(R) für Kugeln, Zylinder und Lamellen; DECON: radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, Polydispersitäts-Scan (Mittelbach & Glatter 1998) und optimiertem Stufenmodell | ✅ **v8.0.0** |
 | **Weitere GIFT-Strukturfaktoren** | S_eff polydisperser harter Kugeln (Vrij, Schulz), klebrige harte Kugeln (Baxter), fraktales Aggregat (Teixeira), Stäbchen (Mean-Field) — validiert gegen sasmodels bzw. PY-Grenzfälle, mit Flags zur Bestimmbarkeit | ✅ **v7.14.0** |
 | **p(r)-Explorer & Kennzahlen** | SasView-kompatible Kennzahlen (Oszillation, Positive Fraction, Maxima, χ²) plus N_g und Evidenz; Karte Dmax × λ mit „gutem Bereich“ und Klick-Übernahme, 1D-Scans über Dmax/λ/N, Dmax-Vorschlag, λ per Evidenz-Maximum, automatische Artefakterkennung bei kleinem q, Serienauswertung mit CSV-Übersicht | ✅ **v7.13.0** |
 | **Unsicherheit per DREAM** | MCMC-Analyse (DREAM(ZS)) der IFT/GIFT-Parameter auf Knopfdruck: S(q)-Parameter, log λ und Dmax mit analytisch herausintegrierten Spline-Koeffizienten (Hansen 2000); Intervalle, Korrelationen, Corner-Plot, p(r)-/I(q)-/S(q)-Bänder, eigene Flags, Ketten als .npz | ✅ **v7.12.0** |
@@ -97,6 +98,21 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v8.0?
+
+**Major Release v8.0.0** — GIFT-Modul vollständig: IFT/GIFT, DREAM, Explorer, Strukturfaktoren und weitere Glatter-Auswertungen (v7.8–v8.0); Bugfixes folgen als 8.0.x
+
+### Hauptfeatures v8.0
+
+- 📏 **Querschnitts- und Dicken-IFT** (Glatter 1980b): p_c(r) für lange Zylinder, p_t(r) für Lamellen, mit R_c bzw. R_t und äquivalenter homogener Größe
+- 📊 **Größenverteilungen per IFT** (Glatter 1980a): Anzahl- oder Volumenverteilung als Primärgröße, abgeleitete Verteilungen, Momente mit Fehlern
+- 🧅 **DECON** (Glatter 1981; Glatter & Hainisch 1984): radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, **Polydispersität** (Mittelbach & Glatter 1998) und optimiertem Stufenmodell (Kern-/Außenradius)
+- Explorer, DREAM, GIFT und Export funktionieren mit allen IFT-Arten
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v8.0.md](CHANGELOG_v8.0.md)
 
 ---
 

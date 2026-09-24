@@ -22,9 +22,10 @@ from .likelihood import (MarginalLikelihood, ParameterSpace, evaluate_log_poster
                          LOG_LAMBDA, DMAX)
 from .screening import ScreeningResult, screen, default_screen_size
 from .diagnostics import diagnose_uncertainty
-from .splines import SplineBasis
 from .structure_factors import get_model
-from .transform import FOUR_PI
+from .transform import make_basis, moment_vectors
+from .kernels import get_kernel, dmax_limit
+from .ift import settings_kind
 from . import parallel
 
 QUANTILES = (2.5, 16.0, 50.0, 84.0, 97.5)
@@ -89,6 +90,7 @@ class UncertaintyResult:
     fixed_values: Dict[str, float]
     n_workers: int
     runtime_s: float
+    kind: str = 'pddf'                   # IFT-Art (v8.0)
     flags: list = field(default_factory=list)
 
     @property
@@ -157,7 +159,7 @@ def build_space(analysis, settings: UncertaintySettings):
         l_ = settings.lower.get(DMAX, settings.dmax_range[0] * d0)
         h_ = settings.upper.get(DMAX, settings.dmax_range[1] * d0)
         if settings.dmax_limit_upper:
-            h_ = min(h_, np.pi / float(sol.q[0]))
+            h_ = min(h_, dmax_limit(float(sol.q[0]), settings_kind(sol.settings)))
         names.append(DMAX)
         lo.append(float(l_))
         hi.append(float(h_))
@@ -245,6 +247,7 @@ def run_uncertainty(analysis, settings: UncertaintySettings,
         dream=dres, screening=scr, bands=bands, rg=_quantile_summary(rg_s),
         i0=_quantile_summary(i0_s), rg_samples=rg_s, i0_samples=i0_s,
         sigma_scale=sigma_scale, q_min=float(sol.q[0]), model_key=model_key,
+        kind=settings_kind(sol.settings),
         fixed_values={k: v for k, v in values.items() if k not in space.names},
         n_workers=workers, runtime_s=time.perf_counter() - t0)
     result.flags = diagnose_uncertainty(result)
@@ -325,13 +328,12 @@ def _predict(ev: MarginalLikelihood, x, n_predict, seed_entropy):
     rows, A = res['A']
     st = ev.settings
     N = st.n_splines
-    unit = SplineBasis(1.0, N)
+    kind = settings_kind(st)
+    unit = make_basis(1.0, N, kind)
     d_all = res['dmax']
     r = np.linspace(0.0, float(np.max(d_all[rows])), int(st.n_r))
-    rq, wq = unit.quadrature(8)
-    phi_q = unit.evaluate(rq)
-    m0_unit = FOUR_PI * (wq @ phi_q)                    # I(0) = D·m0_unit·c
-    m2_unit = FOUR_PI * ((wq * rq ** 2) @ phi_q)        # ∫r²p = D³·m2_unit·c
+    m0_unit, m2_unit = moment_vectors(unit, kind)       # I(0) = D^{a+1}·m0_unit·c
+    pw = get_kernel(kind).a + 1                         # R_g²·I(0) = D^{a+3}·m2_unit·c
     pr, ifit, pq, sq, rg, i0 = [], [], [], [], [], []
     c_prep = ev._prepared()
     for j, row in enumerate(rows):
@@ -352,10 +354,10 @@ def _predict(ev: MarginalLikelihood, x, n_predict, seed_entropy):
         ifit.append(I_fit)
         pq.append(Pq)
         sq.append(S)
-        i0_ = D * float(m0_unit @ c)
-        m2 = D ** 3 * float(m2_unit @ c)
+        i0_ = D ** pw * float(m0_unit @ c)
+        m2 = D ** (pw + 2) * float(m2_unit @ c)
         i0.append(i0_)
-        rg.append(np.sqrt(m2 / (2.0 * i0_)) if i0_ > 0 and m2 > 0 else np.nan)
+        rg.append(np.sqrt(m2 / i0_) if i0_ > 0 and m2 > 0 else np.nan)
     q = ev.q
     bands = {'r': r, 'q': q, 'quantiles': np.array(QUANTILES),
              'pr': np.percentile(np.array(pr), QUANTILES, axis=0),

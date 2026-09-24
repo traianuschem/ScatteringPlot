@@ -1081,6 +1081,78 @@
     "auto_qmin_tooltip": "Erkennt einen führenden Block mit I ≤ 0 bzw. Vorzeichenwechseln (z. B. Beamstop-Bereich, Separationsartefakte) und anschließende nicht signifikante Punkte und setzt q_min dahinter. Manuelle Grenzen haben Vorrang.",
     "dmax_suggest": "Vorschlagen",
     "dmax_suggest_tooltip": "Dmax aus dem Explorer: kleinstes Dmax mit glattem, vor Dmax auslaufendem p(r) (I(0) > 0) und voller Anpassung der Daten; N wird mitgesetzt.",
+    "kind_label": "Auswertung",
+    "kind_tooltip": "Art der indirekten Transformation: p(r) (Glatter 1977); Querschnitt p_c(r) für lange Zylinder bzw. Dicke p_t(r) für flache Lamellen (Glatter 1980b, nur den q-Bereich verwenden, in dem die Teilchen lang bzw. flach erscheinen); Volumenverteilung D_V(R) für homogene Kugeln, lange Zylinder oder Lamellen (Glatter 1980a).",
+    "kind": {
+      "pddf": "p(r) — Paarabstandsverteilung",
+      "cross_section": "p_c(r) — Querschnitt (lange Zylinder)",
+      "thickness": "p_t(r) — Dicke (Lamellen)",
+      "size_sphere": "Größenverteilung D_V(R) — Kugeln",
+      "size_cylinder": "Größenverteilung D_V(R) — lange Zylinder",
+      "size_lamella": "Größenverteilung D_V(T) — Lamellen",
+      "size_sphere_n": "Anzahlverteilung D_N(R) — Kugeln",
+      "size_cylinder_n": "Anzahlverteilung D_N(R) — lange Zylinder",
+      "size_lamella_n": "Anzahlverteilung D_N(T) — Lamellen"
+    },
+    "dmax_label": {
+      "pddf": "Dmax",
+      "cross_section": "Dmax (Querschnitt)",
+      "thickness": "Dmax (Dicke)",
+      "size_sphere": "R_max",
+      "size_cylinder": "R_max",
+      "size_lamella": "T_max",
+      "size_sphere_n": "R_max",
+      "size_cylinder_n": "R_max",
+      "size_lamella_n": "T_max"
+    },
+    "equiv": {
+      "pddf": "R (homogene Kugel)",
+      "cross_section": "R (homogener Zylinder, √2·R_c)",
+      "thickness": "T (homogene Lamelle, √12·R_t)"
+    },
+    "size_mode": "Modus",
+    "size_number_range": "nur ≥ {r} nm und D_V ≥ 2σ",
+    "tab_decon": "DECON",
+    "decon_basis": "Basis",
+    "decon_basis_splines": "Splines (Mittelbach & Glatter 1998)",
+    "decon_basis_steps": "Stufen (Glatter 1981)",
+    "decon_basis_tooltip": "Splines: glattes Profil aus kubischen B-Splines (intern feine Stufen, 4 je Intervall). Stufen: äquidistante Stufenfunktionen wie im ursprünglichen DECON. Die Überlappungsintegrale sind in beiden Fällen exakt (Glatter & Hainisch 1984).",
+    "decon_auto": "auto",
+    "decon_n": "Intervalle",
+    "decon_n_tooltip": "Zahl der Intervalle auf [0, Dmax/2]. „auto“: Stufenbreite = Knotenabstand der IFT (Glatter 1981).",
+    "decon_lam_tooltip": "Glättung B + λK: Wendepunkt-Methode wie in der IFT (Glatter 1981) oder fester Wert.",
+    "decon_poly": "Polydispersität",
+    "decon_poly_none": "keine (monodispers)",
+    "decon_poly_scan": "bestimmen (Scan P = 0–40 %)",
+    "decon_poly_fixed": "fester Wert",
+    "decon_poly_tooltip": "Mittelbach & Glatter (1998): Die Überlappungsintegrale werden über eine Anzahl-Größenverteilung gemittelt; das Profil gilt dann für die häufigste Teilchengröße. Der Scan bestimmt die Breite P aus dem Minimum der mittleren Abweichung. Nur eine lineare Größe (Kern und Schale skalieren gemeinsam).",
+    "decon_dist_schulz": "Schulz (verschoben)",
+    "decon_dist_gauss": "Gauß",
+    "decon_p_tooltip": "Breite als HWHM relativ zum häufigsten Radius: P = σ·√(2 ln 2) (Mittelbach & Glatter 1998).",
+    "decon_run": "Profil berechnen",
+    "decon_run_tooltip": "Radiales Kontrastprofil als Faltungswurzel von p(r): Kugel für p(r), Zylinderquerschnitt für p_c(r), symmetrische Lamelle für p_t(r). Konstantes Startprofil (Glatter 1981) und weitere Startprofile; gleich gute, verschiedene Lösungen werden als Alternativen gezeigt.",
+    "decon_steps": "Stufenmodell",
+    "decon_steps_run": "Stufenmodell optimieren",
+    "decon_steps_tooltip": "Wenige Stufen (2–4) mit variablen Breiten: Grenzen und Höhen werden optimiert (Glatter & Hainisch 1984), mit derselben Polydispersität wie das Profil. Ergibt z. B. Kern- und Außenradius.",
+    "decon_need_profile": "Zuerst das Profil berechnen.",
+    "decon_running": "DECON läuft …",
+    "decon_scan_running": "Polydispersitäts-Scan: {j} von {n} …",
+    "decon_cancelled": "DECON abgebrochen.",
+    "decon_hint": "DECON bestimmt aus p(r) das radiale Kontrastprofil zentrosymmetrischer Teilchen (Glatter 1981; Glatter & Hainisch 1984), bei Bedarf mit Polydispersität (Mittelbach & Glatter 1998). „Profil berechnen“ startet die Rechnung.",
+    "decon_not_available": "DECON ist nur für p(r), p_c(r) (Querschnitt) und p_t(r) (Dicke) definiert, nicht für Größenverteilungen.",
+    "decon_profile": "Δρ(r)",
+    "decon_alternative": "Alternative",
+    "decon_step_label": "Stufenmodell ({n} Stufen: {edges} nm)",
+    "decon_p_axis": "Polydispersität P / %",
+    "decon_status": "{geometry}, R = {R} nm · {poly} · MD(p) = {md} · MD(I) = {md_q} · λ = {lam} · Alternativen: {n}. Vorzeichen: ∫Δρ dV > 0 (das globale Vorzeichen ist unbestimmt).",
+    "decon_status_poly": "P = {p} % (σ = {sigma})",
+    "decon_status_mono": "monodispers",
+    "decon_status_steps": "Stufenmodell: Grenzen {edges} nm, Höhen {heights}, MD(p) = {md}.",
+    "decon_geom": {
+      "sphere": "Kugel",
+      "cylinder": "Zylinderquerschnitt",
+      "lamella": "Lamelle"
+    },
     "dmax_suggest_none": "Kein Dmax mit glattem p(r) und guter Anpassung gefunden — Explorer (Karte Dmax × λ) verwenden.",
     "lambda_method": "λ-Wahl",
     "lambda_method_inflexion": "Wendepunkt (Glatter)",
@@ -1399,6 +1471,27 @@
       "pr_tail": {
         "ok": "Kein langer Null-Ausläufer vor Dmax",
         "long": "p(r) ist ab r ≈ {r} nm nicht mehr signifikant von 0 verschieden ({frac} des Bereichs) — Dmax ist evtl. zu groß."
+      },
+      "cross_section_lowq": {
+        "ok": "{quantity} fällt ab q_min monoton (Faktorisierung gültig, Glatter 1980b)",
+        "rising": "{quantity} steigt am Anfang des Fitbereichs an — endliche Länge bzw. Fläche der Teilchen; q_min erhöhen (etwa bis zum Maximum von {quantity}). Quantitativ nur für Länge/Querschnitt ≥ 10 (Glatter 1980b)."
+      },
+      "size_distribution": {
+        "ok": "D_V überwiegend positiv (negativ {neg})",
+        "negative": "D_V ist zu {neg} negativ — sehr schmale (nahezu monodisperse) Verteilung, bei der negative Werte zur Beschreibung nötig sind, oder die angenommene Teilchenform passt nicht (Kern-Schale, anisotrop, Wechselwirkung) bzw. R_max/λ sind ungeeignet (Glatter 1980a)."
+      },
+      "decon_ambiguous": {
+        "ok": "DECON: alle Startprofile führen zur selben Lösung (bis auf das Vorzeichen)",
+        "several": "DECON: {n} weitere, deutlich verschiedene Profile beschreiben p(r) ähnlich gut — die Faltungswurzel ist nicht eindeutig (typisch bei Kontrastumkehr). Alternativen im DECON-Tab vergleichen."
+      },
+      "decon_fit": {
+        "ok": "DECON: MD(p) = {md}, MD(I) = {md_q}",
+        "worse": "DECON: Das Profil beschreibt p(r) nicht (MD = {md}) — Polydispersität (P-Scan verwenden, Mittelbach & Glatter 1998) oder Abweichung von der Symmetrie (Glatter 1981).",
+        "worse_poly": "DECON: Das Profil beschreibt p(r) auch mit Polydispersität nicht (MD = {md}) — Teilchen nicht zentrosymmetrisch oder Geometrie ungeeignet (Test der Symmetrie, Glatter 1981)."
+      },
+      "decon_poly": {
+        "found": "DECON: Polydispersität P = {p} % (σ = {sigma}) aus dem Minimum von MD(P) (Mittelbach & Glatter 1998).",
+        "boundary": "DECON: Minimum von MD(P) am Rand des Scanbereichs (P = {p} %) — Bereich erweitern oder Verteilungstyp prüfen."
       },
       "pr_negative": {
         "ok": "Keine signifikant negativen p(r)-Werte",

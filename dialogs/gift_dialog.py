@@ -61,6 +61,11 @@ from analysis.gift.parallel import default_workers
 from analysis.gift.uncertainty import (UncertaintySettings, run_uncertainty, DreamCancelled,
                                        LOG_LAMBDA, DMAX)
 from analysis.gift.dream import DreamSettings
+from analysis.gift.kernels import KINDS, PDDF, LABELS, get_kernel, dmax_limit
+from analysis.gift.decon import (DeconSettings, DeconCancelled, GEOMETRIES as DECON_GEOMETRIES,
+                                 BASIS_SPLINES, BASIS_STEPS, POLY_NONE, POLY_SCAN, POLY_FIXED,
+                                 DIST_SCHULZ, DIST_GAUSS, HWHM as DECON_HWHM)
+from analysis.gift.pipeline import run_decon_analysis, run_step_model_analysis
 
 _MODEL_ORDER = ('none', 'hs_py_avg', 'hs_vrij', 'hs_py', 'sticky', 'rmsa', 'fractal', 'rod')
 LAMBDA_MANUAL = 'manual'
@@ -178,6 +183,45 @@ class _DreamWorker(QThread):
             self.failed.emit(str(e))
             return
         self.done.emit(self.analysis, result)
+
+
+class _DeconWorker(QThread):
+    """DECON bzw. Stufenmodell im Hintergrund (der P-Scan dauert bis zu einigen Minuten)."""
+
+    progress = Signal(int, int)
+    done = Signal(object, str, object)          # (IFTAnalysis, Aufgabe, Ergebnis)
+    failed = Signal(str)
+
+    CANCELLED = '__cancelled__'
+
+    def __init__(self, analysis, task, kwargs, parent=None):
+        super().__init__(parent)
+        self.analysis = analysis
+        self.task = task
+        self.kwargs = kwargs
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def _callback(self, j, n):
+        self.progress.emit(int(j), int(n))
+        return not self._cancel
+
+    def run(self):
+        try:
+            if self.task == 'steps':
+                result = run_step_model_analysis(self.analysis, **self.kwargs)
+            else:
+                result = run_decon_analysis(self.analysis, progress=self._callback,
+                                            **self.kwargs)
+        except DeconCancelled:
+            self.failed.emit(self.CANCELLED)
+            return
+        except (ValueError, np.linalg.LinAlgError) as e:
+            self.failed.emit(str(e))
+            return
+        self.done.emit(self.analysis, self.task, result)
 
 
 class GiftDialog(QDialog):
@@ -326,6 +370,12 @@ class GiftDialog(QDialog):
         # IFT
         g_ift = QGroupBox(tr('gift.group_ift'))
         f = QFormLayout(g_ift)
+        self.kind_combo = QComboBox()
+        for k in KINDS:
+            self.kind_combo.addItem(tr(f'gift.kind.{k}'), k)
+        self.kind_combo.setToolTip(tr('gift.kind_tooltip'))
+        f.addRow(tr('gift.kind_label') + ':', self.kind_combo)
+        self._kind_prev = PDDF
         dmax_row = QHBoxLayout()
         self.dmax_spin = QDoubleSpinBox()
         self.dmax_spin.setRange(0.1, 1e5)
@@ -341,7 +391,8 @@ class GiftDialog(QDialog):
         self.dmax_suggest_btn.setToolTip(tr('gift.dmax_suggest_tooltip'))
         self.dmax_suggest_btn.clicked.connect(self._set_dmax_suggested)
         dmax_row.addWidget(self.dmax_suggest_btn)
-        f.addRow('Dmax:', dmax_row)
+        self.dmax_label = QLabel('Dmax:')
+        f.addRow(self.dmax_label, dmax_row)
         self.dmax_info = QLabel()
         self.dmax_info.setWordWrap(True)
         f.addRow(self.dmax_info)
@@ -524,6 +575,7 @@ class GiftDialog(QDialog):
         self.fig_sig, self.canvas_sig = self._add_plot_tab(tr('gift.tab_significance'))
         self.fig_bssa, self.canvas_bssa = self._add_plot_tab(tr('gift.tab_bssa'))
         self._build_explorer_tab()
+        self._build_decon_tab()
         # Unsicherheit (DREAM): Übersicht, Corner-Plot, Ketten, Posterior-Bänder
         self.unc_tabs = QTabWidget()
         ov = QWidget()
@@ -619,6 +671,7 @@ class GiftDialog(QDialog):
                   self.nspl_spin, self.lam_spin):
             w.valueChanged.connect(self._schedule)
         self.k_combo.currentIndexChanged.connect(self._schedule)
+        self.kind_combo.currentIndexChanged.connect(self._on_kind_changed)
         self.bg_check.toggled.connect(self._schedule)
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
         self.qunit_combo.currentIndexChanged.connect(self._on_qunit_changed)
@@ -780,12 +833,30 @@ class GiftDialog(QDialog):
             return None
         return self.sigma_rel_spin.value() / 100.0
 
+    def _kind(self):
+        return self.kind_combo.currentData() or PDDF
+
+    def _on_kind_changed(self, *_):
+        """IFT-Art gewechselt (v7.15): Beschriftungen anpassen; beim Wechsel zwischen Abstand
+        (Dmax) und Radius (R_max) den Wert umrechnen, damit die Teilchengröße gleich bleibt."""
+        kind = self._kind()
+        span_old = get_kernel(self._kind_prev).span
+        span_new = get_kernel(kind).span
+        self._kind_prev = kind
+        self.dmax_label.setText(tr(f'gift.dmax_label.{kind}') + ':')
+        self.dmax_limit_btn.setText('π/(2q_min)' if span_new == 2 else 'π/q_min')
+        if not self._updating and span_old != span_new:
+            self.dmax_spin.setValue(self.dmax_spin.value() * span_old / span_new)
+        self._update_dmax_info()
+        self._schedule()
+
     def _set_suggested_n(self):
         sel = self._fit_arrays()[3]          # voraussichtlicher Fitbereich (inkl. nσ-q_max)
-        self.nspl_spin.setValue(suggest_n_splines(self.dmax_spin.value(), sel.q_min, sel.q_max))
+        self.nspl_spin.setValue(suggest_n_splines(self.dmax_spin.value(), sel.q_min, sel.q_max,
+                                                  kind=self._kind()))
 
     def _set_dmax_to_limit(self):
-        self.dmax_spin.setValue(float(f"{np.pi / self._effective_qmin():.4g}"))
+        self.dmax_spin.setValue(float(f"{dmax_limit(self._effective_qmin(), self._kind()):.4g}"))
 
     def _effective_qmin(self):
         q, _, _ = self._current_arrays()
@@ -809,23 +880,27 @@ class GiftDialog(QDialog):
         """Dmax (und N) aus dem Explorer: kleinstes Dmax mit glattem, vor Dmax auslaufendem
         p(r) und voller Anpassung (explorer.suggest_dmax)."""
         q, I, s, sel = self._fit_arrays()
-        limit = np.pi / sel.q_min
-        n = suggest_n_splines(limit, sel.q_min, sel.q_max)
+        kind = self._kind()
+        limit = dmax_limit(sel.q_min, kind)
+        n = suggest_n_splines(limit, sel.q_min, sel.q_max, kind=kind)
         st = self._settings()
         st.dmax, st.n_splines = limit, n
         dmax, _scan = suggest_dmax(q, I, s, st)
         if dmax is None:
             QMessageBox.information(self, tr('gift.dmax_suggest'), tr('gift.dmax_suggest_none'))
             return
-        self._set_manual(dmax=dmax, n_splines=suggest_n_splines(dmax, sel.q_min, sel.q_max))
+        self._set_manual(dmax=dmax, n_splines=suggest_n_splines(dmax, sel.q_min, sel.q_max,
+                                                                kind=kind))
 
     def _update_dmax_info(self, *_):
         q_min = self._effective_qmin()
-        ratio = dmax_qmin_ratio(self.dmax_spin.value(), q_min)
+        kind = self._kind()
+        ratio = dmax_qmin_ratio(self.dmax_spin.value(), q_min, kind)
         color = _LEVEL_STYLE[LEVEL_WARNING][1] if ratio > 1 else _LEVEL_STYLE[LEVEL_OK][1]
+        lim_txt = 'π/(2q_min)' if get_kernel(kind).span == 2 else 'π/q_min'
         self.dmax_info.setText(
-            f"<span style='color:{color}'>π/q_min = {np.pi / q_min:.4g} nm · "
-            f"Dmax·q_min/π = {ratio:.2f}</span>")
+            f"<span style='color:{color}'>{lim_txt} = {dmax_limit(q_min, kind):.4g} nm · "
+            f"{tr(f'gift.dmax_label.{kind}')}/({lim_txt}) = {ratio:.2f}</span>")
 
     def _choose_out_dir(self):
         start = str(self._out_dir())
@@ -851,7 +926,8 @@ class GiftDialog(QDialog):
         return IFTSettings(dmax=self.dmax_spin.value(), n_splines=self.nspl_spin.value(),
                            lam=lam, k_type=self.k_combo.currentData(),
                            background=self.bg_check.isChecked(),
-                           lam_method=LAMBDA_INFLEXION if manual else method)
+                           lam_method=LAMBDA_INFLEXION if manual else method,
+                           kind=self._kind())
 
     def _qrange_settings(self):
         mode, n = self.qmode_combo.currentData()
@@ -939,12 +1015,28 @@ class GiftDialog(QDialog):
     def _show_results(self):
         a = self.analysis
         s = a.solution
+        kind = s.settings.kind
+        lab = LABELS[kind]
         rows = [
-            f"<b>Rg</b> = {s.rg:.4g} ± {s.rg_err:.2g} nm",
-            f"<b>I(0)</b> = {s.i0:.4g} ± {s.i0_err:.2g}",
+            f"<b>{lab['rg']}</b> = {s.rg:.4g} ± {s.rg_err:.2g} nm",
+            f"<b>{lab['i0']}</b> = {s.i0:.4g} ± {s.i0_err:.2g}",
         ]
+        if lab['equiv'] and np.isfinite(s.rg):
+            name, fac = lab['equiv']
+            rows.append(f"{tr(f'gift.equiv.{kind}')} = {fac * s.rg:.4g} ± {fac * s.rg_err:.2g} nm")
+        z = a.extras.get('size_statistics')
+        if z:
+            x = lab['x']
+            rows.append(f"{tr('gift.size_mode')} = {z['mode']:.4g} nm · ⟨{x}⟩<sub>V</sub> = "
+                        f"{z['mean_V']:.4g} ± {z['mean_V_err']:.2g} nm · σ<sub>V</sub> = "
+                        f"{z['std_V']:.3g} nm")
+            note = (f" ({tr('gift.size_number_range', r=format(z['r_min'], '.3g'))})"
+                    if z['number_restricted'] else '')
+            rows.append(f"⟨{x}⟩<sub>N</sub> = {z['mean_N']:.4g} ± {z['mean_N_err']:.2g} nm · "
+                        f"σ<sub>N</sub> = {z['std_N']:.3g} nm{note}")
         if a.guinier:
-            rows.append(f"Rg<sub>Guinier</sub> = {a.guinier[0]:.4g} nm ({a.guinier[2]} Pkt.)")
+            rows.append(f"{lab['rg']}<sub>Guinier</sub> = {a.guinier[0]:.4g} nm "
+                        f"({a.guinier[2]} Pkt.)")
         rows.append(f"<b>MD</b> = {s.md:.3g}")
         method = 'manual' if s.lam_manual else s.scan.method
         rows.append(f"λ<sub>rel</sub> = {s.lam_rel:.3g} ({tr('gift.lambda_label_' + method)})")
@@ -957,7 +1049,7 @@ class GiftDialog(QDialog):
             rows.append(f"N<sub>g</sub> = {m['n_good']:.1f} · log p(I) = {m['log_evidence']:.5g}")
         if s.background is not None:
             rows.append(f"{tr('gift.background_value')} = {s.background:.4g} ± {s.background_err:.2g}")
-        ns = shannon_channels(s.settings.dmax, s.q[0], s.q[-1])
+        ns = shannon_channels(s.settings.dmax, s.q[0], s.q[-1], kind)
         rows.append(f"N<sub>s</sub> = {ns:.1f}")
         if a.gift is not None:
             g = a.gift
@@ -983,7 +1075,7 @@ class GiftDialog(QDialog):
                 unit = f" {u.units[n]}" if u.units[n] else ''
                 rows.append(f"&nbsp;&nbsp;{u.labels[n]} = {sm['median']:.4g} "
                             f"[{sm['q2.5']:.4g}, {sm['q97.5']:.4g}]{unit}")
-            rows.append(f"&nbsp;&nbsp;Rg = {u.rg['median']:.4g} [{u.rg['q2.5']:.4g}, "
+            rows.append(f"&nbsp;&nbsp;{lab['rg']} = {u.rg['median']:.4g} [{u.rg['q2.5']:.4g}, "
                         f"{u.rg['q97.5']:.4g}] nm")
         self.result_label.setText("<br>".join(rows))
 
@@ -1109,6 +1201,9 @@ class GiftDialog(QDialog):
         self.model_combo.setEnabled(not busy)
         self.dream_btn.setEnabled(not busy)
         self.prior_default_btn.setEnabled(not busy)
+        decon_ok = self.analysis is not None and             self.analysis.solution.settings.kind in DECON_GEOMETRIES
+        self.decon_run_btn.setEnabled(not busy and decon_ok)
+        self.decon_steps_btn.setEnabled(not busy and decon_ok and self.analysis.decon is not None)
 
     def _start_gift(self):
         if self._worker is not None:
@@ -1233,7 +1328,7 @@ class GiftDialog(QDialog):
                 lo, hi = 0.75 * d0, 1.5 * d0
                 if self.dream_dmax_limit_check.isChecked():
                     q_min = a.selection.q_min if a is not None else self._effective_qmin()
-                    hi = min(hi, np.pi / q_min)
+                    hi = min(hi, dmax_limit(q_min, self._kind()))
                     lo = min(lo, 0.5 * hi)
                 out[name] = (lo, hi, d0, True)
             else:
@@ -1470,12 +1565,229 @@ class GiftDialog(QDialog):
         self._exp_ranges_set = False
         self._exp_ax = None
 
+    # ------------------------------------------------------------------
+    # DECON (v7.15)
+    # ------------------------------------------------------------------
+
+    def _build_decon_tab(self):
+        w = QWidget()
+        v = QVBoxLayout(w)
+        grid = QGridLayout()
+        self.decon_basis_combo = QComboBox()
+        self.decon_basis_combo.addItem(tr('gift.decon_basis_splines'), BASIS_SPLINES)
+        self.decon_basis_combo.addItem(tr('gift.decon_basis_steps'), BASIS_STEPS)
+        self.decon_basis_combo.setToolTip(tr('gift.decon_basis_tooltip'))
+        self.decon_n_spin = QSpinBox()
+        self.decon_n_spin.setRange(0, 60)
+        self.decon_n_spin.setSpecialValueText(tr('gift.decon_auto'))
+        self.decon_n_spin.setValue(0)
+        self.decon_n_spin.setToolTip(tr('gift.decon_n_tooltip'))
+        self.decon_lam_combo = QComboBox()
+        self.decon_lam_combo.addItem(tr('gift.lambda_method_inflexion'), 'auto')
+        self.decon_lam_combo.addItem(tr('gift.lambda_method_manual'), 'manual')
+        self.decon_lam_combo.setToolTip(tr('gift.decon_lam_tooltip'))
+        self.decon_lam_spin = QDoubleSpinBox()
+        self.decon_lam_spin.setRange(-10.0, 4.0)
+        self.decon_lam_spin.setDecimals(2)
+        self.decon_lam_spin.setValue(-3.0)
+        self.decon_lam_spin.setPrefix('log₁₀ λ = ')
+        self.decon_lam_spin.setEnabled(False)
+        self.decon_lam_combo.currentIndexChanged.connect(
+            lambda _: self.decon_lam_spin.setEnabled(self.decon_lam_combo.currentData() == 'manual'))
+        self.decon_poly_combo = QComboBox()
+        self.decon_poly_combo.addItem(tr('gift.decon_poly_none'), POLY_NONE)
+        self.decon_poly_combo.addItem(tr('gift.decon_poly_scan'), POLY_SCAN)
+        self.decon_poly_combo.addItem(tr('gift.decon_poly_fixed'), POLY_FIXED)
+        self.decon_poly_combo.setToolTip(tr('gift.decon_poly_tooltip'))
+        self.decon_dist_combo = QComboBox()
+        self.decon_dist_combo.addItem(tr('gift.decon_dist_schulz'), DIST_SCHULZ)
+        self.decon_dist_combo.addItem(tr('gift.decon_dist_gauss'), DIST_GAUSS)
+        self.decon_p_spin = QDoubleSpinBox()
+        self.decon_p_spin.setRange(0.0, 60.0)
+        self.decon_p_spin.setDecimals(1)
+        self.decon_p_spin.setSuffix(' %')
+        self.decon_p_spin.setPrefix('P = ')
+        self.decon_p_spin.setToolTip(tr('gift.decon_p_tooltip'))
+        self.decon_p_spin.setEnabled(False)
+        self.decon_poly_combo.currentIndexChanged.connect(
+            lambda _: self.decon_p_spin.setEnabled(self.decon_poly_combo.currentData() == POLY_FIXED))
+        self.decon_run_btn = QPushButton(tr('gift.decon_run'))
+        self.decon_run_btn.setToolTip(tr('gift.decon_run_tooltip'))
+        self.decon_run_btn.clicked.connect(self._run_decon)
+        self.decon_steps_spin = QSpinBox()
+        self.decon_steps_spin.setRange(2, 4)
+        self.decon_steps_spin.setValue(2)
+        self.decon_steps_btn = QPushButton(tr('gift.decon_steps_run'))
+        self.decon_steps_btn.setToolTip(tr('gift.decon_steps_tooltip'))
+        self.decon_steps_btn.clicked.connect(self._run_step_model)
+        grid.addWidget(QLabel(tr('gift.decon_basis') + ':'), 0, 0)
+        grid.addWidget(self.decon_basis_combo, 0, 1)
+        grid.addWidget(QLabel(tr('gift.decon_n') + ':'), 0, 2)
+        grid.addWidget(self.decon_n_spin, 0, 3)
+        grid.addWidget(self.decon_lam_combo, 0, 4)
+        grid.addWidget(self.decon_lam_spin, 0, 5)
+        grid.addWidget(QLabel(tr('gift.decon_poly') + ':'), 1, 0)
+        grid.addWidget(self.decon_poly_combo, 1, 1)
+        grid.addWidget(self.decon_dist_combo, 1, 2, 1, 2)
+        grid.addWidget(self.decon_p_spin, 1, 4)
+        grid.addWidget(self.decon_run_btn, 1, 5)
+        grid.addWidget(QLabel(tr('gift.decon_steps') + ':'), 2, 0)
+        grid.addWidget(self.decon_steps_spin, 2, 1)
+        grid.addWidget(self.decon_steps_btn, 2, 2, 1, 2)
+        v.addLayout(grid)
+        self.decon_status = QLabel(tr('gift.decon_hint'))
+        self.decon_status.setWordWrap(True)
+        self.decon_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        v.addWidget(self.decon_status)
+        self.fig_decon = Figure(figsize=(7, 6), layout='constrained')
+        self.canvas_decon = FigureCanvasQTAgg(self.fig_decon)
+        v.addWidget(NavigationToolbar2QT(self.canvas_decon, w))
+        v.addWidget(self.canvas_decon, 1)
+        self.tabs.addTab(w, tr('gift.tab_decon'))
+
+    def _decon_settings(self):
+        manual = self.decon_lam_combo.currentData() == 'manual'
+        return DeconSettings(
+            basis=self.decon_basis_combo.currentData(),
+            n_intervals=self.decon_n_spin.value() or None,
+            lam=10 ** self.decon_lam_spin.value() if manual else 'auto',
+            polydispersity=self.decon_poly_combo.currentData(),
+            distribution=self.decon_dist_combo.currentData(),
+            sigma=self.decon_p_spin.value() / 100.0 / DECON_HWHM)
+
+    def _start_decon_worker(self, task, **kw):
+        a = self.analysis
+        if a is None or self._worker is not None:
+            return
+        if a.solution.settings.kind not in DECON_GEOMETRIES:
+            QMessageBox.information(self, tr('gift.tab_decon'), tr('gift.decon_not_available'))
+            return
+        self._worker = _DeconWorker(a, task, kw, self)
+        self._worker.progress.connect(self._on_decon_progress)
+        self._worker.done.connect(self._on_decon_done)
+        self._worker.failed.connect(self._on_decon_failed)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._t_start = time.perf_counter()
+        self._set_busy(True)
+        self.decon_run_btn.setEnabled(False)
+        self.decon_steps_btn.setEnabled(False)
+        self.decon_status.setText(tr('gift.decon_running'))
+        self._worker.start()
+
+    def _run_decon(self):
+        self._start_decon_worker('profile', settings=self._decon_settings())
+
+    def _run_step_model(self):
+        if self.analysis is None or self.analysis.decon is None:
+            QMessageBox.information(self, tr('gift.tab_decon'), tr('gift.decon_need_profile'))
+            return
+        self._start_decon_worker('steps', n_steps=self.decon_steps_spin.value())
+
+    def _on_decon_progress(self, j, n):
+        self.decon_status.setText(tr('gift.decon_scan_running', j=j + 1, n=n))
+
+    def _on_decon_done(self, analysis, task, result):
+        if analysis is not self.analysis:
+            return
+        if task == 'profile' and self.decon_lam_combo.currentData() != 'manual':
+            self._updating = True
+            self.decon_lam_spin.setValue(np.log10(result.lam_rel))
+            self._updating = False
+        self._show_results()
+        self._plot_decon()
+        self._show_provenance()
+
+    def _on_decon_failed(self, message):
+        text = tr('gift.decon_cancelled') if message == _DeconWorker.CANCELLED else \
+            f"<span style='color:#c62828'>{tr('gift.error')}: {message}</span>"
+        self.decon_status.setText(text)
+
+    def _plot_decon(self):
+        fig = self.fig_decon
+        fig.clear()
+        a = self.analysis
+        d = a.decon if a is not None else None
+        available = a is not None and a.solution.settings.kind in DECON_GEOMETRIES
+        idle = self._worker is None
+        self.decon_run_btn.setEnabled(available and idle)
+        self.decon_steps_btn.setEnabled(available and idle and d is not None)
+        if d is None:
+            ax = fig.add_subplot(111)
+            ax.text(0.5, 0.5, tr('gift.decon_hint') if available else
+                    tr('gift.decon_not_available'), ha='center', va='center', wrap=True,
+                    transform=ax.transAxes)
+            ax.set_axis_off()
+            self.canvas_decon.draw_idle()
+            if available:
+                self.decon_status.setText(tr('gift.decon_hint'))
+            return
+        s = a.solution
+        lab = LABELS[s.settings.kind]
+        ax = fig.add_subplot(2, 2, (1, 2))
+        drawstyle = 'steps-post' if d.settings.basis == BASIS_STEPS else 'default'
+        ax.plot(d.x, d.rho, '-', color=_CLR_FIT, lw=1.8, label=tr('gift.decon_profile'))
+        ax.fill_between(d.x, d.rho - d.rho_err, d.rho + d.rho_err, color=_CLR_FIT, alpha=0.25,
+                        lw=0, label='± σ')
+        for i, alt in enumerate(d.alternatives):
+            ax.plot(d.x, alt['rho'], '--', lw=1.1,
+                    label=f"{tr('gift.decon_alternative')} {i + 1} (χ² = {alt['chi2_red']:.3g})")
+        sm = d.step_model
+        if sm is not None:
+            ax.plot(sm['x'], sm['rho'], '-', color='#6a1b9a', lw=1.4, drawstyle=drawstyle,
+                    label=tr('gift.decon_step_label', n=len(sm['edges']),
+                             edges=', '.join(f"{e:.3g}" for e in sm['edges'])))
+        ax.axhline(0, color='k', lw=0.8)
+        xlab = {'sphere': 'r', 'cylinder': 'r', 'lamella': 'x'}[d.geometry]
+        ax.set_xlabel(f"{xlab} / nm")
+        ax.set_ylabel('Δρ (rel.)')
+        ax.legend(fontsize=7)
+        ax2 = fig.add_subplot(2, 2, 3)
+        ax2.plot(d.r, d.p_target, 'o', ms=2.5, color=_CLR_DATA, label=f"{lab['f']} (IFT)")
+        ax2.plot(d.r, d.p_fit, '-', color=_CLR_FIT, lw=1.3, label='DECON')
+        ax2.axhline(0, color='k', lw=0.6)
+        ax2.set_xlabel('r / nm')
+        ax2.set_ylabel(lab['f'])
+        ax2.legend(fontsize=7)
+        ax3 = fig.add_subplot(2, 2, 4)
+        if d.poly_scan is not None:
+            ps = d.poly_scan
+            ax3.plot(100 * ps['P'], ps['md_pr'], 'o-', ms=3, color=_CLR_FIT, label='MD(p)')
+            ax3.axvline(d.p_percent, color='#ff9800', lw=1.2)
+            ax3.set_xlabel(tr('gift.decon_p_axis'))
+            ax3.set_ylabel('MD')
+            ax3.set_yscale('log')
+            ax3.legend(fontsize=7)
+        else:
+            ax3.plot(s.q, s.i_fit, '-', color='k', lw=0.9, label='IFT')
+            ax3.plot(d.q, np.maximum(d.i_model, 1e-300), '-', color=_CLR_FIT, lw=1.3,
+                     label='DECON')
+            if sm is not None:
+                ax3.plot(d.q, np.maximum(sm['i_model'], 1e-300), '-', color='#6a1b9a', lw=1.0,
+                         label=tr('gift.decon_steps'))
+            ax3.set_xscale('log')
+            ax3.set_yscale('log')
+            ax3.set_xlabel('q / nm⁻¹')
+            ax3.set_ylabel('I(q)')
+            ax3.legend(fontsize=7, loc='lower left')
+        poly = (tr('gift.decon_status_poly', p=f"{d.p_percent:.0f}", sigma=f"{d.sigma_poly:.3f}")
+                if d.settings.polydispersity != POLY_NONE else tr('gift.decon_status_mono'))
+        text = tr('gift.decon_status', geometry=tr(f'gift.decon_geom.{d.geometry}'),
+                  R=f"{d.radius:.4g}", md=f"{d.md_pr:.3g}", md_q=f"{d.md_q:.3g}",
+                  lam=f"{d.lam_rel:.2g}", n=len(d.alternatives), poly=poly)
+        if sm is not None:
+            text += " " + tr('gift.decon_status_steps',
+                             edges=', '.join(f"{e:.4g}" for e in sm['edges']),
+                             heights=', '.join(f"{h:.3g}" for h in sm['heights']),
+                             md=f"{sm['md_pr']:.3g}")
+        self.decon_status.setText(text)
+        self.canvas_decon.draw_idle()
+
     def _set_explorer_ranges(self, force=False):
         if self.analysis is None or (self._exp_ranges_set and not force):
             return
         s = self.analysis.solution
         d0 = s.settings.dmax
-        limit = np.pi / self.analysis.selection.q_min
+        limit = dmax_limit(self.analysis.selection.q_min, s.settings.kind)
         self.exp_dmin_spin.setValue(float(f"{0.5 * min(d0, limit):.3g}"))
         self.exp_dmax_spin.setValue(float(f"{2.5 * max(d0, limit):.3g}"))
         self.exp_nmin_spin.setValue(max(5, s.settings.n_splines // 3))
@@ -1578,7 +1890,8 @@ class GiftDialog(QDialog):
                         label=tr('gift.explorer_no_inflexion'))
             ax.plot(res.dmax, np.log10(res.lam_evidence), ':', color='cyan', lw=1.4,
                     label=tr('gift.lambda_method_evidence'))
-            ax.axvline(np.pi / res.q_min, color='#00bcd4', ls='--', lw=1.0, label='π/q_min')
+            ax.axvline(dmax_limit(res.q_min, s.settings.kind), color='#00bcd4', ls='--',
+                       lw=1.0, label='π/q_min')
             ax.plot(s.settings.dmax, np.log10(s.lam_rel), '*', color='#ff9800', ms=14,
                     mec='k', label=tr('gift.explorer_current'))
             ax.set_xlim(extent[0], extent[1])
@@ -1602,8 +1915,8 @@ class GiftDialog(QDialog):
             if key in log_keys:
                 ax.set_yscale('log')
             if mode == 'dmax':
-                ax.axvline(np.pi / a.selection.q_min, color='#00bcd4', ls='--', lw=1.0,
-                           label='π/q_min')
+                ax.axvline(dmax_limit(a.selection.q_min, s.settings.kind), color='#00bcd4',
+                           ls='--', lw=1.0, label='π/q_min')
                 ax.axvline(s.settings.dmax, color='#ff9800', lw=1.5,
                            label=tr('gift.explorer_current'))
                 ax.set_xlabel('Dmax / nm')
@@ -1682,6 +1995,7 @@ class GiftDialog(QDialog):
         self._plot_bssa()
         self._plot_uncertainty()
         self._plot_explorer()
+        self._plot_decon()
 
     def _no_gift_text(self, fig, canvas):
         fig.clear()
@@ -1893,8 +2207,9 @@ class GiftDialog(QDialog):
         ax.plot(b['r'], pr[2], '-', color=_CLR_FIT, lw=1.5, label=tr('gift.dream_median'))
         ax.plot(s.r, s.pr, '--', color='k', lw=1.0, label=tr('gift.dream_point_estimate'))
         ax.axhline(0, color='k', lw=0.6)
-        ax.set_xlabel('r / nm')
-        ax.set_ylabel('p(r)')
+        lab = LABELS[s.settings.kind]
+        ax.set_xlabel(f"{lab['x']} / nm")
+        ax.set_ylabel(lab['f'])
         ax.legend(fontsize=7)
         ax2 = fig.add_subplot(n_rows, 1, 2)
         pos = s.intensity > 0
@@ -1973,16 +2288,27 @@ class GiftDialog(QDialog):
         s = a.solution
         self.fig_pr.clear()
         ax = self.fig_pr.add_subplot(111)
-        ax.plot(s.r, s.pr, '-', color=_CLR_FIT, lw=1.8, label='p(r)')
+        kind = s.settings.kind
+        lab = LABELS[kind]
+        ax.plot(s.r, s.pr, '-', color=_CLR_FIT, lw=1.8, label=lab['f'])
         ax.fill_between(s.r, s.pr - s.pr_err, s.pr + s.pr_err, color=_CLR_FIT, alpha=0.25, lw=0,
                         label='± σ')
+        z = a.extras.get('size_statistics')
+        if z is not None:
+            # abgeleitete Verteilungen, auf das Maximum der Primärgröße skaliert
+            top = float(np.max(s.pr)) if np.max(s.pr) > 0 else 1.0
+            for (name, arr), style, color in zip(z['derived'].items(), ('--', ':'),
+                                                 ('#6a1b9a', '#2e7d32')):
+                ax.plot(z['R'], top * arr, style, color=color, lw=1.4, label=f"{name} (norm.)")
         ax.axhline(0, color='k', lw=0.8)
-        ax.axvline(s.settings.dmax, color='k', ls='--', lw=0.8, label='Dmax')
-        limit = np.pi / a.selection.q_min
+        ax.axvline(s.settings.dmax, color='k', ls='--', lw=0.8,
+                   label=tr(f'gift.dmax_label.{kind}'))
+        limit = dmax_limit(a.selection.q_min, kind)
         if limit <= 1.3 * s.settings.dmax:
-            ax.axvline(limit, color='#c62828', ls=':', lw=1.0, label='π/q_min')
-        ax.set_xlabel('r / nm')
-        ax.set_ylabel('p(r)')
+            ax.axvline(limit, color='#c62828', ls=':', lw=1.0,
+                       label='π/(2q_min)' if get_kernel(kind).span == 2 else 'π/q_min')
+        ax.set_xlabel(f"{lab['x']} / nm")
+        ax.set_ylabel(lab['f'])
         ax.set_xlim(0, max(s.settings.dmax, 0) * 1.05)
         ax.legend(fontsize=8)
         self.canvas_pr.draw_idle()
@@ -2097,6 +2423,8 @@ class GiftDialog(QDialog):
         if idx_unit >= 0 and idx_unit != self.qunit_combo.currentIndex():
             self.qunit_combo.setCurrentIndex(idx_unit)
         self._updating = True
+        idx_kind = self.kind_combo.findData(p.get('kind', PDDF))
+        self.kind_combo.setCurrentIndex(max(idx_kind, 0))
         self.dmax_spin.setValue(float(p['dmax']))
         self.nspl_spin.setValue(int(p['n_splines']))
         idx = self.k_combo.findData(p.get('k_type', K_DIRICHLET))
@@ -2217,7 +2545,8 @@ class GiftDialog(QDialog):
             return
         if self.analysis is None:
             return
-        paths = result_paths(self.dataset.filepath, self._out_dir())
+        paths = result_paths(self.dataset.filepath, self._out_dir(),
+                             self.analysis.solution.settings.kind)
         existing = [p for k, p in paths.items() if p.exists()]
         if existing:
             reply = QMessageBox.question(
@@ -2231,7 +2560,7 @@ class GiftDialog(QDialog):
                                          write_w3c=self.w3c_check.isChecked())
             # Veraltete S(q)/P(q)/DREAM-Dateien einer früheren Rechnung entfernen
             # (sie gehörten nicht zu diesem Sidecar; das Überschreiben wurde bestätigt)
-            for key in ('sq', 'pq', 'prov_w3c', 'dream', 'pr_band'):
+            for key in ('sq', 'pq', 'prov_w3c', 'dream', 'pr_band', 'decon'):
                 if key not in written and paths[key].exists():
                     paths[key].unlink()
         except OSError as e:

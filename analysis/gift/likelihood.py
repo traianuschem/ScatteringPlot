@@ -33,9 +33,9 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .ift import IFTSettings, regularization_matrix, K_GLATTER
-from .splines import SplineBasis
-from .transform import cached_design_matrix, FOUR_PI, _points_per_interval
+from .ift import IFTSettings, regularization_matrix, K_GLATTER, settings_kind
+from .kernels import get_kernel, PDDF
+from .transform import cached_design_matrix, make_basis, _points_per_interval
 from .structure_factors import get_model
 
 LOG_LAMBDA = 'log_lambda'     # log₁₀ λ_rel
@@ -50,25 +50,30 @@ _LOG_2PI = float(np.log(2.0 * np.pi))
 # ---------------------------------------------------------------------------
 
 class ScaledBasisTable:
-    """Tabelle von g_ν(x) und g_ν'(x) für x ∈ [0, x_max] mit kubischer Hermite-Interpolation."""
+    """Tabelle von g_ν(x) und g_ν'(x) für x ∈ [0, x_max] mit kubischer Hermite-Interpolation.
 
-    def __init__(self, n_splines, x_max, dx=_TABLE_DX):
+    Allgemein (v8.0, kernels.py): g_ν(x) = c ∫₀¹ φ̃_ν(u) uᵃ k(x·u) du und
+    ψ_ν(q; D) = D^{a+1} q⁻ᵇ g_ν(q·D)."""
+
+    def __init__(self, n_splines, x_max, dx=_TABLE_DX, kind=PDDF):
         self.n = int(n_splines)
         self.dx = float(dx)
+        self.kernel = kern = get_kernel(kind)
         n_x = int(np.ceil(max(x_max, 1.0) / self.dx)) + 2
         self.x = self.dx * np.arange(n_x)
-        basis = SplineBasis(1.0, self.n)
-        u, w = basis.quadrature(_points_per_interval(self.x[-1], basis.h))
+        basis = make_basis(1.0, self.n, kind)
+        u, w = basis.quadrature(_points_per_interval(self.x[-1], basis.h,
+                                                     2.0 if kern.size else 1.0))
         phi = basis.evaluate(u) * w[:, None]                       # (P, N)
+        if kern.a:
+            phi = phi * u[:, None] ** kern.a
         phi_u = phi * u[:, None]
         self.g = np.empty((n_x, self.n))
         self.dg = np.empty((n_x, self.n))
         for s in range(0, n_x, 1024):                               # speicherschonend
             y = np.outer(self.x[s:s + 1024], u)                     # (X, P)
-            self.g[s:s + 1024] = FOUR_PI * (np.sinc(y / np.pi) @ phi)
-            with np.errstate(invalid='ignore', divide='ignore'):
-                dj = np.where(np.abs(y) > 1e-4, (y * np.cos(y) - np.sin(y)) / (y * y), -y / 3.0)
-            self.dg[s:s + 1024] = FOUR_PI * (dj @ phi_u)
+            self.g[s:s + 1024] = kern.c * (kern.k(y) @ phi)
+            self.dg[s:s + 1024] = kern.c * (kern.dk(y) @ phi_u)
 
     @property
     def x_max(self):
@@ -92,7 +97,10 @@ class ScaledBasisTable:
         h11 = t * t * (t - 1)
         g = (h00 * self.g[i] + h01 * self.g[i + 1]
              + self.dx * (h10 * self.dg[i] + h11 * self.dg[i + 1]))
-        A = d[:, None, None] * g
+        kern = self.kernel
+        A = (d if kern.a == 0 else d ** (kern.a + 1))[:, None, None] * g
+        if kern.b:
+            A = A / q[None, :, None] ** kern.b
         return A[0] if scalar else A
 
 
@@ -196,7 +204,8 @@ class MarginalLikelihood:
             return self._cache
         st = self.settings
         n = st.n_splines
-        K = regularization_matrix(n, st.k_type)
+        kind = settings_kind(st)
+        K = regularization_matrix(n, st.k_type, get_kernel(kind).left_free)
         if st.k_type == K_GLATTER:                   # singulär: winziger Ridge wie in der IFT
             K = K + 1e-10 * np.mean(np.diag(K)) * np.eye(n)
         sign, logdet_k = np.linalg.slogdet(K)
@@ -204,9 +213,9 @@ class MarginalLikelihood:
              'yw': self.I / self.s}
         if self.samples_dmax:
             d_hi = self.space.upper[self.space.names.index(DMAX)]
-            c['table'] = ScaledBasisTable(n, float(self.q.max()) * d_hi * 1.001)
+            c['table'] = ScaledBasisTable(n, float(self.q.max()) * d_hi * 1.001, kind=kind)
         else:
-            c['A0'] = np.asarray(cached_design_matrix(self.q, st.dmax, n))
+            c['A0'] = np.asarray(cached_design_matrix(self.q, st.dmax, n, kind))
         if st.background:
             w = 1.0 / self.s
             c['w'] = w

@@ -17,8 +17,8 @@ from typing import Optional
 
 import numpy as np
 
-from .splines import SplineBasis
-from .transform import cached_design_matrix, FOUR_PI
+from .transform import cached_design_matrix, make_basis, moment_vectors
+from .kernels import PDDF, get_kernel
 from .smearing import IdentitySmearing
 
 K_GLATTER = 'glatter'      # Σ (c_{ν+1} − c_ν)²            [G77 Gl. 14]
@@ -51,6 +51,8 @@ class IFTSettings:
     n_r: int = 201
     # Verfahren für lam = 'auto': Wendepunkt (Standard) oder Evidenz-Maximum
     lam_method: str = LAMBDA_INFLEXION
+    # Art der Transformation (v8.0): p(r), Querschnitt, Dicke, Größenverteilung (kernels.py)
+    kind: str = PDDF
 
     def to_dict(self):
         return asdict(self)
@@ -102,14 +104,23 @@ class IFTSolution:
     extras: dict = field(default_factory=dict)
 
 
-def regularization_matrix(n, kind=K_GLATTER):
-    """Glättungsmatrix K für die Norm der ersten Differenzen der Koeffizienten."""
+def settings_kind(settings):
+    """IFT-Art der Einstellungen (ältere Sidecars ohne Feld: p(r))."""
+    return getattr(settings, 'kind', None) or PDDF
+
+
+def regularization_matrix(n, kind=K_GLATTER, left_free=False):
+    """Glättungsmatrix K für die Norm der ersten Differenzen der Koeffizienten.
+
+    left_free: nur der rechte Rand ist fest auf 0 (Dicken-Verteilung, p_t(0) ≠ 0)."""
+    inner = slice(0, -1) if left_free else slice(1, -1)
+    pad = n + 1 if left_free else n + 2
     if kind == K_GLATTER:
         D = np.diff(np.eye(n), axis=0)                 # (N−1) × N
     elif kind == K_DIRICHLET:
-        D = np.diff(np.eye(n + 2), axis=0)[:, 1:-1]    # (N+1) × N, Ränder fest auf 0
+        D = np.diff(np.eye(pad), axis=0)[:, inner]     # (N+1) × N, Ränder fest auf 0
     elif kind == K_CURVATURE:
-        D = np.diff(np.eye(n + 2), n=2, axis=0)[:, 1:-1]  # 2. Differenzen, Ränder auf 0
+        D = np.diff(np.eye(pad), n=2, axis=0)[:, inner]  # 2. Differenzen, Ränder auf 0
     else:
         raise ValueError(f"Unbekannter K-Typ: {kind}")
     return D.T @ D
@@ -169,8 +180,11 @@ class IFTProblem:
         self.s = np.asarray(sigma, dtype=float)
         self.settings = settings
         smearing = smearing or IdentitySmearing()
-        self.A = smearing.apply(cached_design_matrix(self.q, settings.dmax, settings.n_splines))
-        self.K = regularization_matrix(settings.n_splines, settings.k_type)
+        kind = settings_kind(settings)
+        self.A = smearing.apply(cached_design_matrix(self.q, settings.dmax, settings.n_splines,
+                                                     kind))
+        self.K = regularization_matrix(settings.n_splines, settings.k_type,
+                                       get_kernel(kind).left_free)
         self.Aw = self.A / self.s[:, None]
         self.yw = self.I / self.s
         if settings.background:
@@ -288,8 +302,10 @@ class IFTDecomposition:
             raise ValueError(f"Zu wenige Datenpunkte ({len(q)}) für {n_params} Parameter")
         self.q, self.I, self.s, self.settings = q, I, s, settings
         smearing = smearing or IdentitySmearing()
-        self.basis = SplineBasis(settings.dmax, settings.n_splines)
-        self.A_form = smearing.apply(cached_design_matrix(q, settings.dmax, settings.n_splines))
+        kind = settings_kind(settings)
+        self.basis = make_basis(settings.dmax, settings.n_splines, kind)
+        self.A_form = smearing.apply(cached_design_matrix(q, settings.dmax, settings.n_splines,
+                                                          kind))
         if structure_factor is not None:
             S_q = np.asarray(structure_factor, dtype=float)
             if S_q.shape != q.shape or not np.all(np.isfinite(S_q)):
@@ -299,7 +315,8 @@ class IFTDecomposition:
             S_q = None
             self.A = self.A_form
         self.S_q = S_q
-        self.K = regularization_matrix(settings.n_splines, settings.k_type)
+        self.K = regularization_matrix(settings.n_splines, settings.k_type,
+                                       get_kernel(kind).left_free)
         n_spl = settings.n_splines
         self.Aw = self.A / s[:, None]
         self.yw = I / s
@@ -453,18 +470,16 @@ def run_ift(q, intensity, sigma, settings: IFTSettings, smearing=None, structure
     pr = Phi @ c
     pr_err = np.sqrt(np.maximum(np.einsum('ij,jk,ik->i', Phi, cov_c, Phi), 0.0))
 
-    # Momente für I(0) und Rg [G77 Gl. 19/20] per exakter Quadratur
-    rq, wq = basis.quadrature(8)
-    Phi_q = basis.evaluate(rq)
-    m0_vec = FOUR_PI * (wq @ Phi_q)                 # I(0) = m0_vec · c
-    m2_vec = FOUR_PI * ((wq * rq ** 2) @ Phi_q)
+    # Momente für I(0) und Rg [G77 Gl. 19/20] per exakter Quadratur; andere Arten:
+    # Vorwärtswert und Trägheitsradius der jeweiligen Geometrie (kernels.py)
+    m0_vec, m2_vec = moment_vectors(basis, settings_kind(settings))   # I(0) = m0_vec · c
     i0 = float(m0_vec @ c)
     m2 = float(m2_vec @ c)
     i0_err = float(np.sqrt(max(m0_vec @ cov_c @ m0_vec, 0.0)))
     if i0 > 0 and m2 > 0:
-        rg2 = m2 / (2.0 * i0)
+        rg2 = m2 / i0
         rg = float(np.sqrt(rg2))
-        grad = (m2_vec / (2.0 * i0) - m2 * m0_vec / (2.0 * i0 ** 2)) / (2.0 * rg)
+        grad = (m2_vec / i0 - m2 * m0_vec / i0 ** 2) / (2.0 * rg)
         rg_err = float(np.sqrt(max(grad @ cov_c @ grad, 0.0)))
     else:
         rg, rg_err = float('nan'), float('nan')

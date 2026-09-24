@@ -27,10 +27,11 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
-from .ift import (IFTSettings, IFTDecomposition, _select_lambda, LAMBDA_AUTO,
+from .ift import (settings_kind, IFTSettings, IFTDecomposition, _select_lambda, LAMBDA_AUTO,
                   LAMBDA_EVIDENCE, lambda_grid)
 from .splines import SplineBasis
-from .transform import FOUR_PI
+from .transform import make_basis, moment_vectors
+from .kernels import PDDF, dmax_limit
 
 N_SLICE = 100
 OSC_GOOD = 1.6              # Standardschwelle „glattes p(r)“ (Kugel: 1.1)
@@ -64,13 +65,7 @@ def sasview_r(dmax, nslice=N_SLICE):
     return np.linspace(0.0, dmax - dx, nslice)
 
 
-def _moment_vectors(basis):
-    rq, wq = basis.quadrature(8)
-    phi = basis.evaluate(rq)
-    return FOUR_PI * (wq @ phi), FOUR_PI * ((wq * rq ** 2) @ phi)
-
-
-def pr_metrics(basis: SplineBasis, C, pr_var_fn):
+def pr_metrics(basis: SplineBasis, C, pr_var_fn, kind=PDDF):
     """Kennzahlen für Koeffizienten C (Λ, N).
 
     Args:
@@ -96,11 +91,11 @@ def pr_metrics(basis: SplineBasis, C, pr_var_fn):
     tail = r >= 0.9 * basis.dmax
     with np.errstate(divide='ignore', invalid='ignore'):
         end = np.where(pmax > 0, np.max(np.abs(P[:, tail]), axis=1) / pmax, np.nan)
-    m0, m2 = _moment_vectors(basis)
+    m0, m2 = moment_vectors(basis, kind)
     i0 = C @ m0
     m2c = C @ m2
     with np.errstate(divide='ignore', invalid='ignore'):
-        rg = np.where((i0 > 0) & (m2c > 0), np.sqrt(m2c / (2.0 * i0)), np.nan)
+        rg = np.where((i0 > 0) & (m2c > 0), np.sqrt(m2c / i0), np.nan)
     return {'oscillation': osc, 'positive_fraction': pos, 'positive_1sigma': pos1,
             'n_peaks': peaks.astype(float), 'rg': rg, 'i0': i0, 'end_fraction': end}
 
@@ -114,7 +109,7 @@ def _grid_metrics(dec: IFTDecomposition, lam_rel):
         P1 = Phi @ dec.back.T                                  # (R, N)
         return weights @ (P1 * P1).T                           # (Λ, R)
 
-    out = pr_metrics(dec.basis, g['C'], var_fn)
+    out = pr_metrics(dec.basis, g['C'], var_fn, settings_kind(dec.settings))
     m = len(dec.q)
     out.update(md=g['md'], log_evidence=g['log_evidence'], n_good=g['n_good'],
                chi2_dof=g['chi2'] / np.maximum(m - g['n_good'], 1.0))
@@ -129,10 +124,11 @@ def solution_metrics(sol) -> Dict[str, float]:
     """Kennzahlen einer fertigen IFT/GIFT-Lösung (volle Kovarianz)."""
     st = sol.settings
     n = st.n_splines
-    basis = SplineBasis(st.dmax, n)
+    basis = make_basis(st.dmax, n, settings_kind(st))
     cov = sol.covariance[:n, :n]
     out = pr_metrics(basis, sol.coefficients[None, :],
-                     lambda Phi: np.einsum('ij,jk,ik->i', Phi, cov, Phi)[None, :])
+                     lambda Phi: np.einsum('ij,jk,ik->i', Phi, cov, Phi)[None, :],
+                     settings_kind(st))
     out = {k: float(v[0]) for k, v in out.items()}
     n_good = sol.extras.get('n_good', float('nan'))
     out.update(md=float(sol.md), log_evidence=sol.extras.get('log_evidence', float('nan')),
@@ -275,7 +271,7 @@ def suggest_dmax(q, I, s, settings: IFTSettings, factors=None, osc_max=OSC_GOOD,
     """
     if factors is None:
         factors = np.geomspace(0.05, 3.0, 45)
-    limit = np.pi / float(np.min(q))
+    limit = dmax_limit(float(np.min(q)), settings_kind(settings))
     scan = scan_1d(q, I, s, settings, 'dmax', np.asarray(factors) * limit, smearing,
                    structure_factor)
     m = scan.metrics

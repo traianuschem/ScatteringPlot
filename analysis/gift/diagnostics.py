@@ -11,6 +11,8 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from .kernels import PDDF, get_kernel, dmax_limit
+
 LEVEL_OK = 'ok'
 LEVEL_INFO = 'info'
 LEVEL_WARNING = 'warning'
@@ -40,14 +42,16 @@ class Flag:
 # Einzelprüfungen (auch einzeln nutzbar, z. B. für die Live-Anzeige im Dialog)
 # ---------------------------------------------------------------------------
 
-def dmax_qmin_ratio(dmax, q_min):
-    """Verhältnis Dmax·q_min/π (≤ 1: Dmax ist durch den Messbereich abgedeckt)."""
-    return float(dmax) * float(q_min) / np.pi
+def dmax_qmin_ratio(dmax, q_min, kind=PDDF):
+    """Verhältnis Dmax·q_min/π (≤ 1: Dmax ist durch den Messbereich abgedeckt).
+
+    Radius-Verteilungen (v8.0): größter Abstand 2·R_max, Grenze π/(2 q_min)."""
+    return float(dmax) / dmax_limit(q_min, kind)
 
 
-def check_dmax_qmin(dmax, q_min):
-    ratio = dmax_qmin_ratio(dmax, q_min)
-    limit = np.pi / q_min
+def check_dmax_qmin(dmax, q_min, kind=PDDF):
+    ratio = dmax_qmin_ratio(dmax, q_min, kind)
+    limit = dmax_limit(q_min, kind)
     if ratio > 1.0:
         return Flag('dmax_qmin', LEVEL_WARNING,
                     f"Dmax = {dmax:.3g} nm > π/q_min = {limit:.3g} nm "
@@ -59,24 +63,24 @@ def check_dmax_qmin(dmax, q_min):
                 'ok', {'limit': f"{limit:.3g}", 'ratio': f"{ratio:.2f}"})
 
 
-def shannon_channels(dmax, q_min, q_max):
-    """Anzahl der Shannon-Kanäle N_s = Dmax·(q_max − q_min)/π."""
-    return float(dmax) * (float(q_max) - float(q_min)) / np.pi
+def shannon_channels(dmax, q_min, q_max, kind=PDDF):
+    """Anzahl der Shannon-Kanäle N_s = Dmax·(q_max − q_min)/π (Dmax = größter Abstand)."""
+    return get_kernel(kind).span * float(dmax) * (float(q_max) - float(q_min)) / np.pi
 
 
-def suggest_n_splines(dmax, q_min, q_max, n_min=20, n_max=200):
+def suggest_n_splines(dmax, q_min, q_max, n_min=20, n_max=200, kind=PDDF):
     """Empfohlene Spline-Anzahl: etwas mehr als die Zahl der Shannon-Kanäle.
 
     Die Regularisierung verhindert Überanpassung, eine zu grobe Basis dagegen kann die
     Information der Daten nicht darstellen (MD ≫ 1).
     """
-    ns = shannon_channels(dmax, q_min, q_max)
+    ns = shannon_channels(dmax, q_min, q_max, kind)
     return int(np.clip(np.ceil(1.2 * ns) + 5, n_min, n_max))
 
 
-def check_shannon(dmax, q_min, q_max, n_splines):
-    ns = shannon_channels(dmax, q_min, q_max)
-    suggest = suggest_n_splines(dmax, q_min, q_max)
+def check_shannon(dmax, q_min, q_max, n_splines, kind=PDDF):
+    ns = shannon_channels(dmax, q_min, q_max, kind)
+    suggest = suggest_n_splines(dmax, q_min, q_max, kind=kind)
     if ns < 3.0:
         return Flag('shannon', LEVEL_WARNING,
                     f"Nur {ns:.1f} Shannon-Kanäle im Fitbereich — sehr geringer "
@@ -108,15 +112,20 @@ def check_q_range(selection):
                  'q_min': f"{selection.q_min:.4g}", 'q_max': f"{selection.q_max:.4g}"})
 
 
-def guinier_rg(q, intensity, sigma, qrg_max=1.3, min_points=5, max_iter=20):
+def guinier_rg(q, intensity, sigma, qrg_max=None, min_points=5, max_iter=20, dim=3):
     """Iterativer Guinier-Fit ln I = ln I0 − Rg²q²/3 im Bereich q·Rg ≤ qrg_max.
+
+    dim = 2 (Querschnitt): ln(qI) = ln(qI)₀ − R_c²q²/2; dim = 1 (Dicke):
+    ln(q²I) = ln(q²I)₀ − R_t²q² (v8.0). Standard q·R ≤ 1.3 (3D) bzw. 1.0.
 
     Returns:
         (Rg, I0, n_points) oder None, wenn kein gültiger Guinier-Bereich existiert.
     """
     q = np.asarray(q, dtype=float)
-    I = np.asarray(intensity, dtype=float)
-    s = np.asarray(sigma, dtype=float)
+    I = np.asarray(intensity, dtype=float) * q ** (3 - int(dim))
+    s = np.asarray(sigma, dtype=float) * q ** (3 - int(dim))
+    if qrg_max is None:
+        qrg_max = 1.3 if dim == 3 else 1.0
     valid = I > 0
     q, I, s = q[valid], I[valid], s[valid]
     if len(q) < min_points:
@@ -130,8 +139,13 @@ def guinier_rg(q, intensity, sigma, qrg_max=1.3, min_points=5, max_iter=20):
         coef = np.polyfit(x, y, 1, w=np.sqrt(w))
         slope, intercept = coef
         if slope >= 0:
+            # Anfangsbereich zu flach für das Rauschen (kleines R·q_min): Startbereich
+            # vergrößern statt aufzugeben (v8.0)
+            if rg is None and n < len(q):
+                n = min(2 * n, len(q))
+                continue
             return None
-        rg_new = float(np.sqrt(-3.0 * slope))
+        rg_new = float(np.sqrt(-float(dim) * slope))
         n_new = int(np.count_nonzero(q * rg_new <= qrg_max))
         if n_new < min_points:
             return None
@@ -295,17 +309,17 @@ def check_lowq_rise(q, intensity, sigma, n_check=6):
     return None
 
 
-def check_guinier_missing(guinier, q_min, dmax):
+def check_guinier_missing(guinier, q_min, dmax, kind=PDDF):
     """Ohne Guinier-Bereich (q_min·Rg ≳ 1.3) ist das Teilchen vermutlich größer als π/q_min;
     ein auf π/q_min begrenztes Dmax erzwingt dann ein oszillierendes p(r)."""
     if guinier is not None:
         return None
-    limit = np.pi / q_min
+    limit = dmax_limit(q_min, kind)
     return Flag('guinier_missing', LEVEL_WARNING,
                 f"Kein Guinier-Bereich gefunden: Die Teilchen sind vermutlich größer als "
                 f"π/q_min = {limit:.3g} nm. Ein Dmax ≤ π/q_min erzwingt dann ein oszillierendes "
                 f"p(r) — Dmax mit dem Explorer bzw. „Dmax vorschlagen“ bestimmen; die größten "
-                f"Abstände bleiben unsicher.", dmax * q_min / np.pi, 1.0, 'missing',
+                f"Abstände bleiben unsicher.", dmax / limit, 1.0, 'missing',
                 {'limit': f"{limit:.3g}"})
 
 
@@ -329,6 +343,7 @@ def check_pr_smoothness(metrics, solution, guinier=None):
     if not np.isfinite(osc):
         return None
     st = solution.settings
+    kind = getattr(st, 'kind', None) or PDDF
     q_min, q_max = float(np.min(solution.q)), float(np.max(solution.q))
     params = {'osc': f"{osc:.2f}"}
     if osc <= OSC_INFO:
@@ -338,11 +353,11 @@ def check_pr_smoothness(metrics, solution, guinier=None):
     scan = solution.scan
     if scan is not None and not solution.lam_manual and not scan.inflexion_found:
         causes.append('no_inflexion')
-    if guinier is None and st.dmax <= 1.05 * np.pi / q_min:
+    if guinier is None and st.dmax <= 1.05 * dmax_limit(q_min, kind):
         causes.append('dmax_small')
     if metrics.get('md', 0) > 2.0:
         causes.append('md_high')
-    if st.n_splines > 2.0 * shannon_channels(st.dmax, q_min, q_max) + 5:
+    if st.n_splines > 2.0 * shannon_channels(st.dmax, q_min, q_max, kind) + 5:
         causes.append('many_splines')
     if scan is not None and scan.index_evidence is not None:
         if solution.lam_rel < scan.lam_rel[scan.index_evidence] / 10.0:
@@ -364,6 +379,62 @@ def check_pr_peaks(metrics):
                     f"Oszillation (mit der Oszillations-Kennzahl vergleichen).", n, 1.0,
                     'several', {'n': str(int(n))})
     return None
+
+
+def check_cross_section_lowq(q, intensity, sigma, kind, n_check=None):
+    """Querschnitts-/Dicken-IFT [G80b]: Die Faktorisierung I = (πL/q)·I_c bzw. (2πA/q²)·I_t
+    gilt nur für q ≫ 1/L. Endliche Teilchen senken q·I bzw. q²·I nahe dem Ursprung ab;
+    steigt diese Größe am Anfang des Fitbereichs signifikant an, ist q_min zu klein."""
+    kern = get_kernel(kind)
+    if kern.b == 0:
+        return None
+    q = np.asarray(q, dtype=float)
+    y = np.asarray(intensity, dtype=float) * q ** kern.b
+    sy = np.asarray(sigma, dtype=float) * q ** kern.b
+    n = n_check or max(6, len(q) // 8)
+    ok = y[:n] > 0
+    if ok.sum() < 4:
+        return None
+    x, ly, w = q[:n][ok], np.log(y[:n][ok]), (y[:n][ok] / sy[:n][ok]) ** 2
+    X = np.column_stack([np.ones_like(x), x])
+    cov = np.linalg.pinv(X.T @ (w[:, None] * X))
+    slope = float((cov @ X.T @ (w * ly))[1])
+    err = float(np.sqrt(max(cov[1, 1], 0.0)))
+    label = 'q·I' if kern.b == 1 else 'q²·I'
+    params = {'quantity': label}
+    if slope > 3.0 * err and slope > 0:
+        return Flag('cross_section_lowq', LEVEL_WARNING,
+                    f"{label} steigt am Anfang des Fitbereichs an — endliche Länge bzw. Fläche "
+                    f"der Teilchen; q_min erhöhen (etwa bis zum Maximum von {label}) [G80b]. "
+                    f"Quantitativ nur für Länge/Querschnitt ≥ 10.", slope / err, 3.0, 'rising',
+                    params)
+    return Flag('cross_section_lowq', LEVEL_OK,
+                f"{label} fällt ab q_min monoton (Faktorisierung gültig) [G80b]", None, None,
+                'ok', params)
+
+
+SIZE_NEGATIVE_WARNING = 0.1
+
+
+def check_size_distribution(stats):
+    """Größenverteilung (v8.0): signifikant negative Anteile von D_V zeigen, dass die
+    angenommene Form (homogene Kugel/Zylinder/Lamelle) die Teilchen nicht beschreibt
+    (z. B. Kern-Schale, anisotrop, Wechselwirkung) oder R_max/λ ungeeignet sind [G80a]."""
+    if not stats:
+        return None
+    neg = stats.get('negative_fraction', float('nan'))
+    if not np.isfinite(neg):
+        return None
+    params = {'neg': f"{neg:.0%}"}
+    if neg > SIZE_NEGATIVE_WARNING:
+        return Flag('size_distribution', LEVEL_WARNING,
+                    f"D_V ist zu {neg:.0%} negativ — sehr schmale (nahezu monodisperse) "
+                    f"Verteilung, bei der negative Werte zur Beschreibung nötig sind, oder die "
+                    f"angenommene Teilchenform passt nicht (Kern-Schale, anisotrop, "
+                    f"Wechselwirkung) bzw. R_max/λ sind ungeeignet [G80a].", neg,
+                    SIZE_NEGATIVE_WARNING, 'negative', params)
+    return Flag('size_distribution', LEVEL_OK, f"D_V überwiegend positiv (negativ {neg:.0%})",
+                neg, SIZE_NEGATIVE_WARNING, 'ok', params)
 
 
 def check_rg_consistency(rg_ift, rg_guinier):
@@ -397,15 +468,16 @@ def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
         sigma_source = SIGMA_ESTIMATED if sigma_estimated else SIGMA_MEASURED
     sigma_estimated = sigma_source != SIGMA_MEASURED
     st = solution.settings
+    kind = getattr(st, 'kind', None) or PDDF
     q_min, q_max = float(np.min(solution.q)), float(np.max(solution.q))
     rg_g = guinier[0] if guinier else None
     flags = [
-        check_dmax_qmin(st.dmax, q_min),
-        check_shannon(st.dmax, q_min, q_max, st.n_splines),
+        check_dmax_qmin(st.dmax, q_min, kind),
+        check_shannon(st.dmax, q_min, q_max, st.n_splines, kind),
         check_q_range(selection),
         check_lowq_artifacts(selection),
         check_lowq_rise(solution.q, solution.intensity, solution.sigma),
-        check_guinier_missing(guinier, q_min, st.dmax),
+        check_guinier_missing(guinier, q_min, st.dmax, kind),
         check_sigma(sigma_source, sigma_relative),
         check_inflexion(solution.scan, solution.lam_manual),
         check_fit_quality(solution.md, sigma_estimated),
@@ -416,6 +488,7 @@ def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
         check_pr_smoothness(metrics, solution, guinier),
         check_pr_peaks(metrics),
         check_rg_consistency(solution.rg, rg_g),
+        check_cross_section_lowq(solution.q, solution.intensity, solution.sigma, kind),
     ]
     return [f for f in flags if f is not None]
 
@@ -641,7 +714,7 @@ def diagnose_uncertainty(u):
                           f"Posterior-Median).", None, None, 'hyper', {'names': s}))
 
     if 'dmax' in names:
-        limit = np.pi / u.q_min
+        limit = dmax_limit(u.q_min, getattr(u, 'kind', PDDF))
         sm = u.summary['dmax']
         params = {'limit': f"{limit:.3g}", 'median': f"{sm['median']:.3g}",
                   'q97': f"{sm['q97.5']:.3g}"}
@@ -678,3 +751,50 @@ def diagnose_uncertainty(u):
 def worst_level(flags):
     order = {LEVEL_OK: 0, LEVEL_INFO: 1, LEVEL_WARNING: 2}
     return max((f.level for f in flags), key=lambda lv: order[lv], default=LEVEL_OK)
+
+
+DECON_MD_WARNING = 3.0
+
+
+def diagnose_decon(res):
+    """Flags der DECON-Rechnung [G81, MG98]."""
+    flags = []
+    if res.alternatives:
+        n = len(res.alternatives)
+        flags.append(Flag('decon_ambiguous', LEVEL_WARNING,
+                          f"{n} weitere, deutlich verschiedene Profile beschreiben p(r) ähnlich "
+                          f"gut — die Faltungswurzel ist nicht eindeutig (typisch bei "
+                          f"Kontrastumkehr). Alternativen im Plot vergleichen.",
+                          float(n), 0.0, 'several', {'n': str(n)}))
+    else:
+        flags.append(Flag('decon_ambiguous', LEVEL_OK,
+                          "Alle Startprofile führen zur selben Lösung (bis auf das Vorzeichen)",
+                          0.0, 0.0, 'ok'))
+    params = {'md': f"{res.md_pr:.3g}", 'md_q': f"{res.md_q:.3g}"}
+    if res.md_pr > DECON_MD_WARNING:
+        poly = res.settings.polydispersity != 'none'
+        flags.append(Flag('decon_fit', LEVEL_WARNING,
+                          f"Das Profil beschreibt p(r) nicht (MD = {res.md_pr:.3g}) — "
+                          + ("Teilchen nicht zentrosymmetrisch oder Geometrie ungeeignet "
+                             "[G81: Test der Symmetrie]." if poly else
+                             "Polydispersität (P-Scan verwenden, [MG98]) oder Abweichung von "
+                             "der Symmetrie [G81]."),
+                          res.md_pr, DECON_MD_WARNING, 'worse_poly' if poly else 'worse', params))
+    else:
+        flags.append(Flag('decon_fit', LEVEL_OK,
+                          f"MD(p) = {res.md_pr:.3g}, MD(I) = {res.md_q:.3g}", res.md_pr,
+                          DECON_MD_WARNING, 'ok', params))
+    ps = res.poly_scan
+    if ps is not None and ps['index'] in (0, len(ps['P']) - 1) and ps['index'] > 0:
+        flags.append(Flag('decon_poly', LEVEL_WARNING,
+                          f"Minimum von MD(P) am Rand des Scanbereichs (P = "
+                          f"{100 * ps['P'][ps['index']]:.0f} %) — Bereich erweitern oder "
+                          f"Verteilungstyp prüfen [MG98].", None, None, 'boundary',
+                          {'p': f"{100 * ps['P'][ps['index']]:.0f}"}))
+    elif ps is not None:
+        flags.append(Flag('decon_poly', LEVEL_INFO,
+                          f"Polydispersität P = {res.p_percent:.0f} % (σ = {res.sigma_poly:.3f}, "
+                          f"{res.settings.distribution}) aus dem Minimum von MD(P) [MG98].",
+                          res.p_percent, None, 'found',
+                          {'p': f"{res.p_percent:.0f}", 'sigma': f"{res.sigma_poly:.3f}"}))
+    return flags

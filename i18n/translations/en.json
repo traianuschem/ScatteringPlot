@@ -1081,6 +1081,78 @@
     "auto_qmin_tooltip": "Detects a leading block with I ≤ 0 or sign changes (e.g. beamstop region, separation artefacts) and subsequent insignificant points, and sets q_min behind them. Manual limits take precedence.",
     "dmax_suggest": "Suggest",
     "dmax_suggest_tooltip": "Dmax from the explorer: smallest Dmax with a smooth p(r) that decays before Dmax (I(0) > 0) and a full fit of the data; N is set as well.",
+    "kind_label": "Evaluation",
+    "kind_tooltip": "Type of indirect transformation: p(r) (Glatter 1977); cross-section p_c(r) for long cylinders or thickness p_t(r) for flat lamellae (Glatter 1980b; use only the q range in which the particles appear long or flat); volume distribution D_V(R) for homogeneous spheres, long cylinders or lamellae (Glatter 1980a).",
+    "kind": {
+      "pddf": "p(r) — pair distance distribution",
+      "cross_section": "p_c(r) — cross-section (long cylinders)",
+      "thickness": "p_t(r) — thickness (lamellae)",
+      "size_sphere": "Size distribution D_V(R) — spheres",
+      "size_cylinder": "Size distribution D_V(R) — long cylinders",
+      "size_lamella": "Size distribution D_V(T) — lamellae",
+      "size_sphere_n": "Number distribution D_N(R) — spheres",
+      "size_cylinder_n": "Number distribution D_N(R) — long cylinders",
+      "size_lamella_n": "Number distribution D_N(T) — lamellae"
+    },
+    "dmax_label": {
+      "pddf": "Dmax",
+      "cross_section": "Dmax (cross-section)",
+      "thickness": "Dmax (thickness)",
+      "size_sphere": "R_max",
+      "size_cylinder": "R_max",
+      "size_lamella": "T_max",
+      "size_sphere_n": "R_max",
+      "size_cylinder_n": "R_max",
+      "size_lamella_n": "T_max"
+    },
+    "equiv": {
+      "pddf": "R (homogeneous sphere)",
+      "cross_section": "R (homogeneous cylinder, √2·R_c)",
+      "thickness": "T (homogeneous lamella, √12·R_t)"
+    },
+    "size_mode": "Mode",
+    "size_number_range": "only ≥ {r} nm and D_V ≥ 2σ",
+    "tab_decon": "DECON",
+    "decon_basis": "Basis",
+    "decon_basis_splines": "splines (Mittelbach & Glatter 1998)",
+    "decon_basis_steps": "steps (Glatter 1981)",
+    "decon_basis_tooltip": "Splines: smooth profile from cubic B-splines (internally fine steps, 4 per interval). Steps: equidistant step functions as in the original DECON. The overlap integrals are exact in both cases (Glatter & Hainisch 1984).",
+    "decon_auto": "auto",
+    "decon_n": "Intervals",
+    "decon_n_tooltip": "Number of intervals on [0, Dmax/2]. “auto”: step width = knot distance of the IFT (Glatter 1981).",
+    "decon_lam_tooltip": "Smoothing B + λK: point-of-inflexion method as in the IFT (Glatter 1981) or fixed value.",
+    "decon_poly": "Polydispersity",
+    "decon_poly_none": "none (monodisperse)",
+    "decon_poly_scan": "determine (scan P = 0–40 %)",
+    "decon_poly_fixed": "fixed value",
+    "decon_poly_tooltip": "Mittelbach & Glatter (1998): the overlap integrals are averaged over a number size distribution; the profile then refers to the most frequent particle size. The scan determines the width P from the minimum of the mean deviation. Only one linear size (core and shell scale together).",
+    "decon_dist_schulz": "Schulz (shifted)",
+    "decon_dist_gauss": "Gaussian",
+    "decon_p_tooltip": "Width as HWHM relative to the most frequent radius: P = σ·√(2 ln 2) (Mittelbach & Glatter 1998).",
+    "decon_run": "Compute profile",
+    "decon_run_tooltip": "Radial contrast profile as convolution square root of p(r): sphere for p(r), cylinder cross-section for p_c(r), symmetric lamella for p_t(r). Constant start profile (Glatter 1981) plus further start profiles; equally good but different solutions are shown as alternatives.",
+    "decon_steps": "Step model",
+    "decon_steps_run": "Optimise step model",
+    "decon_steps_tooltip": "Few steps (2–4) with variable widths: boundaries and heights are optimised (Glatter & Hainisch 1984), with the same polydispersity as the profile. Yields e.g. core and outer radius.",
+    "decon_need_profile": "Compute the profile first.",
+    "decon_running": "DECON running …",
+    "decon_scan_running": "Polydispersity scan: {j} of {n} …",
+    "decon_cancelled": "DECON cancelled.",
+    "decon_hint": "DECON derives the radial contrast profile of centrosymmetric particles from p(r) (Glatter 1981; Glatter & Hainisch 1984), optionally with polydispersity (Mittelbach & Glatter 1998). Press “Compute profile” to start.",
+    "decon_not_available": "DECON is only defined for p(r), p_c(r) (cross-section) and p_t(r) (thickness), not for size distributions.",
+    "decon_profile": "Δρ(r)",
+    "decon_alternative": "Alternative",
+    "decon_step_label": "step model ({n} steps: {edges} nm)",
+    "decon_p_axis": "polydispersity P / %",
+    "decon_status": "{geometry}, R = {R} nm · {poly} · MD(p) = {md} · MD(I) = {md_q} · λ = {lam} · alternatives: {n}. Sign: ∫Δρ dV > 0 (the global sign is undetermined).",
+    "decon_status_poly": "P = {p} % (σ = {sigma})",
+    "decon_status_mono": "monodisperse",
+    "decon_status_steps": "Step model: boundaries {edges} nm, heights {heights}, MD(p) = {md}.",
+    "decon_geom": {
+      "sphere": "sphere",
+      "cylinder": "cylinder cross-section",
+      "lamella": "lamella"
+    },
     "dmax_suggest_none": "No Dmax with smooth p(r) and good fit found — use the explorer (Dmax × λ map).",
     "lambda_method": "λ choice",
     "lambda_method_inflexion": "Inflexion point (Glatter)",
@@ -1399,6 +1471,27 @@
       "pr_tail": {
         "ok": "No long zero tail before Dmax",
         "long": "p(r) is not significantly different from 0 beyond r ≈ {r} nm ({frac} of the range) — Dmax may be too large."
+      },
+      "cross_section_lowq": {
+        "ok": "{quantity} decreases monotonically from q_min (factorisation valid, Glatter 1980b)",
+        "rising": "{quantity} rises at the start of the fit range — finite length or area of the particles; increase q_min (roughly to the maximum of {quantity}). Quantitative only for length/cross-section ≥ 10 (Glatter 1980b)."
+      },
+      "size_distribution": {
+        "ok": "D_V mostly positive (negative {neg})",
+        "negative": "D_V is {neg} negative — very narrow (nearly monodisperse) distribution, for which negative values are needed, or the assumed particle shape does not fit (core-shell, anisotropic, interaction) or R_max/λ are unsuitable (Glatter 1980a)."
+      },
+      "decon_ambiguous": {
+        "ok": "DECON: all start profiles lead to the same solution (up to the sign)",
+        "several": "DECON: {n} further, clearly different profiles describe p(r) similarly well — the convolution square root is not unique (typical for contrast inversion). Compare the alternatives in the DECON tab."
+      },
+      "decon_fit": {
+        "ok": "DECON: MD(p) = {md}, MD(I) = {md_q}",
+        "worse": "DECON: the profile does not describe p(r) (MD = {md}) — polydispersity (use the P scan, Mittelbach & Glatter 1998) or deviation from symmetry (Glatter 1981).",
+        "worse_poly": "DECON: the profile does not describe p(r) even with polydispersity (MD = {md}) — particles not centrosymmetric or geometry unsuitable (test of symmetry, Glatter 1981)."
+      },
+      "decon_poly": {
+        "found": "DECON: polydispersity P = {p} % (σ = {sigma}) from the minimum of MD(P) (Mittelbach & Glatter 1998).",
+        "boundary": "DECON: minimum of MD(P) at the edge of the scan range (P = {p} %) — extend the range or check the distribution type."
       },
       "pr_negative": {
         "ok": "No significantly negative p(r) values",
