@@ -112,6 +112,8 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 - 🧅 **DECON** (Glatter 1981; Glatter & Hainisch 1984): radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, **Polydispersität** (Mittelbach & Glatter 1998) und optimiertem Stufenmodell (Kern-/Außenradius)
 - Explorer, DREAM, GIFT und Export funktionieren mit allen IFT-Arten
 
+📖 **Bedienungsanleitung** mit Literaturverzeichnis: [docs/GIFT/ANLEITUNG.md](docs/GIFT/ANLEITUNG.md)
+
 **Vollständige Änderungen:** Siehe [CHANGELOG_v8.0.md](CHANGELOG_v8.0.md)
 
 ---
