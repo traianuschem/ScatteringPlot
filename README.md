@@ -1,8 +1,8 @@
-# ScatterForge Plot v7.5.0
+# ScatterForge Plot v8.0.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-7.5.0-blue)
+![Version](https://img.shields.io/badge/version-8.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,15 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **Weitere Glatter-Auswertungen** | IFT-Arten Querschnitt p_c(r) und Dicke p_t(r), Größenverteilungen D_V(R)/D_N(R) für Kugeln, Zylinder und Lamellen; DECON: radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, Polydispersitäts-Scan (Mittelbach & Glatter 1998) und optimiertem Stufenmodell | ✅ **v8.0.0** |
+| **Weitere GIFT-Strukturfaktoren** | S_eff polydisperser harter Kugeln (Vrij, Schulz), klebrige harte Kugeln (Baxter), fraktales Aggregat (Teixeira), Stäbchen (Mean-Field) — validiert gegen sasmodels bzw. PY-Grenzfälle, mit Flags zur Bestimmbarkeit | ✅ **v7.14.0** |
+| **p(r)-Explorer & Kennzahlen** | SasView-kompatible Kennzahlen (Oszillation, Positive Fraction, Maxima, χ²) plus N_g und Evidenz; Karte Dmax × λ mit „gutem Bereich“ und Klick-Übernahme, 1D-Scans über Dmax/λ/N, Dmax-Vorschlag, λ per Evidenz-Maximum, automatische Artefakterkennung bei kleinem q, Serienauswertung mit CSV-Übersicht | ✅ **v7.13.0** |
+| **Unsicherheit per DREAM** | MCMC-Analyse (DREAM(ZS)) der IFT/GIFT-Parameter auf Knopfdruck: S(q)-Parameter, log λ und Dmax mit analytisch herausintegrierten Spline-Koeffizienten (Hansen 2000); Intervalle, Korrelationen, Corner-Plot, p(r)-/I(q)-/S(q)-Bänder, eigene Flags, Ketten als .npz | ✅ **v7.12.0** |
+| **Parallele GIFT-Rechnung** | BSSA-Mehrfachstarts im Prozess-Pool, Ergebnis bitgleich unabhängig von der Prozesszahl; vektorisierte Batch-Likelihood | ✅ **v7.11.0** |
+| **GIFT für geladene Systeme** | RMSA-Strukturfaktor (Hayter-Penfold, Rescaling nach Hansen-Hayter) mit Ladung, Salz, Temperatur, ε_r; validiert gegen sasmodels/SasView; BSSA-Mehrfachstart | ✅ **v7.10.0** |
+| **GIFT (Strukturfaktor)** | Generalisierte IFT für konzentrierte Systeme: S(q) (Harte Kugeln PY bzw. gemittelt S_ave) und modellfreies p(r) gleichzeitig, Optimierung per Boltzmann-Simplex-Simulated-Annealing, Hintergrund-Thread, S(q)/P(q)-Export | ✅ **v7.9.0** |
+| **P(r) per IFT (Glatter)** | Neues Menü „Analyse“: modellfreie Paarabstandsverteilung p(r) nach Glatter (1977) mit automatischer λ-Wahl (Wendepunkt-Methode), Fehlerbändern, Rg/I(0), q-Fitbereich per 1σ/2σ/3σ-Signifikanz, Plausibilitäts-Flags (u. a. Dmax ≤ π/q_min) | ✅ **v7.8.0** |
+| **Provenance-Sidecar** | Jede IFT-Auswertung schreibt ein JSON-Sidecar (SHA-256 der Ein-/Ausgaben, alle Parameter, Flags, record_id; optional W3C PROV-JSON), prüfbar und wiederholbar | ✅ **v7.8.0** |
 | **Subplot-Achsen-Editor** | Achsen und Limits-Dialog sowie Titel-Editor steuern jetzt auch die untere Subplot-Achse (PDDF/ASAXS-Cross-Term/Significance): Titel-Override, Limits, Y-Skala, eigener Subplot-Titel | ✅ **v7.7.0** |
 | **Plot-Typen** | 11 spezialisierte Darstellungen: Log-Log, Porod, Kratky, Guinier, Bragg Spacing, 2-Theta, PDDF, Azimuthal Profile, ASAXS, dlnI/dlnq, **Significance** | ✅ **v7.6.0** |
 | **Significance-Plot** | Subplot mit punktweiser Signifikanz \|I(q)/σ(q)\| (roh + median-geglättet) und einstellbaren σ-Schwellenlinien, um den vertrauenswürdigen q-Bereich einer Kurve abzulesen | ✅ **v7.6.0** |
@@ -89,6 +98,135 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v8.0?
+
+**Major Release v8.0.0** — GIFT-Modul vollständig: IFT/GIFT, DREAM, Explorer, Strukturfaktoren und weitere Glatter-Auswertungen (v7.8–v8.0); Bugfixes folgen als 8.0.x
+
+### Hauptfeatures v8.0
+
+- 📏 **Querschnitts- und Dicken-IFT** (Glatter 1980b): p_c(r) für lange Zylinder, p_t(r) für Lamellen, mit R_c bzw. R_t und äquivalenter homogener Größe
+- 📊 **Größenverteilungen per IFT** (Glatter 1980a): Anzahl- oder Volumenverteilung als Primärgröße, abgeleitete Verteilungen, Momente mit Fehlern
+- 🧅 **DECON** (Glatter 1981; Glatter & Hainisch 1984): radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, **Polydispersität** (Mittelbach & Glatter 1998) und optimiertem Stufenmodell (Kern-/Außenradius)
+- Explorer, DREAM, GIFT und Export funktionieren mit allen IFT-Arten
+
+📖 **Bedienungsanleitung** mit Literaturverzeichnis: [docs/GIFT/ANLEITUNG.md](docs/GIFT/ANLEITUNG.md)
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v8.0.md](CHANGELOG_v8.0.md)
+
+---
+
+## 🎉 Was ist neu in v7.14?
+
+**Minor Release v7.14.0** — Weitere Strukturfaktoren für GIFT
+
+### Hauptfeatures v7.14
+
+- 🧪 **S_eff nach Vrij**: polydisperse harte Kugeln (Percus-Yevick-Mischung, Schulz-Verteilung) als physikalische Alternative zum „scheinbaren“ S_ave
+- 🍯 **Klebrige harte Kugeln** (Baxter): kurzreichweitige Anziehung, Parametrisierung wie SasView (τ = stickiness, δ = perturb)
+- 🕸️ **Fraktales Aggregat** (Teixeira): p(r) beschreibt die Bausteine, S(q) die Aggregation (D_f, ξ, Zahl der Bausteine)
+- 🥢 **Stäbchen** (Mean-Field nach van der Schoot, [W99])
+- 🛡️ Robustere Numerik für sehr kleine λ in GIFT und DREAM
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.14.md](CHANGELOG_v7.14.md)
+
+---
+
+## 🎉 Was ist neu in v7.13?
+
+**Minor Release v7.13.0** — Explorer und Kennzahlen gegen oszillierende p(r)
+
+### Hauptfeatures v7.13
+
+- 🗺️ **Explorer-Tab**: Karte Dmax × λ (Oszillation, MD, Evidenz, …) mit Wendepunkt-λ, Evidenz-Maximum, π/q_min und grünem „gutem Bereich“; Klick übernimmt die Werte; 1D-Scans über Dmax, λ und N wie in SasView
+- 📏 **Kennzahlen** in SasView-Definition (Oszillation, Positive Fraction, 1σ-Positive Fraction, Maxima) plus N_g, log-Evidenz und Randanteil — mit Hinweisen zur unterschiedlichen Interpretation (Moore vs. Glatter/GIFT, [docs/GIFT/KENNZAHLEN.md](docs/GIFT/KENNZAHLEN.md))
+- ✂️ **Artefakte bei kleinem q** (Beamstop, Separation) werden automatisch erkannt und ausgeschlossen
+- 🎯 **Dmax vorschlagen** und neue Voreinstellung, wenn kein Guinier-Bereich gemessen ist; **λ-Wahl** Wendepunkt (Standard), Evidenz-Maximum oder aus DREAM
+- 🧮 Robustere Numerik: SVD-Zerlegung, automatisch erweiterter λ-Scan, Randplateau-Regel
+- 📚 **Serienauswertung** (rudimentär): gleiche Einstellungen für mehrere Datensätze, Dmax je Datensatz, CSV-Übersicht
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.13.md](CHANGELOG_v7.13.md)
+
+---
+
+## 🎉 Was ist neu in v7.12?
+
+**Minor Release v7.12.0** — Statistische Absicherung der IFT/GIFT-Parameter (DREAM)
+
+### Hauptfeatures v7.12
+
+- 🎲 **„Unsicherheit bestimmen“**: DREAM(ZS)-MCMC über die S(q)-Parameter, log λ und Dmax, gestartet aus einem Latin-Hypercube-Screening
+- 📐 **Marginale Likelihood** nach Hansen (2000): Die Spline-Koeffizienten werden analytisch herausintegriert; Dmax variiert ohne neue Quadratur (skalierte Spline-Tabelle)
+- 📊 Neuer Tab **„Unsicherheit“**: Median/68 %/95 %, R̂, Corner-Plot, Ketten, Posterior-Bänder für p(r), I(q) und S(q)
+- 🚩 **DREAM-Flags**: Konvergenz, nicht bestimmbare Parameter, Masse an Priorgrenzen, starke Korrelationen, Multimodalität, Dmax-Posterior vs. π/q_min
+- 🧾 Sidecar mit den Aktivitäten `screening` und `dream`; `_GIFT_dream.npz` und `_GIFT_pr_band.dat`; „Einstellungen aus Sidecar“ wiederholt auch DREAM (bitgleich)
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.12.md](CHANGELOG_v7.12.md)
+
+---
+
+## 🎉 Was ist neu in v7.11?
+
+**Minor Release v7.11.0** — Parallelisierung der GIFT-Rechnung
+
+### Hauptfeatures v7.11
+
+- 🚀 **BSSA-Mehrfachstarts parallel** im persistenten Prozess-Pool (RMSA-Beispiel: 11.4 s → 5.5 s)
+- 🎯 **Bitgleich unabhängig von der Prozesszahl**: Seeds hängen an den Starts, BLAS rechnet im Pool einfädig
+- 🪟 **Windows-tauglich**: Worker starten ohne erneuten Import des Hauptprogramms (kein PySide6 in den Workern)
+- 🧮 **Vektorisierte Batch-Likelihood** als Grundlage für DREAM
+- ⚙️ Neues Feld „Prozesse“ im GIFT-Bereich des Dialogs
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.11.md](CHANGELOG_v7.11.md)
+
+---
+
+## 🎉 Was ist neu in v7.10?
+
+**Minor Release v7.10.0** — GIFT für geladene Systeme (RMSA)
+
+### Hauptfeatures v7.10
+
+- ⚡ **Neues Strukturfaktor-Modell „Geladene Kugeln, RMSA“**: Hayter-Penfold-MSA mit Rescaling nach Hansen & Hayter (Fritz, Bergmann & Glatter 2000); Temperatur, Salz und ε_r standardmäßig fest
+- ✅ **Validiert** gegen die sasmodels-Referenzwerte und eine SasView-Simulation (Abweichung < 10⁻⁵)
+- 🎯 **BSSA-Mehrfachstart** (4 bzw. 8 unabhängige Läufe) gegen Nebenminima der MD-Fläche, mit Flag zur Übereinstimmung
+- 🧾 Debye-Länge, κσ, Kontaktpotential und Rescaling-Faktor in Ergebnisanzeige und Sidecar
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.10.md](CHANGELOG_v7.10.md) · Lizenzhinweise: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+---
+
+## 🎉 Was ist neu in v7.9?
+
+**Minor Release v7.9.0** — GIFT: generalisierte indirekte Fourier-Transformation mit Strukturfaktor
+
+### Hauptfeatures v7.9
+
+- 🧮 **GIFT-Modus im P(r)-Dialog**: Formfaktor (modellfrei, p(r)) und Strukturfaktor S(q) werden gleichzeitig bestimmt — für konzentrierte, wechselwirkende Systeme (Brunner-Popela & Glatter 1997)
+- ⚛️ **Strukturfaktoren**: Harte Kugeln Percus-Yevick sowie der gemittelte S_ave(q) mit Polydispersität μ (empfohlen, Weyerich et al. 1999)
+- 🔥 **BSSA-Optimierer** (Bergmann et al. 2000) im Hintergrund-Thread mit Fortschritt und Abbrechen; reproduzierbar über Seed
+- 📊 **Neue Tabs** „S(q) & P(q)“ und „BSSA-Verlauf“, zusätzliche Flags (Parameter am Rand, S(q) < 0, Verbesserung gegenüber S = 1)
+- 🧾 **Provenance**: neue Aktivität `gift_bssa` mit allen Einstellungen, Seed und Ergebnissen; Export zusätzlich von S(q) und P(q)
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.9.md](CHANGELOG_v7.9.md)
+
+---
+
+## 🎉 Was ist neu in v7.8?
+
+**Minor Release v7.8.0** — P(r) per indirekter Fourier-Transformation (IFT, Glatter 1977) mit Provenance-Sidecar
+
+### Hauptfeatures v7.8
+
+- 🔬 **Neues Menü „Analyse → P(r) berechnen (IFT/GIFT)…“** (`Strg+Umschalt+G`, auch per Rechtsklick auf einen Datensatz): modellfreie Berechnung der Paarabstandsverteilung p(r) mit kubischen B-Splines, automatischer Wahl des Stabilisierungsparameters λ nach Glatters Wendepunkt-Methode, Fehlerbändern für p(r) und Fit sowie Rg und I(0) mit Unsicherheiten
+- 📏 **q-Fitbereich aus der Signifikanzanalyse**: voller Bereich, 1σ/2σ/3σ-Voreinstellung (gleiche Rechnung wie im Significance-Plot) oder manuell
+- 🚦 **Plausibilitäts-Flags**: u. a. Dmax > π/q_min, Shannon-Kanäle, fehlender Wendepunkt, Anpassungsgüte, p(r) am Rand/negativ/oszillierend, Vergleich mit Guinier-Rg
+- 🧾 **Provenance-Sidecar** nach dem Vorbild von JADE-DLS: SHA-256 von Daten und Ergebnissen, lückenlose Aktivitätenkette, record_id in jeder Ergebnisdatei; „Analyse → Provenance-Sidecar prüfen…“ und „Einstellungen aus Sidecar…“ für die Reproduzierbarkeit
+- 📈 **Übernehmen** legt automatisch eine PDDF-Gruppe (Daten + IFT-Fit + p(r)) an und wechselt in den PDDF-Plot
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v7.8.md](CHANGELOG_v7.8.md)
 
 ---
 
@@ -1068,6 +1206,7 @@ Vollständige Referenz aller Tastaturkürzel.
 |----------|--------|
 | `Strg+K` | Kurven-Editor |
 | `Strg+T` | Titel bearbeiten |
+| `Strg+Umschalt+G` | P(r) berechnen (IFT/GIFT) |
 | `Strg+U` | Achsen-Einstellungen |
 | `Strg+I` | Grid-Einstellungen |
 | `Strg+M` | Legende bearbeiten |

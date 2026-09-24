@@ -1,0 +1,800 @@
+"""
+Plausibilitätsprüfungen (Flags) für IFT/GIFT-Ergebnisse.
+
+Jedes Flag hat einen stabilen `code` (für i18n in der GUI und für die Provenance),
+eine Stufe ('ok', 'info', 'warning'), den zugehörigen Messwert und eine deutsche
+Klartextmeldung.
+"""
+
+from dataclasses import dataclass, asdict, field
+from typing import Dict, Optional
+
+import numpy as np
+
+from .kernels import PDDF, get_kernel, dmax_limit
+
+LEVEL_OK = 'ok'
+LEVEL_INFO = 'info'
+LEVEL_WARNING = 'warning'
+
+
+@dataclass
+class Flag:
+    """Ergebnis einer Prüfung.
+
+    `code` + `variant` bilden den i18n-Schlüssel `gift.flag.<code>.<variant>`; `params`
+    enthält die bereits formatierten Platzhalterwerte dafür. `message` ist die deutsche
+    Klartextfassung (für Provenance und Logs).
+    """
+    code: str
+    level: str
+    message: str
+    value: Optional[float] = None
+    threshold: Optional[float] = None
+    variant: str = 'ok'
+    params: Dict[str, str] = field(default_factory=dict)
+
+    def to_dict(self):
+        return asdict(self)
+
+
+# ---------------------------------------------------------------------------
+# Einzelprüfungen (auch einzeln nutzbar, z. B. für die Live-Anzeige im Dialog)
+# ---------------------------------------------------------------------------
+
+def dmax_qmin_ratio(dmax, q_min, kind=PDDF):
+    """Verhältnis Dmax·q_min/π (≤ 1: Dmax ist durch den Messbereich abgedeckt).
+
+    Radius-Verteilungen (v8.0): größter Abstand 2·R_max, Grenze π/(2 q_min)."""
+    return float(dmax) / dmax_limit(q_min, kind)
+
+
+def check_dmax_qmin(dmax, q_min, kind=PDDF):
+    ratio = dmax_qmin_ratio(dmax, q_min, kind)
+    limit = dmax_limit(q_min, kind)
+    if ratio > 1.0:
+        return Flag('dmax_qmin', LEVEL_WARNING,
+                    f"Dmax = {dmax:.3g} nm > π/q_min = {limit:.3g} nm "
+                    f"(Dmax·q_min/π = {ratio:.2f}): Die größten Abstände sind durch den "
+                    f"Messbereich nicht abgedeckt.", ratio, 1.0, 'exceeded',
+                    {'dmax': f"{dmax:.3g}", 'limit': f"{limit:.3g}", 'ratio': f"{ratio:.2f}"})
+    return Flag('dmax_qmin', LEVEL_OK,
+                f"Dmax ≤ π/q_min = {limit:.3g} nm (Dmax·q_min/π = {ratio:.2f})", ratio, 1.0,
+                'ok', {'limit': f"{limit:.3g}", 'ratio': f"{ratio:.2f}"})
+
+
+def shannon_channels(dmax, q_min, q_max, kind=PDDF):
+    """Anzahl der Shannon-Kanäle N_s = Dmax·(q_max − q_min)/π (Dmax = größter Abstand)."""
+    return get_kernel(kind).span * float(dmax) * (float(q_max) - float(q_min)) / np.pi
+
+
+def suggest_n_splines(dmax, q_min, q_max, n_min=20, n_max=200, kind=PDDF):
+    """Empfohlene Spline-Anzahl: etwas mehr als die Zahl der Shannon-Kanäle.
+
+    Die Regularisierung verhindert Überanpassung, eine zu grobe Basis dagegen kann die
+    Information der Daten nicht darstellen (MD ≫ 1).
+    """
+    ns = shannon_channels(dmax, q_min, q_max, kind)
+    return int(np.clip(np.ceil(1.2 * ns) + 5, n_min, n_max))
+
+
+def check_shannon(dmax, q_min, q_max, n_splines, kind=PDDF):
+    ns = shannon_channels(dmax, q_min, q_max, kind)
+    suggest = suggest_n_splines(dmax, q_min, q_max, kind=kind)
+    if ns < 3.0:
+        return Flag('shannon', LEVEL_WARNING,
+                    f"Nur {ns:.1f} Shannon-Kanäle im Fitbereich — sehr geringer "
+                    f"Informationsgehalt.", ns, 3.0, 'few', {'ns': f"{ns:.1f}"})
+    if n_splines < ns:
+        return Flag('shannon', LEVEL_WARNING,
+                    f"N = {n_splines} Splines < {ns:.1f} Shannon-Kanäle: Die Basis ist "
+                    f"gröber als der Informationsgehalt der Daten (empfohlen: N ≥ {suggest}).",
+                    ns, float(n_splines), 'coarse',
+                    {'ns': f"{ns:.1f}", 'n': str(n_splines), 'suggest': str(suggest)})
+    return Flag('shannon', LEVEL_OK, f"{ns:.1f} Shannon-Kanäle im Fitbereich", ns, 3.0,
+                'ok', {'ns': f"{ns:.1f}"})
+
+
+def check_q_range(selection):
+    if selection is None:
+        return None
+    frac = selection.n_excluded / selection.n_total if selection.n_total else 0.0
+    if frac > 0.5:
+        return Flag('q_range', LEVEL_WARNING,
+                    f"{selection.n_excluded} von {selection.n_total} Punkten "
+                    f"({frac:.0%}) liegen außerhalb des Fitbereichs.", frac, 0.5, 'excluded',
+                    {'excluded': str(selection.n_excluded), 'total': str(selection.n_total),
+                     'frac': f"{frac:.0%}"})
+    return Flag('q_range', LEVEL_OK,
+                f"{selection.n_selected} von {selection.n_total} Punkten im Fitbereich "
+                f"({selection.q_min:.4g}–{selection.q_max:.4g} nm⁻¹)", frac, 0.5, 'ok',
+                {'selected': str(selection.n_selected), 'total': str(selection.n_total),
+                 'q_min': f"{selection.q_min:.4g}", 'q_max': f"{selection.q_max:.4g}"})
+
+
+def guinier_rg(q, intensity, sigma, qrg_max=None, min_points=5, max_iter=20, dim=3):
+    """Iterativer Guinier-Fit ln I = ln I0 − Rg²q²/3 im Bereich q·Rg ≤ qrg_max.
+
+    dim = 2 (Querschnitt): ln(qI) = ln(qI)₀ − R_c²q²/2; dim = 1 (Dicke):
+    ln(q²I) = ln(q²I)₀ − R_t²q² (v8.0). Standard q·R ≤ 1.3 (3D) bzw. 1.0.
+
+    Returns:
+        (Rg, I0, n_points) oder None, wenn kein gültiger Guinier-Bereich existiert.
+    """
+    q = np.asarray(q, dtype=float)
+    I = np.asarray(intensity, dtype=float) * q ** (3 - int(dim))
+    s = np.asarray(sigma, dtype=float) * q ** (3 - int(dim))
+    if qrg_max is None:
+        qrg_max = 1.3 if dim == 3 else 1.0
+    valid = I > 0
+    q, I, s = q[valid], I[valid], s[valid]
+    if len(q) < min_points:
+        return None
+    n = min_points
+    rg = None
+    for _ in range(max_iter):
+        x = q[:n] ** 2
+        y = np.log(I[:n])
+        w = (I[:n] / s[:n]) ** 2
+        coef = np.polyfit(x, y, 1, w=np.sqrt(w))
+        slope, intercept = coef
+        if slope >= 0:
+            # Anfangsbereich zu flach für das Rauschen (kleines R·q_min): Startbereich
+            # vergrößern statt aufzugeben (v8.0)
+            if rg is None and n < len(q):
+                n = min(2 * n, len(q))
+                continue
+            return None
+        rg_new = float(np.sqrt(-float(dim) * slope))
+        n_new = int(np.count_nonzero(q * rg_new <= qrg_max))
+        if n_new < min_points:
+            return None
+        if rg is not None and n_new == n and abs(rg_new - rg) < 1e-6 * rg:
+            break
+        rg, n = rg_new, n_new
+    return rg, float(np.exp(intercept)), n
+
+
+def check_fit_quality(md, sigma_estimated):
+    """`sigma_estimated`: True, wenn σ nicht gemessen, sondern geschätzt/angenommen ist."""
+    if sigma_estimated:
+        return Flag('fit_quality', LEVEL_INFO,
+                    f"MD = {md:.2f} (σ geschätzt — nur relativ aussagekräftig)", md, None,
+                    'estimated', {'md': f"{md:.2f}"})
+    if md > 2.0:
+        return Flag('fit_quality', LEVEL_WARNING,
+                    f"MD = {md:.2f} ≫ 1: Die Anpassung beschreibt die Daten nicht innerhalb "
+                    f"der Fehler (Dmax zu klein, Untergrund, Wechselwirkung?).", md, 2.0,
+                    'high', {'md': f"{md:.2f}"})
+    if md < 0.5:
+        return Flag('fit_quality', LEVEL_WARNING,
+                    f"MD = {md:.2f} ≪ 1: Die Fehler σ sind vermutlich überschätzt.", md, 0.5,
+                    'low', {'md': f"{md:.2f}"})
+    return Flag('fit_quality', LEVEL_OK, f"MD = {md:.2f}", md, None, 'ok', {'md': f"{md:.2f}"})
+
+
+SIGMA_MEASURED = 'measured'
+SIGMA_ESTIMATED = 'estimated'
+SIGMA_RELATIVE = 'relative'
+
+
+def check_sigma(sigma_source, sigma_relative=None):
+    """Hinweis, wenn σ nicht aus einer Fehlerspalte stammt.
+
+    Aus Kompatibilitätsgründen wird auch ein bool akzeptiert (True = geschätzt).
+    """
+    if sigma_source is True:
+        sigma_source = SIGMA_ESTIMATED
+    if sigma_source == SIGMA_ESTIMATED:
+        return Flag('sigma_estimated', LEVEL_WARNING,
+                    "Keine Fehlerspalte: σ wurde aus den Daten geschätzt.", variant='estimated')
+    if sigma_source == SIGMA_RELATIVE:
+        pct = f"{100 * sigma_relative:g}"
+        return Flag('sigma_estimated', LEVEL_INFO,
+                    f"σ als {pct} % von |I| angenommen (z. B. simulierte Daten) — MD und "
+                    f"Fehlerbänder sind nur relativ aussagekräftig.", sigma_relative, None,
+                    'relative', {'pct': pct})
+    return None
+
+
+def check_inflexion(scan, lam_manual):
+    if lam_manual:
+        return Flag('lambda', LEVEL_INFO, "λ manuell vorgegeben (Wendepunkt nicht verwendet)",
+                    variant='manual')
+    if scan is not None and getattr(scan, 'method', 'inflexion') == 'evidence':
+        infl = scan.lam_rel[scan.index_inflexion]
+        ev = scan.lam_rel[scan.index_evidence]
+        params = {'lam_ev': f"{np.log10(ev):.2f}", 'lam_infl': f"{np.log10(infl):.2f}"}
+        return Flag('lambda', LEVEL_INFO,
+                    f"λ über das Evidenz-Maximum bestimmt (log λ_rel = {params['lam_ev']}; "
+                    f"Wendepunkt: {params['lam_infl']}"
+                    + ("" if scan.inflexion_found else ", nicht gefunden") + ").",
+                    variant='evidence', params=params)
+    if scan is not None and not scan.inflexion_found:
+        return Flag('lambda', LEVEL_WARNING,
+                    "Kein Wendepunkt in log N_c(λ) gefunden — nach Glatter ein Hinweis auf "
+                    "Inkonsistenz zwischen Daten und Annahmen (Dmax, N, Untergrund).",
+                    variant='not_found')
+    return Flag('lambda', LEVEL_OK, "λ über Wendepunkt-Methode bestimmt")
+
+
+def _significant(pr, pr_err, rel_floor=0.02):
+    scale = np.max(np.abs(pr)) if len(pr) else 0.0
+    return np.abs(pr) > np.maximum(2.0 * pr_err, rel_floor * scale)
+
+
+def check_pr_end(r, pr, pr_err, dmax):
+    """p(r) muss vor Dmax weich gegen 0 gehen; ein großer Wert kurz vor Dmax → Dmax zu klein."""
+    pmax = np.max(pr)
+    if pmax <= 0:
+        return None
+    tail = r >= 0.9 * dmax
+    ratio = float(np.max(np.abs(pr[tail])) / pmax)
+    if ratio > 0.1:
+        return Flag('pr_end', LEVEL_WARNING,
+                    f"p(r) ist kurz vor Dmax noch bei {ratio:.0%} des Maximums — Dmax ist "
+                    f"vermutlich zu klein gewählt.", ratio, 0.1, 'high',
+                    {'ratio': f"{ratio:.0%}"})
+    return Flag('pr_end', LEVEL_OK, "p(r) läuft vor Dmax gegen 0", ratio, 0.1)
+
+
+def check_pr_tail(r, pr, pr_err, dmax):
+    """Lange, nicht-signifikante Nullregion vor Dmax → Dmax deutlich zu groß."""
+    sig = _significant(pr, pr_err)
+    if not sig.any():
+        return None
+    r_last = float(r[np.nonzero(sig)[0].max()])
+    frac = 1.0 - r_last / dmax
+    if frac > 0.2:
+        return Flag('pr_tail', LEVEL_INFO,
+                    f"p(r) ist ab r ≈ {r_last:.3g} nm nicht mehr signifikant von 0 "
+                    f"verschieden ({frac:.0%} des Bereichs) — Dmax ist evtl. zu groß.",
+                    r_last, 0.8 * dmax, 'long', {'r': f"{r_last:.3g}", 'frac': f"{frac:.0%}"})
+    return Flag('pr_tail', LEVEL_OK, "Kein langer Null-Ausläufer vor Dmax", r_last)
+
+
+def check_pr_negative(r, pr, pr_err):
+    """Signifikant negatives p(r). Nur Hinweis (v7.13): Bei Kontrastwechsel (z. B. Kern und
+    Schale mit entgegengesetztem Kontrast) ist das physikalisch möglich, wenn auch selten."""
+    neg = (pr < 0) & _significant(pr, pr_err)
+    if neg.any():
+        depth = float(-np.min(pr[neg]) / np.max(np.abs(pr)))
+        return Flag('pr_negative', LEVEL_INFO,
+                    f"p(r) ist signifikant negativ (bis {depth:.0%} des Maximums) — "
+                    f"Untergrund, Oszillation, nicht berücksichtigte Wechselwirkung (→ GIFT) "
+                    f"oder (selten) ein Kontrastwechsel im Teilchen?", depth, None, 'negative',
+                    {'depth': f"{depth:.0%}"})
+    return Flag('pr_negative', LEVEL_OK, "Keine signifikant negativen p(r)-Werte")
+
+
+def check_pr_oscillation(r, pr, pr_err):
+    """Mehrfache signifikante Vorzeichenwechsel → typisch für i(r) mit Wechselwirkung [W99]."""
+    sig = _significant(pr, pr_err)
+    signs = np.sign(pr[sig])
+    changes = int(np.count_nonzero(np.diff(signs) != 0))
+    if changes >= 2:
+        return Flag('pr_oscillation', LEVEL_INFO,
+                    f"p(r) wechselt {changes}× signifikant das Vorzeichen — typisch für "
+                    f"Wechselwirkung zwischen den Teilchen (→ GIFT mit Strukturfaktor).",
+                    float(changes), 2.0, 'oscillating', {'n': str(changes)})
+    return None
+
+
+def check_lowq_artifacts(selection):
+    """Automatisch ausgeschlossene Punkte am Kurvenanfang (analysis.significance)."""
+    n = getattr(selection, 'n_artifacts', 0) if selection is not None else 0
+    if not n:
+        return None
+    q_a = selection.q_artifacts
+    return Flag('lowq_artifacts', LEVEL_INFO,
+                f"{n} Punkte bei kleinem q (bis {q_a:.4g} nm⁻¹) als Artefakte erkannt und "
+                f"ausgeschlossen (Vorzeichenwechsel bzw. nicht signifikanter Übergang, z. B. "
+                f"Beamstop-Bereich). q_min = {selection.q_min:.4g} nm⁻¹; bei Bedarf manuell "
+                f"anpassen.", float(n), None, 'excluded',
+                {'n': str(n), 'q': f"{q_a:.4g}", 'q_min': f"{selection.q_min:.4g}"})
+
+
+def check_lowq_rise(q, intensity, sigma, n_check=6):
+    """I(q) steigt am Anfang des Fitbereichs zu größerem q an: Beamstop-Randschatten oder
+    repulsive Wechselwirkung (S(q) < 1). Wird nicht automatisch ausgeschlossen."""
+    k = min(n_check, len(q))
+    if k < 3:
+        return None
+    i_max = int(np.argmax(intensity[:k]))
+    if i_max > 0 and intensity[i_max] - intensity[0] > 3.0 * np.hypot(sigma[0], sigma[i_max]):
+        return Flag('lowq_rise', LEVEL_INFO,
+                    f"I(q) steigt am Anfang des Fitbereichs bis q = {q[i_max]:.4g} nm⁻¹ an — "
+                    f"Beamstop-Randschatten (q_min erhöhen) oder repulsive Wechselwirkung "
+                    f"(→ GIFT).", float(q[i_max]), None, 'rise', {'q': f"{q[i_max]:.4g}"})
+    return None
+
+
+def check_guinier_missing(guinier, q_min, dmax, kind=PDDF):
+    """Ohne Guinier-Bereich (q_min·Rg ≳ 1.3) ist das Teilchen vermutlich größer als π/q_min;
+    ein auf π/q_min begrenztes Dmax erzwingt dann ein oszillierendes p(r)."""
+    if guinier is not None:
+        return None
+    limit = dmax_limit(q_min, kind)
+    return Flag('guinier_missing', LEVEL_WARNING,
+                f"Kein Guinier-Bereich gefunden: Die Teilchen sind vermutlich größer als "
+                f"π/q_min = {limit:.3g} nm. Ein Dmax ≤ π/q_min erzwingt dann ein oszillierendes "
+                f"p(r) — Dmax mit dem Explorer bzw. „Dmax vorschlagen“ bestimmen; die größten "
+                f"Abstände bleiben unsicher.", dmax / limit, 1.0, 'missing',
+                {'limit': f"{limit:.3g}"})
+
+
+OSC_INFO = 1.6        # SasView-Oszillation: Kugel ≈ 1.1
+OSC_WARNING = 2.5
+
+CAUSE_TEXTS = {
+    'no_inflexion': "kein Wendepunkt gefunden",
+    'dmax_small': "Dmax vermutlich zu klein (Teilchen > π/q_min)",
+    'md_high': "MD ≫ 1 (Modell, σ oder Untergrund prüfen)",
+    'many_splines': "viele Splines im Verhältnis zu den Shannon-Kanälen",
+    'lambda_small': "λ mehr als eine Dekade unter dem Evidenz-Optimum",
+}
+
+
+def check_pr_smoothness(metrics, solution, guinier=None):
+    """Oszillation nach SasView-Definition mit den wahrscheinlichsten Ursachen.
+
+    `cause_codes` (Parameter) listet die Ursachen als Schlüssel `gift.cause.<code>`."""
+    osc = metrics.get('oscillation', float('nan'))
+    if not np.isfinite(osc):
+        return None
+    st = solution.settings
+    kind = getattr(st, 'kind', None) or PDDF
+    q_min, q_max = float(np.min(solution.q)), float(np.max(solution.q))
+    params = {'osc': f"{osc:.2f}"}
+    if osc <= OSC_INFO:
+        return Flag('pr_smoothness', LEVEL_OK, f"Oszillation {osc:.2f} (Kugel ≈ 1.1)", osc,
+                    OSC_INFO, 'ok', params)
+    causes = []
+    scan = solution.scan
+    if scan is not None and not solution.lam_manual and not scan.inflexion_found:
+        causes.append('no_inflexion')
+    if guinier is None and st.dmax <= 1.05 * dmax_limit(q_min, kind):
+        causes.append('dmax_small')
+    if metrics.get('md', 0) > 2.0:
+        causes.append('md_high')
+    if st.n_splines > 2.0 * shannon_channels(st.dmax, q_min, q_max, kind) + 5:
+        causes.append('many_splines')
+    if scan is not None and scan.index_evidence is not None:
+        if solution.lam_rel < scan.lam_rel[scan.index_evidence] / 10.0:
+            causes.append('lambda_small')
+    cause_txt = '; '.join(CAUSE_TEXTS[c] for c in causes) or "Explorer (Dmax × λ) prüfen"
+    params.update(causes=cause_txt, cause_codes=','.join(causes))
+    level = LEVEL_WARNING if osc > OSC_WARNING else LEVEL_INFO
+    return Flag('pr_smoothness', level,
+                f"p(r) oszilliert (Oszillation {osc:.2f}, Kugel ≈ 1.1). Wahrscheinliche "
+                f"Ursache: {cause_txt}.", osc, OSC_INFO,
+                'oscillating' if level == LEVEL_WARNING else 'elevated', params)
+
+
+def check_pr_peaks(metrics):
+    n = metrics.get('n_peaks', float('nan'))
+    if np.isfinite(n) and n > 1:
+        return Flag('pr_peaks', LEVEL_INFO,
+                    f"p(r) hat {int(n)} Maxima — Kern-Schale-Struktur, Aggregate oder "
+                    f"Oszillation (mit der Oszillations-Kennzahl vergleichen).", n, 1.0,
+                    'several', {'n': str(int(n))})
+    return None
+
+
+def check_cross_section_lowq(q, intensity, sigma, kind, n_check=None):
+    """Querschnitts-/Dicken-IFT [G80b]: Die Faktorisierung I = (πL/q)·I_c bzw. (2πA/q²)·I_t
+    gilt nur für q ≫ 1/L. Endliche Teilchen senken q·I bzw. q²·I nahe dem Ursprung ab;
+    steigt diese Größe am Anfang des Fitbereichs signifikant an, ist q_min zu klein."""
+    kern = get_kernel(kind)
+    if kern.b == 0:
+        return None
+    q = np.asarray(q, dtype=float)
+    y = np.asarray(intensity, dtype=float) * q ** kern.b
+    sy = np.asarray(sigma, dtype=float) * q ** kern.b
+    n = n_check or max(6, len(q) // 8)
+    ok = y[:n] > 0
+    if ok.sum() < 4:
+        return None
+    x, ly, w = q[:n][ok], np.log(y[:n][ok]), (y[:n][ok] / sy[:n][ok]) ** 2
+    X = np.column_stack([np.ones_like(x), x])
+    cov = np.linalg.pinv(X.T @ (w[:, None] * X))
+    slope = float((cov @ X.T @ (w * ly))[1])
+    err = float(np.sqrt(max(cov[1, 1], 0.0)))
+    label = 'q·I' if kern.b == 1 else 'q²·I'
+    params = {'quantity': label}
+    if slope > 3.0 * err and slope > 0:
+        return Flag('cross_section_lowq', LEVEL_WARNING,
+                    f"{label} steigt am Anfang des Fitbereichs an — endliche Länge bzw. Fläche "
+                    f"der Teilchen; q_min erhöhen (etwa bis zum Maximum von {label}) [G80b]. "
+                    f"Quantitativ nur für Länge/Querschnitt ≥ 10.", slope / err, 3.0, 'rising',
+                    params)
+    return Flag('cross_section_lowq', LEVEL_OK,
+                f"{label} fällt ab q_min monoton (Faktorisierung gültig) [G80b]", None, None,
+                'ok', params)
+
+
+SIZE_NEGATIVE_WARNING = 0.1
+
+
+def check_size_distribution(stats):
+    """Größenverteilung (v8.0): signifikant negative Anteile von D_V zeigen, dass die
+    angenommene Form (homogene Kugel/Zylinder/Lamelle) die Teilchen nicht beschreibt
+    (z. B. Kern-Schale, anisotrop, Wechselwirkung) oder R_max/λ ungeeignet sind [G80a]."""
+    if not stats:
+        return None
+    neg = stats.get('negative_fraction', float('nan'))
+    if not np.isfinite(neg):
+        return None
+    params = {'neg': f"{neg:.0%}"}
+    if neg > SIZE_NEGATIVE_WARNING:
+        return Flag('size_distribution', LEVEL_WARNING,
+                    f"D_V ist zu {neg:.0%} negativ — sehr schmale (nahezu monodisperse) "
+                    f"Verteilung, bei der negative Werte zur Beschreibung nötig sind, oder die "
+                    f"angenommene Teilchenform passt nicht (Kern-Schale, anisotrop, "
+                    f"Wechselwirkung) bzw. R_max/λ sind ungeeignet [G80a].", neg,
+                    SIZE_NEGATIVE_WARNING, 'negative', params)
+    return Flag('size_distribution', LEVEL_OK, f"D_V überwiegend positiv (negativ {neg:.0%})",
+                neg, SIZE_NEGATIVE_WARNING, 'ok', params)
+
+
+def check_rg_consistency(rg_ift, rg_guinier):
+    if rg_guinier is None or not np.isfinite(rg_ift):
+        return None
+    dev = abs(rg_ift - rg_guinier) / rg_ift
+    if dev > 0.1:
+        return Flag('rg_consistency', LEVEL_INFO,
+                    f"Rg(IFT) = {rg_ift:.3g} nm weicht um {dev:.0%} von Rg(Guinier) = "
+                    f"{rg_guinier:.3g} nm ab.", dev, 0.1, 'deviation',
+                    {'rg_ift': f"{rg_ift:.3g}", 'rg_guinier': f"{rg_guinier:.3g}",
+                     'dev': f"{dev:.0%}"})
+    return Flag('rg_consistency', LEVEL_OK,
+                f"Rg(IFT) = {rg_ift:.3g} nm, Rg(Guinier) = {rg_guinier:.3g} nm", dev, 0.1,
+                'ok', {'rg_ift': f"{rg_ift:.3g}", 'rg_guinier': f"{rg_guinier:.3g}"})
+
+
+# ---------------------------------------------------------------------------
+# Gesamtdiagnose
+# ---------------------------------------------------------------------------
+
+def diagnose_ift(solution, selection=None, sigma_estimated=False, guinier=None,
+                 sigma_source=None, sigma_relative=None, metrics=None):
+    """Alle Flags für eine IFT-Lösung (Reihenfolge = Anzeige-Reihenfolge).
+
+    metrics: Kennzahlen (explorer.solution_metrics); werden sonst berechnet."""
+    if metrics is None:
+        from .explorer import solution_metrics
+        metrics = solution_metrics(solution)
+    if sigma_source is None:
+        sigma_source = SIGMA_ESTIMATED if sigma_estimated else SIGMA_MEASURED
+    sigma_estimated = sigma_source != SIGMA_MEASURED
+    st = solution.settings
+    kind = getattr(st, 'kind', None) or PDDF
+    q_min, q_max = float(np.min(solution.q)), float(np.max(solution.q))
+    rg_g = guinier[0] if guinier else None
+    flags = [
+        check_dmax_qmin(st.dmax, q_min, kind),
+        check_shannon(st.dmax, q_min, q_max, st.n_splines, kind),
+        check_q_range(selection),
+        check_lowq_artifacts(selection),
+        check_lowq_rise(solution.q, solution.intensity, solution.sigma),
+        check_guinier_missing(guinier, q_min, st.dmax, kind),
+        check_sigma(sigma_source, sigma_relative),
+        check_inflexion(solution.scan, solution.lam_manual),
+        check_fit_quality(solution.md, sigma_estimated),
+        check_pr_end(solution.r, solution.pr, solution.pr_err, st.dmax),
+        check_pr_tail(solution.r, solution.pr, solution.pr_err, st.dmax),
+        check_pr_negative(solution.r, solution.pr, solution.pr_err),
+        check_pr_oscillation(solution.r, solution.pr, solution.pr_err),
+        check_pr_smoothness(metrics, solution, guinier),
+        check_pr_peaks(metrics),
+        check_rg_consistency(solution.rg, rg_g),
+        check_cross_section_lowq(solution.q, solution.intensity, solution.sigma, kind),
+    ]
+    return [f for f in flags if f is not None]
+
+
+def diagnose_gift(result, model):
+    """Zusätzliche Flags für eine GIFT-Rechnung [B00, W99]."""
+    flags = []
+    labels = {p.name: p.label for p in model.params}
+    at_bound = []
+    no_attraction = False
+    for name in result.free:
+        rng = result.upper[name] - result.lower[name]
+        v = result.params[name]
+        if min(v - result.lower[name], result.upper[name] - v) < 0.01 * rng:
+            if model.key == 'sticky' and name == 'stickiness' and v > result.lower[name] + 0.5 * rng:
+                no_attraction = True       # τ → ∞: harte Kugeln, eigenes Flag unten
+                continue
+            at_bound.append(f"{labels[name]} = {v:.4g}")
+    if at_bound:
+        names = ', '.join(at_bound)
+        flags.append(Flag('gift_bound', LEVEL_WARNING,
+                          f"Parameter am Rand der erlaubten Grenzen ({names}) — Grenzen "
+                          f"erweitern oder das Modell ist ungeeignet [B00].", None, None,
+                          'at_bound', {'names': names}))
+    elif result.free:
+        flags.append(Flag('gift_bound', LEVEL_OK, "Alle freien Parameter innerhalb der Grenzen"))
+
+    s_min = float(np.min(result.structure_factor))
+    if s_min < 0:
+        flags.append(Flag('gift_structure_factor', LEVEL_WARNING,
+                          f"S(q) wird negativ (min {s_min:.3g}) — unphysikalisch.", s_min, 0.0,
+                          'negative', {'min': f"{s_min:.3g}"}))
+
+    if result.md_without_sq is not None and np.isfinite(result.md_without_sq):
+        ratio = result.md_without_sq / max(result.md, np.finfo(float).tiny)
+        params = {'md_ift': f"{result.md_without_sq:.3g}", 'md_gift': f"{result.md:.3g}"}
+        if ratio < 1.2:
+            flags.append(Flag('gift_improvement', LEVEL_INFO,
+                              f"S(q) verbessert die Anpassung kaum (MD {result.md_without_sq:.3g} "
+                              f"→ {result.md:.3g}) — Wechselwirkung evtl. vernachlässigbar.",
+                              ratio, 1.2, 'small', params))
+        else:
+            flags.append(Flag('gift_improvement', LEVEL_OK,
+                              f"MD ohne S(q) = {result.md_without_sq:.3g} → mit S(q) = "
+                              f"{result.md:.3g}", ratio, 1.2, 'improved', params))
+
+    if not result.lambda_converged:
+        flags.append(Flag('gift_lambda', LEVEL_WARNING,
+                          "λ hat sich zwischen den GIFT-Zyklen nicht stabilisiert — Ergebnis "
+                          "prüfen (λ manuell setzen oder mehr Zyklen).", variant='not_converged'))
+
+    undetermined = [labels[n] for n in result.free
+                    if not np.isfinite(result.param_errors.get(n, np.nan))]
+    if undetermined:
+        names = ', '.join(undetermined)
+        flags.append(Flag('gift_errors', LEVEL_INFO,
+                          f"Fehler aus der MD-Krümmung nicht bestimmbar für {names} (flache "
+                          f"oder nicht konvexe MD-Fläche).", None, None, 'undetermined',
+                          {'names': names}))
+
+    if len(result.starts) > 1:
+        mds = np.array([s_['md'] for s_ in result.starts])
+        best = float(np.min(mds))
+        # „dasselbe Minimum“: MD innerhalb 1 % (bzw. 0.01 absolut bei MD ≈ 0) des besten
+        hits = int(np.count_nonzero(mds <= best + max(0.01 * best, 0.01)))
+        n = len(mds)
+        params = {'hits': str(hits), 'n': str(n)}
+        if hits == 1:
+            flags.append(Flag('gift_multistart', LEVEL_WARNING,
+                              f"Das beste Minimum wurde nur in 1 von {n} BSSA-Läufen gefunden — "
+                              f"die MD-Fläche hat Nebenminima; mehr Starts oder engere Grenzen "
+                              f"verwenden.", hits, n, 'rare', params))
+        elif hits < n:
+            flags.append(Flag('gift_multistart', LEVEL_INFO,
+                              f"Bestes Minimum in {hits} von {n} BSSA-Läufen gefunden "
+                              f"(Nebenminima vorhanden).", hits, n, 'partial', params))
+        else:
+            flags.append(Flag('gift_multistart', LEVEL_OK,
+                              f"Alle {n} BSSA-Läufe finden dasselbe Minimum.", hits, n, 'ok',
+                              params))
+
+    if model.key == 'rmsa':
+        if 'charge' in result.free and 'salt' in result.free:
+            flags.append(Flag('gift_rmsa_degenerate', LEVEL_WARNING,
+                              "Ladung und Salzkonzentration sind gleichzeitig frei — sie lassen "
+                              "sich nicht unabhängig bestimmen (Fritz et al. 2000). Eine der "
+                              "beiden festhalten.", variant='charge_salt'))
+        info = result.model_info or {}
+        s = info.get('rescale_s')
+        if s is not None and s < 0.999:
+            flags.append(Flag('gift_rmsa_rescaled', LEVEL_INFO,
+                              f"Rescaling nach Hansen & Hayter aktiv: effektiver Durchmesser "
+                              f"σ' = {1 / s:.3g}·σ (MSA allein gäbe g(σ+) < 0).", 1 / s, None,
+                              'rescaled', {'factor': f"{1 / s:.3g}"}))
+
+    if model.key == 'sticky':
+        if no_attraction:
+            tau = result.params['stickiness']
+            flags.append(Flag('gift_sticky', LEVEL_INFO,
+                              f"Stickiness τ läuft an die obere Grenze ({tau:.3g}): keine Anziehung "
+                              f"nachweisbar — das Modell entspricht harten Kugeln (PY).", tau, None,
+                              'no_attraction', {'tau': f"{tau:.3g}"}))
+        if 'perturb' in result.free and 'stickiness' in result.free:
+            flags.append(Flag('gift_sticky_coupled', LEVEL_WARNING,
+                              "Topfbreite δ und Stickiness τ sind gleichzeitig frei — sie sind "
+                              "stark gekoppelt (nur ihre Kombination ist bestimmbar). δ "
+                              "festhalten (SasView: 0.01–0.1).", variant='coupled'))
+    if model.key == 'fractal':
+        xi = result.params['xi']
+        q_min = float(np.min(result.solution.q))
+        info = result.model_info or {}
+        params = {'n': f"{info.get('n_aggregate', float('nan')):.3g}",
+                  'rg': f"{info.get('rg_aggregate_nm', float('nan')):.3g}",
+                  'qxi': f"{q_min * xi:.2g}"}
+        if q_min * xi > 2.0:
+            flags.append(Flag('gift_fractal', LEVEL_WARNING,
+                              f"ξ = {xi:.3g} nm ist größer als ~2/q_min (q_min·ξ = "
+                              f"{q_min * xi:.2g}): Der Guinier-Bereich der Aggregate ist nicht "
+                              f"gemessen, ξ (und die Aggregatgröße) sind nicht bestimmbar.",
+                              q_min * xi, 2.0, 'xi_unresolved', params))
+        else:
+            flags.append(Flag('gift_fractal', LEVEL_INFO,
+                              f"Fraktales Aggregat: ≈ {params['n']} Bausteine, Rg ≈ "
+                              f"{params['rg']} nm. p(r) beschreibt die Bausteine; r₀ und p(r) "
+                              f"sind gekoppelt (DREAM-Korrelation prüfen).", q_min * xi, 2.0,
+                              'aggregate', params))
+    if model.key == 'rod':
+        flags.append(Flag('gift_rod', LEVEL_WARNING,
+                          "S_rod hängt nur über den Stäbchen-Formfaktor F(qL) von q ab; das "
+                          "modellfreie p(r) kann den Strukturfaktor weitgehend aufnehmen. Die "
+                          "Parameter sind aus den Daten allein kaum bestimmbar — c aus der "
+                          "Konzentration vorgeben und festhalten (c = (π/4)·n·L²·D). Gültig "
+                          "nur für dünne Stäbchen (qR < 1, L ≫ R) [W99].", variant='degenerate'))
+
+    if model.apparent_parameters:
+        flags.append(Flag('gift_apparent', LEVEL_INFO,
+                          "S_ave-Parameter sind scheinbare Modellparameter mit begrenzter "
+                          "physikalischer Bedeutung; das Ergebnis ist p(r) bzw. P(q) [W99].",
+                          variant='apparent'))
+    return flags
+
+
+def diagnose_uncertainty(u):
+    """Flags der DREAM-Analyse (Plan §2.3) für ein uncertainty.UncertaintyResult."""
+    flags = []
+    d = u.dream
+    names = u.names
+    lab = u.labels
+    rhat = dict(zip(names, map(float, d.r_hat)))
+    r_max = max(rhat.values())
+    if not d.converged:
+        bad = ', '.join(f"{lab[n]} ({rhat[n]:.2f})" for n in names
+                        if not rhat[n] < d.settings.r_hat_target)
+        variant = 'not_converged' if d.burn_in_completed else 'no_burn_in'
+        flags.append(Flag('dream_convergence', LEVEL_WARNING,
+                          f"DREAM nicht konvergiert: R̂ ≥ {d.settings.r_hat_target:g} für {bad} "
+                          f"nach {d.n_evals} Auswertungen — Budget erhöhen; die Intervalle sind "
+                          f"nur vorläufig.", r_max, d.settings.r_hat_target, variant,
+                          {'names': bad or '-', 'evals': str(d.n_evals),
+                           'target': f"{d.settings.r_hat_target:g}"}))
+    else:
+        flags.append(Flag('dream_convergence', LEVEL_OK,
+                          f"DREAM konvergiert (max. R̂ = {r_max:.3f}, {d.n_evals} Auswertungen)",
+                          r_max, d.settings.r_hat_target, 'ok',
+                          {'rhat': f"{r_max:.3f}", 'evals': str(d.n_evals)}))
+
+    unident = [n for n in names
+               if u.summary[n]['std'] > 0.8 * u.summary[n]['prior_std']]
+    if unident:
+        s = ', '.join(lab[n] for n in unident)
+        flags.append(Flag('dream_identifiability', LEVEL_WARNING,
+                          f"Nicht bestimmbar: {s} — die Posterior-Verteilung ist kaum schmaler "
+                          f"als die Priorverteilung; die Daten legen diese Größen nicht fest.",
+                          None, 0.8, 'unidentifiable', {'names': s}))
+
+    at_bound = [n for n in names
+                if max(u.summary[n]['mass_at_lower'], u.summary[n]['mass_at_upper']) > 0.1]
+    if at_bound:
+        s = ', '.join(lab[n] for n in at_bound)
+        flags.append(Flag('dream_boundary', LEVEL_WARNING,
+                          f"Posterior-Masse an einer Priorgrenze ({s}) — Grenzen erweitern; das "
+                          f"Intervall ist sonst abgeschnitten.", None, 0.1, 'at_bound',
+                          {'names': s}))
+
+    pairs = []
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            rho = float(u.correlation[i, j])
+            if abs(rho) > 0.9:
+                pairs.append(f"{lab[names[i]]}–{lab[names[j]]} ({rho:+.2f})")
+    if pairs:
+        s = ', '.join(pairs)
+        flags.append(Flag('dream_correlation', LEVEL_INFO,
+                          f"Stark korrelierte Parameter: {s} — nur Kombinationen sind gut "
+                          f"bestimmt (z. B. z ↔ R_HS ↔ φ bei geladenen Systemen [F00]).",
+                          None, 0.9, 'strong', {'pairs': s}))
+
+    multi = [n for n in names if u.modes.get(n, 1) > 1]
+    if multi:
+        s = ', '.join(f"{lab[n]} ({u.modes[n]})" for n in multi)
+        flags.append(Flag('dream_multimodal', LEVEL_WARNING,
+                          f"Mehrere getrennte Modi im Posterior: {s} — Median und Intervalle "
+                          f"beschreiben die Verteilung nur eingeschränkt (Corner-Plot prüfen).",
+                          None, None, 'multimodal', {'names': s}))
+
+    outside, hyper = [], []
+    for n in names:
+        sm = u.summary[n]
+        if not sm['q2.5'] <= u.reference[n] <= sm['q97.5']:
+            (hyper if n in ('log_lambda', 'dmax') else outside).append(n)
+    if outside:
+        s = ', '.join(f"{lab[n]} = {u.reference[n]:.4g} vs. {u.summary[n]['median']:.4g}"
+                      for n in outside)
+        flags.append(Flag('dream_reference', LEVEL_WARNING,
+                          f"BSSA-Optimum außerhalb des 95-%-Intervalls ({s}) — Hauptmodus des "
+                          f"Posteriors und MD-Minimum stimmen nicht überein.", None, None,
+                          'outside', {'names': s}))
+    if hyper:
+        s = ', '.join(f"{lab[n]}: {u.reference[n]:.4g} → {u.summary[n]['median']:.4g}"
+                      for n in hyper)
+        flags.append(Flag('dream_reference', LEVEL_INFO,
+                          f"Die Daten bevorzugen andere Werte als gewählt ({s}; gewählt → "
+                          f"Posterior-Median).", None, None, 'hyper', {'names': s}))
+
+    if 'dmax' in names:
+        limit = dmax_limit(u.q_min, getattr(u, 'kind', PDDF))
+        sm = u.summary['dmax']
+        params = {'limit': f"{limit:.3g}", 'median': f"{sm['median']:.3g}",
+                  'q97': f"{sm['q97.5']:.3g}"}
+        if sm['median'] > limit:
+            flags.append(Flag('dream_dmax_qmin', LEVEL_WARNING,
+                              f"Dmax-Posterior (Median {sm['median']:.3g} nm) liegt über "
+                              f"π/q_min = {limit:.3g} nm — Information bei kleinen q fehlt.",
+                              sm['median'] / limit, 1.0, 'exceeded', params))
+        elif sm['q97.5'] > limit:
+            flags.append(Flag('dream_dmax_qmin', LEVEL_INFO,
+                              f"Der obere Teil des Dmax-Posteriors (97.5 %: {sm['q97.5']:.3g} nm) "
+                              f"reicht über π/q_min = {limit:.3g} nm.", sm['q97.5'] / limit, 1.0,
+                              'tail', params))
+        else:
+            flags.append(Flag('dream_dmax_qmin', LEVEL_OK,
+                              f"Dmax-Posterior vollständig unter π/q_min = {limit:.3g} nm",
+                              sm['q97.5'] / limit, 1.0, 'ok', params))
+
+    if u.sigma_scale != 1.0:
+        flags.append(Flag('dream_sigma', LEVEL_INFO,
+                          f"σ wurde mit √MD = {u.sigma_scale:.3g} skaliert (Anpassung an die "
+                          f"beobachtete Streuung).", u.sigma_scale, None, 'scaled',
+                          {'factor': f"{u.sigma_scale:.3g}"}))
+
+    acc = d.acceptance_rate
+    if np.isfinite(acc) and acc < 0.05:
+        flags.append(Flag('dream_acceptance', LEVEL_INFO,
+                          f"Niedrige Akzeptanzrate ({100 * acc:.1f} %) — Ketten mischen langsam; "
+                          f"Ergebnis mit mehr Auswertungen prüfen.", acc, 0.05, 'low',
+                          {'rate': f"{100 * acc:.1f}"}))
+    return flags
+
+
+def worst_level(flags):
+    order = {LEVEL_OK: 0, LEVEL_INFO: 1, LEVEL_WARNING: 2}
+    return max((f.level for f in flags), key=lambda lv: order[lv], default=LEVEL_OK)
+
+
+DECON_MD_WARNING = 3.0
+
+
+def diagnose_decon(res):
+    """Flags der DECON-Rechnung [G81, MG98]."""
+    flags = []
+    if res.alternatives:
+        n = len(res.alternatives)
+        flags.append(Flag('decon_ambiguous', LEVEL_WARNING,
+                          f"{n} weitere, deutlich verschiedene Profile beschreiben p(r) ähnlich "
+                          f"gut — die Faltungswurzel ist nicht eindeutig (typisch bei "
+                          f"Kontrastumkehr). Alternativen im Plot vergleichen.",
+                          float(n), 0.0, 'several', {'n': str(n)}))
+    else:
+        flags.append(Flag('decon_ambiguous', LEVEL_OK,
+                          "Alle Startprofile führen zur selben Lösung (bis auf das Vorzeichen)",
+                          0.0, 0.0, 'ok'))
+    params = {'md': f"{res.md_pr:.3g}", 'md_q': f"{res.md_q:.3g}"}
+    if res.md_pr > DECON_MD_WARNING:
+        poly = res.settings.polydispersity != 'none'
+        flags.append(Flag('decon_fit', LEVEL_WARNING,
+                          f"Das Profil beschreibt p(r) nicht (MD = {res.md_pr:.3g}) — "
+                          + ("Teilchen nicht zentrosymmetrisch oder Geometrie ungeeignet "
+                             "[G81: Test der Symmetrie]." if poly else
+                             "Polydispersität (P-Scan verwenden, [MG98]) oder Abweichung von "
+                             "der Symmetrie [G81]."),
+                          res.md_pr, DECON_MD_WARNING, 'worse_poly' if poly else 'worse', params))
+    else:
+        flags.append(Flag('decon_fit', LEVEL_OK,
+                          f"MD(p) = {res.md_pr:.3g}, MD(I) = {res.md_q:.3g}", res.md_pr,
+                          DECON_MD_WARNING, 'ok', params))
+    ps = res.poly_scan
+    if ps is not None and ps['index'] in (0, len(ps['P']) - 1) and ps['index'] > 0:
+        flags.append(Flag('decon_poly', LEVEL_WARNING,
+                          f"Minimum von MD(P) am Rand des Scanbereichs (P = "
+                          f"{100 * ps['P'][ps['index']]:.0f} %) — Bereich erweitern oder "
+                          f"Verteilungstyp prüfen [MG98].", None, None, 'boundary',
+                          {'p': f"{100 * ps['P'][ps['index']]:.0f}"}))
+    elif ps is not None:
+        flags.append(Flag('decon_poly', LEVEL_INFO,
+                          f"Polydispersität P = {res.p_percent:.0f} % (σ = {res.sigma_poly:.3f}, "
+                          f"{res.settings.distribution}) aus dem Minimum von MD(P) [MG98].",
+                          res.p_percent, None, 'found',
+                          {'p': f"{res.p_percent:.0f}", 'sigma': f"{res.sigma_poly:.3f}"}))
+    return flags

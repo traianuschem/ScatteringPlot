@@ -7,6 +7,11 @@
   },
 
   "menu": {
+    "analysis": {
+      "title": "Analyse",
+      "gift": "P(r) berechnen (IFT/GIFT)...",
+      "verify_sidecar": "Provenance-Sidecar prüfen..."
+    },
     "file": {
       "title": "Datei",
       "load": "Daten laden...",
@@ -51,6 +56,7 @@
   },
 
   "tree": {
+    "provenance_tooltip": "GIFT-Ergebnis · record_id {record_id}",
     "unassigned": "▼ Nicht zugeordnet",
     "annotations": "▼ Annotations & Referenzlinien",
     "section_2d": "▼ 2D-Datensätze"
@@ -113,6 +119,7 @@
   },
 
   "context_menu": {
+    "gift": "P(r) berechnen (IFT/GIFT)...",
     "edit": "Bearbeiten...",
     "edit_curve": "🎨 Kurve bearbeiten...",
     "edit_group": "🎨 Gruppe bearbeiten...",
@@ -145,6 +152,16 @@
   },
 
   "messages": {
+    "gift_select_dataset": "Bitte zuerst einen 1D-Datensatz im Baum auswählen.",
+    "gift_not_loaded": "Die Daten von '{name}' konnten nicht geladen werden.",
+    "gift_verify_inputs": "Eingangsdateien:",
+    "gift_verify_outputs": "Ergebnisdateien:",
+    "gift_status_ok": "unverändert",
+    "gift_status_modified": "VERÄNDERT",
+    "gift_status_missing": "fehlt",
+    "gift_status_no_hash": "kein Hash",
+    "gift_verify_ok": "Alle Dateien stimmen mit dem Sidecar überein.\nrecord_id: {record_id}",
+    "gift_verify_failed": "Mindestens eine Datei weicht vom Sidecar ab oder fehlt.\nrecord_id: {record_id}",
     "success": "Erfolg",
     "info": "Info",
     "error": "Fehler",
@@ -1017,5 +1034,476 @@
     "dashed": "gestrichelt",
     "dotted": "gepunktet",
     "dashdot": "strich-punkt"
+  },
+
+  "gift": {
+    "title": "P(r) — Indirekte Fourier-Transformation",
+    "group_data": "Daten",
+    "dataset": "Datensatz",
+    "file": "Datei",
+    "points": "Punkte",
+    "qunit": "q-Einheit der Datei",
+    "qunit_angstrom": "Å⁻¹ (z. B. SasView) → ×10",
+    "qunit_tooltip": "ScatterForge rechnet in nm⁻¹ und nm. Daten aus SasView liegen in Å⁻¹ vor — dann „Å⁻¹“ wählen, sonst sind alle Längen (Dmax, Rg, R_HS) um den Faktor 10 zu groß.",
+    "sigma_source": "Fehler σ",
+    "sigma_measured": "aus Fehlerspalte",
+    "sigma_estimated": "keine Fehlerspalte — wird geschätzt",
+    "sigma_mode": "σ ohne Fehlerspalte",
+    "sigma_mode_estimate": "aus Rauschen schätzen",
+    "sigma_mode_relative": "relativ annehmen",
+    "sigma_mode_tooltip": "Rauschfreie Simulationen haben kein schätzbares Rauschen — dann σ als festen Anteil von |I| annehmen.",
+    "nsplines_suggest": "Vorschlag",
+    "nsplines_suggest_tooltip": "N aus der Zahl der Shannon-Kanäle Dmax·(q_max−q_min)/π ableiten",
+    "group_sq": "Strukturfaktor (GIFT)",
+    "model": "Modell",
+    "model_tooltip": "S(q)-Modell für die generalisierte IFT. „Kein“ = reine IFT (verdünnte Systeme).",
+    "model_none": "Kein (IFT, S = 1)",
+    "model_hs_py": "Harte Kugeln, Percus-Yevick",
+    "model_hs_py_avg": "Harte Kugeln, gemittelt S_ave (empfohlen)",
+    "model_rmsa": "Geladene Kugeln, RMSA (Hayter-Penfold)",
+    "model_hs_vrij": "Harte Kugeln, polydispers: S_eff (Vrij, Schulz)",
+    "model_sticky": "Klebrige harte Kugeln (Baxter)",
+    "model_fractal": "Fraktales Aggregat (Teixeira)",
+    "model_rod": "Stäbchen, Mean-Field (S_rod)",
+    "rmsa_rescaled": "Hansen-Hayter-Rescaling",
+    "param_start": "Start",
+    "param_lower": "min",
+    "param_upper": "max",
+    "param_fixed": "fix",
+    "from_ift": "Startwerte aus IFT",
+    "from_ift_tooltip": "R_HS aus dem Rg der IFT (äquivalente Kugel √(5/3)·Rg), φ und μ auf Standardwerte. Eher überschätzte Startwerte konvergieren besser (Brunner-Popela & Glatter 1997).",
+    "seed": "Seed",
+    "seed_tooltip": "Startwert des Zufallszahlengenerators der BSSA-Suche (reproduzierbar, im Sidecar dokumentiert)",
+    "workers": "Prozesse",
+    "workers_tooltip": "Parallele Prozesse für die BSSA-Mehrfachstarts und DREAM. Das Ergebnis ist von der Anzahl unabhängig (bitgleich). 0 = im Hauptprozess rechnen (Diagnose, nicht bitgleich zu den Pool-Ergebnissen).",
+    "tab_explorer": "Explorer",
+    "auto_qmin": "Artefakte bei kleinem q automatisch ausschließen",
+    "auto_qmin_tooltip": "Erkennt einen führenden Block mit I ≤ 0 bzw. Vorzeichenwechseln (z. B. Beamstop-Bereich, Separationsartefakte) und anschließende nicht signifikante Punkte und setzt q_min dahinter. Manuelle Grenzen haben Vorrang.",
+    "dmax_suggest": "Vorschlagen",
+    "dmax_suggest_tooltip": "Dmax aus dem Explorer: kleinstes Dmax mit glattem, vor Dmax auslaufendem p(r) (I(0) > 0) und voller Anpassung der Daten; N wird mitgesetzt.",
+    "kind_label": "Auswertung",
+    "kind_tooltip": "Art der indirekten Transformation: p(r) (Glatter 1977); Querschnitt p_c(r) für lange Zylinder bzw. Dicke p_t(r) für flache Lamellen (Glatter 1980b, nur den q-Bereich verwenden, in dem die Teilchen lang bzw. flach erscheinen); Volumenverteilung D_V(R) für homogene Kugeln, lange Zylinder oder Lamellen (Glatter 1980a).",
+    "kind": {
+      "pddf": "p(r) — Paarabstandsverteilung",
+      "cross_section": "p_c(r) — Querschnitt (lange Zylinder)",
+      "thickness": "p_t(r) — Dicke (Lamellen)",
+      "size_sphere": "Größenverteilung D_V(R) — Kugeln",
+      "size_cylinder": "Größenverteilung D_V(R) — lange Zylinder",
+      "size_lamella": "Größenverteilung D_V(T) — Lamellen",
+      "size_sphere_n": "Anzahlverteilung D_N(R) — Kugeln",
+      "size_cylinder_n": "Anzahlverteilung D_N(R) — lange Zylinder",
+      "size_lamella_n": "Anzahlverteilung D_N(T) — Lamellen"
+    },
+    "dmax_label": {
+      "pddf": "Dmax",
+      "cross_section": "Dmax (Querschnitt)",
+      "thickness": "Dmax (Dicke)",
+      "size_sphere": "R_max",
+      "size_cylinder": "R_max",
+      "size_lamella": "T_max",
+      "size_sphere_n": "R_max",
+      "size_cylinder_n": "R_max",
+      "size_lamella_n": "T_max"
+    },
+    "equiv": {
+      "pddf": "R (homogene Kugel)",
+      "cross_section": "R (homogener Zylinder, √2·R_c)",
+      "thickness": "T (homogene Lamelle, √12·R_t)"
+    },
+    "size_mode": "Modus",
+    "size_number_range": "nur ≥ {r} nm und D_V ≥ 2σ",
+    "tab_decon": "DECON",
+    "decon_basis": "Basis",
+    "decon_basis_splines": "Splines (Mittelbach & Glatter 1998)",
+    "decon_basis_steps": "Stufen (Glatter 1981)",
+    "decon_basis_tooltip": "Splines: glattes Profil aus kubischen B-Splines (intern feine Stufen, 4 je Intervall). Stufen: äquidistante Stufenfunktionen wie im ursprünglichen DECON. Die Überlappungsintegrale sind in beiden Fällen exakt (Glatter & Hainisch 1984).",
+    "decon_auto": "auto",
+    "decon_n": "Intervalle",
+    "decon_n_tooltip": "Zahl der Intervalle auf [0, Dmax/2]. „auto“: Stufenbreite = Knotenabstand der IFT (Glatter 1981).",
+    "decon_lam_tooltip": "Glättung B + λK: Wendepunkt-Methode wie in der IFT (Glatter 1981) oder fester Wert.",
+    "decon_poly": "Polydispersität",
+    "decon_poly_none": "keine (monodispers)",
+    "decon_poly_scan": "bestimmen (Scan P = 0–40 %)",
+    "decon_poly_fixed": "fester Wert",
+    "decon_poly_tooltip": "Mittelbach & Glatter (1998): Die Überlappungsintegrale werden über eine Anzahl-Größenverteilung gemittelt; das Profil gilt dann für die häufigste Teilchengröße. Der Scan bestimmt die Breite P aus dem Minimum der mittleren Abweichung. Nur eine lineare Größe (Kern und Schale skalieren gemeinsam).",
+    "decon_dist_schulz": "Schulz (verschoben)",
+    "decon_dist_gauss": "Gauß",
+    "decon_p_tooltip": "Breite als HWHM relativ zum häufigsten Radius: P = σ·√(2 ln 2) (Mittelbach & Glatter 1998).",
+    "decon_run": "Profil berechnen",
+    "decon_run_tooltip": "Radiales Kontrastprofil als Faltungswurzel von p(r): Kugel für p(r), Zylinderquerschnitt für p_c(r), symmetrische Lamelle für p_t(r). Konstantes Startprofil (Glatter 1981) und weitere Startprofile; gleich gute, verschiedene Lösungen werden als Alternativen gezeigt.",
+    "decon_steps": "Stufenmodell",
+    "decon_steps_run": "Stufenmodell optimieren",
+    "decon_steps_tooltip": "Wenige Stufen (2–4) mit variablen Breiten: Grenzen und Höhen werden optimiert (Glatter & Hainisch 1984), mit derselben Polydispersität wie das Profil. Ergibt z. B. Kern- und Außenradius.",
+    "decon_need_profile": "Zuerst das Profil berechnen.",
+    "decon_running": "DECON läuft …",
+    "decon_scan_running": "Polydispersitäts-Scan: {j} von {n} …",
+    "decon_cancelled": "DECON abgebrochen.",
+    "decon_hint": "DECON bestimmt aus p(r) das radiale Kontrastprofil zentrosymmetrischer Teilchen (Glatter 1981; Glatter & Hainisch 1984), bei Bedarf mit Polydispersität (Mittelbach & Glatter 1998). „Profil berechnen“ startet die Rechnung.",
+    "decon_not_available": "DECON ist nur für p(r), p_c(r) (Querschnitt) und p_t(r) (Dicke) definiert, nicht für Größenverteilungen.",
+    "decon_profile": "Δρ(r)",
+    "decon_alternative": "Alternative",
+    "decon_step_label": "Stufenmodell ({n} Stufen: {edges} nm)",
+    "decon_p_axis": "Polydispersität P / %",
+    "decon_status": "{geometry}, R = {R} nm · {poly} · MD(p) = {md} · MD(I) = {md_q} · λ = {lam} · Alternativen: {n}. Vorzeichen: ∫Δρ dV > 0 (das globale Vorzeichen ist unbestimmt).",
+    "decon_status_poly": "P = {p} % (σ = {sigma})",
+    "decon_status_mono": "monodispers",
+    "decon_status_steps": "Stufenmodell: Grenzen {edges} nm, Höhen {heights}, MD(p) = {md}.",
+    "decon_geom": {
+      "sphere": "Kugel",
+      "cylinder": "Zylinderquerschnitt",
+      "lamella": "Lamelle"
+    },
+    "dmax_suggest_none": "Kein Dmax mit glattem p(r) und guter Anpassung gefunden — Explorer (Karte Dmax × λ) verwenden.",
+    "lambda_method": "λ-Wahl",
+    "lambda_method_inflexion": "Wendepunkt (Glatter)",
+    "lambda_method_evidence": "Evidenz-Maximum (Bayes)",
+    "lambda_method_manual": "manuell",
+    "lambda_method_tooltip": "Wendepunkt: Plateau von log N_c vor dem MD-Anstieg (Glatter 1977, Standard). Evidenz-Maximum: wahrscheinlichstes λ nach Hansen (2000), dieselbe Größe wie in DREAM. Manuell: Wert unten, z. B. aus dem Explorer oder aus DREAM.",
+    "lambda_label_inflexion": "Wendepunkt",
+    "lambda_label_evidence": "Evidenz-Maximum",
+    "lambda_label_manual": "manuell",
+    "lambda_chosen": "gewählt",
+    "lambda_evidence_axis": "log-Evidenz − Maximum",
+    "dream_adopt": "λ und Dmax aus DREAM übernehmen",
+    "dream_adopt_tooltip": "Setzt λ (manuell) und Dmax auf die Posterior-Mediane der DREAM-Analyse; danach neu rechnen.",
+    "dream_adopted": "λ/Dmax aus DREAM übernommen — neu rechnen.",
+    "explorer_mode": "Scan",
+    "explorer_mode_map": "Karte Dmax × λ",
+    "explorer_mode_dmax": "Scan über Dmax",
+    "explorer_mode_lam": "Scan über λ",
+    "explorer_mode_n_splines": "Scan über N",
+    "explorer_metric": "Kennzahl",
+    "explorer_run": "Berechnen",
+    "explorer_points": "Punkte",
+    "explorer_osc": "Oszillation",
+    "explorer_osc_tooltip": "Schwelle für „glattes p(r)“ im grünen Bereich (SasView-Definition; Kugel ≈ 1.1).",
+    "explorer_hint": "Klick in die Grafik übernimmt Dmax bzw. λ (manuell) bzw. N. Grün: glattes p(r) (Oszillation ≤ Schwelle, I(0) > 0, p(r) läuft vor Dmax aus) bei voller Anpassung.",
+    "explorer_done": "Berechnet in {t} s.",
+    "explorer_empty": "Noch kein Scan — „Berechnen“. Grundlage ist die aktuelle Rechnung (q-Bereich, N, K, Untergrund, bei GIFT S(q) am Optimum).",
+    "explorer_adopted": "Werte übernommen.",
+    "explorer_stale": "veraltet (Einstellungen geändert) — neu berechnen",
+    "explorer_map_title": "weiß: Wendepunkt-λ · cyan gepunktet: Evidenz-Maximum · grün: guter Bereich · ★ aktuell",
+    "explorer_no_inflexion": "kein Wendepunkt",
+    "explorer_current": "aktuell",
+    "explorer_good": "guter Bereich",
+    "batch": "Serie…",
+    "batch_tooltip": "Die aktuellen Einstellungen auf mehrere geladene Datensätze anwenden (je Datensatz Export mit Sidecar, Übersicht als CSV).",
+    "batch_title": "IFT/GIFT-Serie",
+    "batch_hint": "Wendet die Einstellungen des Dialogs (q-Bereich inkl. automatischem q_min, N, λ-Wahl, K, Untergrund, ggf. S(q)-Modell) auf die gewählten Datensätze an. Jeder Datensatz wird mit eigenem Sidecar in seinen GIFT-Ordner exportiert; die Übersicht wird als CSV gespeichert.",
+    "batch_all": "Alle",
+    "batch_none": "Keine",
+    "batch_dmax_suggest": "Dmax je Datensatz vorschlagen",
+    "batch_dmax_fixed": "Dmax und N wie im Dialog",
+    "batch_dmax_tooltip": "Vorschlagen: Dmax und N je Datensatz aus dem Explorer (sinnvoll, wenn sich die Teilchengröße ändert, z. B. Aggregation).",
+    "batch_groups": "Ergebnisse als Gruppen übernehmen",
+    "batch_start": "Serie starten",
+    "batch_status": "Status",
+    "batch_running": "Datensatz {k}/{n}: {name} …",
+    "batch_done": "{n} Datensätze in {t} s ausgewertet. Übersicht: {path}",
+    "batch_cancelled": "Serie abgebrochen.",
+    "batch_plot_title": "p(r)/I(0) der Serie (* = Dmax vorgeschlagen)",
+    "metric": {
+      "oscillation": "Oszillation",
+      "md": "MD",
+      "chi2_dof": "χ²/dof",
+      "log_evidence": "log-Evidenz",
+      "positive_fraction": "Positive Fraction",
+      "positive_1sigma": "1σ-Positive Fraction",
+      "n_peaks": "Maxima",
+      "end_fraction": "Randanteil p(0.9·Dmax…Dmax)",
+      "rg": "Rg",
+      "i0": "I(0)",
+      "n_good": "N_g (eff. Parameter)",
+      "background": "Untergrund"
+    },
+    "cause": {
+      "no_inflexion": "kein Wendepunkt gefunden",
+      "dmax_small": "Dmax vermutlich zu klein (Teilchen > π/q_min)",
+      "md_high": "MD ≫ 1 (Modell, σ oder Untergrund prüfen)",
+      "many_splines": "viele Splines im Verhältnis zu den Shannon-Kanälen",
+      "lambda_small": "λ mehr als eine Dekade unter dem Evidenz-Optimum",
+      "none": "Explorer (Dmax × λ) prüfen"
+    },
+    "tab_uncertainty": "Unsicherheit",
+    "group_dream": "Unsicherheit (DREAM)",
+    "dream_hint": "MCMC-Analyse (DREAM(ZS)) der fertigen Rechnung: Die Spline-Koeffizienten sind analytisch herausintegriert (Hansen 2000); abgetastet werden die gewählten S(q)-Parameter, log λ und Dmax. Ergebnis: Intervalle, Korrelationen und Posterior-Bänder.",
+    "dream_col_sample": "abtasten",
+    "dream_gauss_tooltip": "Optionale gaußsche Priorverteilung μ ± σ (z. B. φ aus der Einwaage). σ = – → gleichverteilt zwischen den Grenzen.",
+    "dream_prior_defaults": "Standardgrenzen",
+    "dream_prior_defaults_tooltip": "Priorgrenzen neu setzen: S(q) wie der BSSA-Suchbereich, log λ = Optimum ± 4 Dekaden, Dmax = 0.75 … 1.5 × Dmax.",
+    "dream_dmax_limit": "π/q_min als Obergrenze für Dmax",
+    "dream_dmax_limit_tooltip": "Die Dmax-Priorverteilung endet bei π/q_min. Ohne Haken wird ein Überschreiten nur als Flag gemeldet.",
+    "dream_scale_sigma": "σ mit √MD skalieren",
+    "dream_scale_sigma_tooltip": "Skaliert die Fehler so, dass MD am Optimum = 1 wird (bei offensichtlich über- oder unterschätzten Fehlerbalken). Wird als Flag und im Sidecar vermerkt.",
+    "dream_chains": "Ketten",
+    "dream_chains_tooltip": "Anzahl der DREAM-Ketten (Auswertungen je Generation).",
+    "dream_budget": "Budget",
+    "dream_budget_tooltip": "Maximale Zahl der Likelihood-Auswertungen. Der Lauf endet früher, sobald R̂ < Ziel und genug Stichproben vorliegen.",
+    "dream_rhat_tooltip": "Konvergenzkriterium: Gelman-Rubin R̂ aller Parameter unter diesem Wert.",
+    "dream_run": "Unsicherheit bestimmen",
+    "dream_run_tooltip": "Startet Screening, DREAM und Posterior-Prädiktion für die aktuelle Rechnung (Hintergrund, abbrechbar).",
+    "dream_nothing": "Keine Größe zum Abtasten ausgewählt.",
+    "dream_starting": "DREAM wird gestartet …",
+    "dream_screening": "Screening der Posterior-Landschaft ({n} Punkte) …",
+    "dream_predict": "Posterior-Prädiktion (Bänder) …",
+    "dream_running": "DREAM: {n} Auswertungen, Generation {gen}, max. R̂ = {rhat}, Akzeptanz {acc} %",
+    "dream_stale": "DREAM-Ergebnis verworfen: Die Rechnung wurde inzwischen geändert.",
+    "dream_done": "DREAM konvergiert: {n} Auswertungen in {t} s (max. R̂ = {rhat}).",
+    "dream_done_not_converged": "DREAM nach {n} Auswertungen ({t} s) nicht konvergiert (max. R̂ = {rhat}) — Budget erhöhen.",
+    "dream_cancelled": "DREAM abgebrochen.",
+    "dream_reproduced": "DREAM wiederholt. Posterior-Median (Sidecar → neu):\n{lines}",
+    "dream_median_95": "Median [95 %]",
+    "dream_not_run": "Noch keine Unsicherheitsanalyse — „Unsicherheit bestimmen“ starten.",
+    "dream_info": "<b>{evals}</b> Auswertungen, {gens} Generationen × {chains} Ketten; Einlauf {burn} Generationen, {samples} Posterior-Zustände; Akzeptanz {acc} %, max. R̂ = {rhat}; {t} s mit {workers} Prozessen.<br><b>Rg</b> = {rg} nm, <b>I(0)</b> = {i0} (Median [95 %])",
+    "dream_col_param": "Parameter",
+    "dream_col_reference": "Optimum",
+    "dream_col_median": "Median",
+    "dream_tab_overview": "Übersicht",
+    "dream_tab_corner": "Corner-Plot",
+    "dream_tab_traces": "Ketten",
+    "dream_tab_bands": "Bänder",
+    "dream_corner_legend": "— Median · · 95 % – – Optimum (BSSA/IFT)",
+    "dream_generation": "Generation",
+    "dream_trace_title": "DREAM-Ketten (grau: Einlauf, verworfen)",
+    "dream_median": "Posterior-Median",
+    "dream_point_estimate": "Punktschätzung (IFT/GIFT)",
+    "apparent_hint": "S_ave-Parameter sind scheinbare Modellparameter; das eigentliche Ergebnis ist p(r) bzw. P(q) (Weyerich et al. 1999).",
+    "run_gift": "GIFT starten",
+    "cancel": "Abbrechen",
+    "gift_stale": "Einstellungen geändert — „GIFT starten“ drücken.",
+    "gift_starting": "BSSA-Suche wird gestartet …",
+    "gift_running": "BSSA läuft: {n} Auswertungen, T = {T}, MD = {md} (Zyklus {cycle})",
+    "gift_done": "Fertig: {n} Auswertungen in {t} s, {cycles} λ-Zyklus/Zyklen",
+    "gift_cancelled": "Abgebrochen.",
+    "start_outside": "Der Startwert von {name} liegt außerhalb der Grenzen.",
+    "need_compute": "Bitte zuerst GIFT mit den aktuellen Einstellungen rechnen („GIFT starten“).",
+    "tab_sq": "S(q) & P(q)",
+    "tab_bssa": "BSSA-Verlauf",
+    "only_gift": "Nur bei GIFT (Strukturfaktor-Modell ≠ „Kein“)",
+    "bssa_title": "Boltzmann-Simplex-Simulated-Annealing ({evals} Auswertungen)",
+    "bssa_evals": "Funktionsauswertungen",
+    "bssa_normalized": "Parameter (normiert auf Grenzen)",
+    "keep_nonpositive": "Werte I ≤ 0 verwenden ({n} Punkte)",
+    "keep_nonpositive_tooltip": "Nach Untergrundabzug sind I ≤ 0 bei großen q legitim. Im Hauptplot werden sie für die log-Darstellung ausgeblendet, für die IFT sollten sie verwendet werden.",
+    "group_qrange": "q-Fitbereich",
+    "qrange_mode": "Auswahl",
+    "qrange_full": "Voller Bereich",
+    "qrange_sigma": "{n}σ (Signifikanz)",
+    "qrange_manual": "Manuell",
+    "qrange_sigma_disabled": "Die σ-Voreinstellungen benötigen eine Fehlerspalte.",
+    "window": "Glättungsfenster",
+    "window_tooltip": "Fenster (Punkte) des gleitenden Medians der Signifikanz |I/σ| — wie im Significance-Plot.",
+    "qrange_info": "{n} von {total} Punkten, q = {q_min} … {q_max} nm⁻¹",
+    "group_ift": "IFT (Glatter 1977)",
+    "dmax_limit_tooltip": "Dmax auf die Grenze π/q_min setzen",
+    "nsplines": "Splines N",
+    "nsplines_tooltip": "Anzahl der kubischen B-Splines für p(r) (typisch 20–30)",
+    "lambda_auto": "λ automatisch (Wendepunkt-Methode)",
+    "lambda_manual": "manuell",
+    "lambda_inflexion": "Wendepunkt",
+    "k_type": "Glättung K",
+    "k_dirichlet": "1. Differenzen, Ränder 0 (Standard)",
+    "k_glatter": "1. Differenzen (Glatter 1977)",
+    "k_curvature": "2. Differenzen (Krümmung)",
+    "k_tooltip": "Stabilisierungsnorm der Spline-Koeffizienten. Die Originalform nach Glatter bestraft einen konstanten Anteil nicht; bei fehlenden Kleinwinkeldaten ist die Standardvariante stabiler.",
+    "background": "Konstanten Untergrund anpassen",
+    "background_tooltip": "Fittet zusätzlich einen konstanten Untergrund. Er ist stark mit p(r) bei kleinen r korreliert (große Unsicherheit).",
+    "background_value": "Untergrund",
+    "group_output": "Ausgabe",
+    "out_dir": "Zielordner: {path}",
+    "change_out_dir": "Zielordner ändern...",
+    "write_w3c": "Zusätzlich W3C PROV-JSON schreiben",
+    "live_preview": "Live-Vorschau",
+    "tab_iq": "I(q) & Fit",
+    "tab_pr": "p(r)",
+    "tab_lambda": "λ-Wahl",
+    "tab_significance": "Signifikanz",
+    "tab_provenance": "Provenance",
+    "prov_key": "Feld",
+    "prov_value": "Wert",
+    "compute": "Berechnen",
+    "load_sidecar": "Einstellungen aus Sidecar...",
+    "load_sidecar_tooltip": "Übernimmt alle Einstellungen aus einem *_GIFT_prov.json und rechnet neu (Reproduzierbarkeit).",
+    "apply": "Übernehmen",
+    "apply_tooltip": "Schreibt p(r), Fit und Provenance-Sidecar und legt eine PDDF-Gruppe an.",
+    "error": "Rechnung nicht möglich",
+    "legend_data": "Daten (Fitbereich)",
+    "legend_excluded": "außerhalb",
+    "legend_fit": "IFT-Fit",
+    "md_axis": "MD (mittlere Abweichung)",
+    "lambda_title": "Wendepunkt-Methode: log N_c und MD über λ",
+    "no_errors": "Keine Fehlerspalte — Signifikanz nicht verfügbar",
+    "sidecar_invalid": "Sidecar konnte nicht gelesen werden: {error}",
+    "sidecar_hash_mismatch": "Achtung: Die Datendatei hat sich seit der gespeicherten Analyse verändert (SHA-256 weicht ab).",
+    "sidecar_reproduced": "Einstellungen übernommen und neu gerechnet.\nRg (Sidecar) = {rg_old} nm\nRg (neu) = {rg_new} nm",
+    "overwrite": "Folgende Dateien existieren bereits und werden überschrieben:\n{files}\n\nFortfahren?",
+    "applied": "Ergebnisse geschrieben nach\n{dir}\n\n{files}",
+    "label_fit": "{name} – IFT-Fit",
+    "label_pr": "{name} – p(r)",
+    "group_name": "GIFT: {name}",
+    "flag": {
+      "gift_sticky": {
+        "no_attraction": "Stickiness τ läuft an die obere Grenze ({tau}): keine Anziehung nachweisbar — das Modell entspricht harten Kugeln (PY)."
+      },
+      "gift_sticky_coupled": {
+        "coupled": "Topfbreite δ und Stickiness τ sind gleichzeitig frei — sie sind stark gekoppelt (nur ihre Kombination ist bestimmbar). δ festhalten (SasView: 0.01–0.1)."
+      },
+      "gift_fractal": {
+        "aggregate": "Fraktales Aggregat: ≈ {n} Bausteine, Rg ≈ {rg} nm. p(r) beschreibt die Bausteine; r₀ und p(r) sind gekoppelt (DREAM-Korrelation prüfen).",
+        "xi_unresolved": "ξ ist größer als ~2/q_min (q_min·ξ = {qxi}): Der Guinier-Bereich der Aggregate ist nicht gemessen, ξ (und die Aggregatgröße) sind nicht bestimmbar."
+      },
+      "gift_rod": {
+        "degenerate": "S_rod hängt nur über den Stäbchen-Formfaktor F(qL) von q ab; das modellfreie p(r) kann den Strukturfaktor weitgehend aufnehmen. Die Parameter sind aus den Daten allein kaum bestimmbar — c aus der Konzentration vorgeben und festhalten (c = (π/4)·n·L²·D). Gültig nur für dünne Stäbchen (qR < 1, L ≫ R)."
+      },
+      "lowq_artifacts": {
+        "excluded": "{n} Punkte bei kleinem q (bis {q} nm⁻¹) als Artefakte erkannt und ausgeschlossen (Vorzeichenwechsel bzw. nicht signifikanter Übergang, z. B. Beamstop-Bereich). q_min = {q_min} nm⁻¹; bei Bedarf manuell anpassen."
+      },
+      "lowq_rise": {
+        "rise": "I(q) steigt am Anfang des Fitbereichs bis q = {q} nm⁻¹ an — Beamstop-Randschatten (q_min erhöhen) oder repulsive Wechselwirkung (→ GIFT)."
+      },
+      "guinier_missing": {
+        "missing": "Kein Guinier-Bereich gefunden: Die Teilchen sind vermutlich größer als π/q_min = {limit} nm. Ein Dmax ≤ π/q_min erzwingt dann ein oszillierendes p(r) — Dmax mit dem Explorer bzw. „Vorschlagen“ bestimmen; die größten Abstände bleiben unsicher."
+      },
+      "pr_smoothness": {
+        "ok": "Oszillation {osc} (Kugel ≈ 1.1)",
+        "elevated": "p(r) oszilliert leicht (Oszillation {osc}, Kugel ≈ 1.1). Wahrscheinliche Ursache: {causes}.",
+        "oscillating": "p(r) oszilliert (Oszillation {osc}, Kugel ≈ 1.1). Wahrscheinliche Ursache: {causes}."
+      },
+      "pr_peaks": {
+        "several": "p(r) hat {n} Maxima — Kern-Schale-Struktur, Aggregate oder Oszillation (mit der Oszillations-Kennzahl vergleichen)."
+      },
+      "dream_convergence": {
+        "ok": "DREAM konvergiert (max. R̂ = {rhat}, {evals} Auswertungen).",
+        "not_converged": "DREAM nicht konvergiert: R̂ ≥ {target} für {names} nach {evals} Auswertungen — Budget erhöhen; die Intervalle sind nur vorläufig.",
+        "no_burn_in": "DREAM hat die Einlaufphase nicht abgeschlossen (R̂ ≥ {target} für {names} nach {evals} Auswertungen) — Budget erhöhen oder Priorgrenzen einengen."
+      },
+      "dream_identifiability": {
+        "unidentifiable": "Nicht bestimmbar: {names} — die Posterior-Verteilung ist kaum schmaler als die Priorverteilung; die Daten legen diese Größen nicht fest."
+      },
+      "dream_boundary": {
+        "at_bound": "Posterior-Masse an einer Priorgrenze ({names}) — Grenzen erweitern; das Intervall ist sonst abgeschnitten."
+      },
+      "dream_correlation": {
+        "strong": "Stark korrelierte Parameter: {pairs} — nur Kombinationen sind gut bestimmt (z. B. z ↔ R_HS ↔ φ bei geladenen Systemen)."
+      },
+      "dream_multimodal": {
+        "multimodal": "Mehrere getrennte Modi im Posterior: {names} — Median und Intervalle beschreiben die Verteilung nur eingeschränkt (Corner-Plot prüfen)."
+      },
+      "dream_reference": {
+        "outside": "BSSA-Optimum außerhalb des 95-%-Intervalls ({names}) — Hauptmodus des Posteriors und MD-Minimum stimmen nicht überein.",
+        "hyper": "Die Daten bevorzugen andere Werte als gewählt ({names}; gewählt → Posterior-Median)."
+      },
+      "dream_dmax_qmin": {
+        "ok": "Dmax-Posterior vollständig unter π/q_min = {limit} nm.",
+        "tail": "Der obere Teil des Dmax-Posteriors (97.5 %: {q97} nm) reicht über π/q_min = {limit} nm.",
+        "exceeded": "Dmax-Posterior (Median {median} nm) liegt über π/q_min = {limit} nm — Information bei kleinen q fehlt."
+      },
+      "dream_sigma": {
+        "scaled": "σ wurde mit √MD = {factor} skaliert (Anpassung an die beobachtete Streuung)."
+      },
+      "dream_acceptance": {
+        "low": "Niedrige Akzeptanzrate ({rate} %) — Ketten mischen langsam; Ergebnis mit mehr Auswertungen prüfen."
+      },
+      "gift_multistart": {
+        "ok": "Alle {n} BSSA-Läufe finden dasselbe Minimum.",
+        "partial": "Bestes Minimum in {hits} von {n} BSSA-Läufen gefunden (Nebenminima vorhanden).",
+        "rare": "Das beste Minimum wurde nur in 1 von {n} BSSA-Läufen gefunden — die MD-Fläche hat Nebenminima; mehr Starts oder bekannte Größen (z. B. φ) festhalten."
+      },
+      "gift_rmsa_degenerate": {
+        "charge_salt": "Ladung und Salzkonzentration sind gleichzeitig frei — sie lassen sich nicht unabhängig bestimmen (Fritz et al. 2000). Eine der beiden festhalten."
+      },
+      "gift_rmsa_rescaled": {
+        "rescaled": "Rescaling nach Hansen & Hayter aktiv: effektiver Durchmesser σ' = {factor}·σ (die MSA allein gäbe g(σ+) < 0)."
+      },
+      "gift_bound": {
+        "ok": "Alle freien S(q)-Parameter innerhalb der Grenzen",
+        "at_bound": "Parameter am Rand der erlaubten Grenzen ({names}) — Grenzen erweitern oder das Modell ist ungeeignet (Bergmann et al. 2000)."
+      },
+      "gift_structure_factor": {
+        "negative": "S(q) wird negativ (min {min}) — unphysikalisch."
+      },
+      "gift_improvement": {
+        "improved": "MD ohne S(q) = {md_ift} → mit S(q) = {md_gift}",
+        "small": "S(q) verbessert die Anpassung kaum (MD {md_ift} → {md_gift}) — Wechselwirkung evtl. vernachlässigbar."
+      },
+      "gift_lambda": {
+        "not_converged": "λ hat sich zwischen den GIFT-Zyklen nicht stabilisiert — Ergebnis prüfen (λ manuell setzen)."
+      },
+      "gift_errors": {
+        "undetermined": "Fehler aus der MD-Krümmung nicht bestimmbar für {names} (flache oder nicht konvexe MD-Fläche)."
+      },
+      "gift_apparent": {
+        "apparent": "S_ave-Parameter sind scheinbare Modellparameter mit begrenzter physikalischer Bedeutung; das Ergebnis ist p(r) bzw. P(q) (Weyerich et al. 1999)."
+      },
+      "dmax_qmin": {
+        "ok": "Dmax ≤ π/q_min = {limit} nm (Dmax·q_min/π = {ratio})",
+        "exceeded": "Dmax = {dmax} nm > π/q_min = {limit} nm (Dmax·q_min/π = {ratio}): Die größten Abstände sind durch den Messbereich nicht abgedeckt."
+      },
+      "shannon": {
+        "ok": "{ns} Shannon-Kanäle im Fitbereich",
+        "few": "Nur {ns} Shannon-Kanäle im Fitbereich — sehr geringer Informationsgehalt.",
+        "coarse": "N = {n} Splines < {ns} Shannon-Kanäle: Die Basis ist gröber als der Informationsgehalt der Daten (empfohlen: N ≥ {suggest})."
+      },
+      "q_range": {
+        "ok": "{selected} von {total} Punkten im Fitbereich ({q_min}–{q_max} nm⁻¹)",
+        "excluded": "{excluded} von {total} Punkten ({frac}) liegen außerhalb des Fitbereichs."
+      },
+      "sigma_estimated": {
+        "estimated": "Keine Fehlerspalte: σ wurde aus den Daten geschätzt.",
+        "relative": "σ als {pct} % von |I| angenommen (z. B. simulierte Daten) — MD und Fehlerbänder sind nur relativ aussagekräftig."
+      },
+      "lambda": {
+        "evidence": "λ über das Evidenz-Maximum bestimmt (log λ_rel = {lam_ev}; Wendepunkt: {lam_infl}).",
+        "ok": "λ über die Wendepunkt-Methode bestimmt",
+        "manual": "λ manuell vorgegeben (Wendepunkt nicht verwendet)",
+        "not_found": "Kein Wendepunkt in log N_c(λ) gefunden — nach Glatter ein Hinweis auf Inkonsistenz zwischen Daten und Annahmen (Dmax, N, Untergrund)."
+      },
+      "fit_quality": {
+        "ok": "MD = {md}",
+        "estimated": "MD = {md} (σ geschätzt — nur relativ aussagekräftig)",
+        "high": "MD = {md} ≫ 1: Die Anpassung beschreibt die Daten nicht innerhalb der Fehler (Dmax zu klein, Untergrund, Wechselwirkung?).",
+        "low": "MD = {md} ≪ 1: Die Fehler σ sind vermutlich überschätzt."
+      },
+      "pr_end": {
+        "ok": "p(r) läuft vor Dmax gegen 0",
+        "high": "p(r) ist kurz vor Dmax noch bei {ratio} des Maximums — Dmax ist vermutlich zu klein gewählt."
+      },
+      "pr_tail": {
+        "ok": "Kein langer Null-Ausläufer vor Dmax",
+        "long": "p(r) ist ab r ≈ {r} nm nicht mehr signifikant von 0 verschieden ({frac} des Bereichs) — Dmax ist evtl. zu groß."
+      },
+      "cross_section_lowq": {
+        "ok": "{quantity} fällt ab q_min monoton (Faktorisierung gültig, Glatter 1980b)",
+        "rising": "{quantity} steigt am Anfang des Fitbereichs an — endliche Länge bzw. Fläche der Teilchen; q_min erhöhen (etwa bis zum Maximum von {quantity}). Quantitativ nur für Länge/Querschnitt ≥ 10 (Glatter 1980b)."
+      },
+      "size_distribution": {
+        "ok": "D_V überwiegend positiv (negativ {neg})",
+        "negative": "D_V ist zu {neg} negativ — sehr schmale (nahezu monodisperse) Verteilung, bei der negative Werte zur Beschreibung nötig sind, oder die angenommene Teilchenform passt nicht (Kern-Schale, anisotrop, Wechselwirkung) bzw. R_max/λ sind ungeeignet (Glatter 1980a)."
+      },
+      "decon_ambiguous": {
+        "ok": "DECON: alle Startprofile führen zur selben Lösung (bis auf das Vorzeichen)",
+        "several": "DECON: {n} weitere, deutlich verschiedene Profile beschreiben p(r) ähnlich gut — die Faltungswurzel ist nicht eindeutig (typisch bei Kontrastumkehr). Alternativen im DECON-Tab vergleichen."
+      },
+      "decon_fit": {
+        "ok": "DECON: MD(p) = {md}, MD(I) = {md_q}",
+        "worse": "DECON: Das Profil beschreibt p(r) nicht (MD = {md}) — Polydispersität (P-Scan verwenden, Mittelbach & Glatter 1998) oder Abweichung von der Symmetrie (Glatter 1981).",
+        "worse_poly": "DECON: Das Profil beschreibt p(r) auch mit Polydispersität nicht (MD = {md}) — Teilchen nicht zentrosymmetrisch oder Geometrie ungeeignet (Test der Symmetrie, Glatter 1981)."
+      },
+      "decon_poly": {
+        "found": "DECON: Polydispersität P = {p} % (σ = {sigma}) aus dem Minimum von MD(P) (Mittelbach & Glatter 1998).",
+        "boundary": "DECON: Minimum von MD(P) am Rand des Scanbereichs (P = {p} %) — Bereich erweitern oder Verteilungstyp prüfen."
+      },
+      "pr_negative": {
+        "ok": "Keine signifikant negativen p(r)-Werte",
+        "negative": "p(r) ist signifikant negativ (bis {depth} des Maximums) — Untergrund, Oszillation, nicht berücksichtigte Wechselwirkung (→ GIFT) oder (selten) ein Kontrastwechsel im Teilchen?"
+      },
+      "pr_oscillation": {
+        "oscillating": "p(r) wechselt {n}× signifikant das Vorzeichen — typisch für Wechselwirkung zwischen den Teilchen (→ GIFT mit Strukturfaktor)."
+      },
+      "rg_consistency": {
+        "ok": "Rg(IFT) = {rg_ift} nm, Rg(Guinier) = {rg_guinier} nm",
+        "deviation": "Rg(IFT) = {rg_ift} nm weicht um {dev} von Rg(Guinier) = {rg_guinier} nm ab."
+      }
+    }
   }
 }

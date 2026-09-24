@@ -7,6 +7,11 @@
   },
 
   "menu": {
+    "analysis": {
+      "title": "Analysis",
+      "gift": "Compute P(r) (IFT/GIFT)...",
+      "verify_sidecar": "Verify provenance sidecar..."
+    },
     "file": {
       "title": "File",
       "load": "Load Data...",
@@ -51,6 +56,7 @@
   },
 
   "tree": {
+    "provenance_tooltip": "GIFT result · record_id {record_id}",
     "unassigned": "▼ Unassigned",
     "annotations": "▼ Annotations & Reference Lines",
     "section_2d": "▼ 2D Datasets"
@@ -113,6 +119,7 @@
   },
 
   "context_menu": {
+    "gift": "Compute P(r) (IFT/GIFT)...",
     "edit": "Edit...",
     "edit_curve": "🎨 Edit Curve...",
     "edit_group": "🎨 Edit Group...",
@@ -145,6 +152,16 @@
   },
 
   "messages": {
+    "gift_select_dataset": "Please select a 1D dataset in the tree first.",
+    "gift_not_loaded": "The data of '{name}' could not be loaded.",
+    "gift_verify_inputs": "Input files:",
+    "gift_verify_outputs": "Result files:",
+    "gift_status_ok": "unchanged",
+    "gift_status_modified": "MODIFIED",
+    "gift_status_missing": "missing",
+    "gift_status_no_hash": "no hash",
+    "gift_verify_ok": "All files match the sidecar.\nrecord_id: {record_id}",
+    "gift_verify_failed": "At least one file differs from the sidecar or is missing.\nrecord_id: {record_id}",
     "success": "Success",
     "info": "Information",
     "error": "Error",
@@ -1017,5 +1034,476 @@
     "dashed": "dashed",
     "dotted": "dotted",
     "dashdot": "dash-dot"
+  },
+
+  "gift": {
+    "title": "P(r) — Indirect Fourier Transformation",
+    "group_data": "Data",
+    "dataset": "Dataset",
+    "file": "File",
+    "points": "Points",
+    "qunit": "q unit of the file",
+    "qunit_angstrom": "Å⁻¹ (e.g. SasView) → ×10",
+    "qunit_tooltip": "ScatterForge works in nm⁻¹ and nm. SasView data are in Å⁻¹ — choose “Å⁻¹”, otherwise all lengths (Dmax, Rg, R_HS) are too large by a factor of 10.",
+    "sigma_source": "Errors σ",
+    "sigma_measured": "from error column",
+    "sigma_estimated": "no error column — estimated",
+    "sigma_mode": "σ without error column",
+    "sigma_mode_estimate": "estimate from noise",
+    "sigma_mode_relative": "assume relative",
+    "sigma_mode_tooltip": "Noise-free simulations have no noise to estimate — assume σ as a fixed fraction of |I| instead.",
+    "nsplines_suggest": "Suggest",
+    "nsplines_suggest_tooltip": "Derive N from the number of Shannon channels Dmax·(q_max−q_min)/π",
+    "group_sq": "Structure factor (GIFT)",
+    "model": "Model",
+    "model_tooltip": "S(q) model for the generalized IFT. “None” = plain IFT (dilute systems).",
+    "model_none": "None (IFT, S = 1)",
+    "model_hs_py": "Hard spheres, Percus-Yevick",
+    "model_hs_py_avg": "Hard spheres, averaged S_ave (recommended)",
+    "model_rmsa": "Charged spheres, RMSA (Hayter-Penfold)",
+    "model_hs_vrij": "Hard spheres, polydisperse: S_eff (Vrij, Schulz)",
+    "model_sticky": "Sticky hard spheres (Baxter)",
+    "model_fractal": "Fractal aggregate (Teixeira)",
+    "model_rod": "Rods, mean field (S_rod)",
+    "rmsa_rescaled": "Hansen-Hayter rescaling",
+    "param_start": "Start",
+    "param_lower": "min",
+    "param_upper": "max",
+    "param_fixed": "fixed",
+    "from_ift": "Start values from IFT",
+    "from_ift_tooltip": "R_HS from the IFT Rg (equivalent sphere √(5/3)·Rg), φ and μ at defaults. Rather overestimated start values converge better (Brunner-Popela & Glatter 1997).",
+    "seed": "Seed",
+    "seed_tooltip": "Random seed of the BSSA search (reproducible, documented in the sidecar)",
+    "workers": "Processes",
+    "workers_tooltip": "Parallel processes for the BSSA multi-starts and DREAM. The result does not depend on the number (bit-identical). 0 = compute in the main process (diagnostics, not bit-identical to pool results).",
+    "tab_explorer": "Explorer",
+    "auto_qmin": "Exclude low-q artefacts automatically",
+    "auto_qmin_tooltip": "Detects a leading block with I ≤ 0 or sign changes (e.g. beamstop region, separation artefacts) and subsequent insignificant points, and sets q_min behind them. Manual limits take precedence.",
+    "dmax_suggest": "Suggest",
+    "dmax_suggest_tooltip": "Dmax from the explorer: smallest Dmax with a smooth p(r) that decays before Dmax (I(0) > 0) and a full fit of the data; N is set as well.",
+    "kind_label": "Evaluation",
+    "kind_tooltip": "Type of indirect transformation: p(r) (Glatter 1977); cross-section p_c(r) for long cylinders or thickness p_t(r) for flat lamellae (Glatter 1980b; use only the q range in which the particles appear long or flat); volume distribution D_V(R) for homogeneous spheres, long cylinders or lamellae (Glatter 1980a).",
+    "kind": {
+      "pddf": "p(r) — pair distance distribution",
+      "cross_section": "p_c(r) — cross-section (long cylinders)",
+      "thickness": "p_t(r) — thickness (lamellae)",
+      "size_sphere": "Size distribution D_V(R) — spheres",
+      "size_cylinder": "Size distribution D_V(R) — long cylinders",
+      "size_lamella": "Size distribution D_V(T) — lamellae",
+      "size_sphere_n": "Number distribution D_N(R) — spheres",
+      "size_cylinder_n": "Number distribution D_N(R) — long cylinders",
+      "size_lamella_n": "Number distribution D_N(T) — lamellae"
+    },
+    "dmax_label": {
+      "pddf": "Dmax",
+      "cross_section": "Dmax (cross-section)",
+      "thickness": "Dmax (thickness)",
+      "size_sphere": "R_max",
+      "size_cylinder": "R_max",
+      "size_lamella": "T_max",
+      "size_sphere_n": "R_max",
+      "size_cylinder_n": "R_max",
+      "size_lamella_n": "T_max"
+    },
+    "equiv": {
+      "pddf": "R (homogeneous sphere)",
+      "cross_section": "R (homogeneous cylinder, √2·R_c)",
+      "thickness": "T (homogeneous lamella, √12·R_t)"
+    },
+    "size_mode": "Mode",
+    "size_number_range": "only ≥ {r} nm and D_V ≥ 2σ",
+    "tab_decon": "DECON",
+    "decon_basis": "Basis",
+    "decon_basis_splines": "splines (Mittelbach & Glatter 1998)",
+    "decon_basis_steps": "steps (Glatter 1981)",
+    "decon_basis_tooltip": "Splines: smooth profile from cubic B-splines (internally fine steps, 4 per interval). Steps: equidistant step functions as in the original DECON. The overlap integrals are exact in both cases (Glatter & Hainisch 1984).",
+    "decon_auto": "auto",
+    "decon_n": "Intervals",
+    "decon_n_tooltip": "Number of intervals on [0, Dmax/2]. “auto”: step width = knot distance of the IFT (Glatter 1981).",
+    "decon_lam_tooltip": "Smoothing B + λK: point-of-inflexion method as in the IFT (Glatter 1981) or fixed value.",
+    "decon_poly": "Polydispersity",
+    "decon_poly_none": "none (monodisperse)",
+    "decon_poly_scan": "determine (scan P = 0–40 %)",
+    "decon_poly_fixed": "fixed value",
+    "decon_poly_tooltip": "Mittelbach & Glatter (1998): the overlap integrals are averaged over a number size distribution; the profile then refers to the most frequent particle size. The scan determines the width P from the minimum of the mean deviation. Only one linear size (core and shell scale together).",
+    "decon_dist_schulz": "Schulz (shifted)",
+    "decon_dist_gauss": "Gaussian",
+    "decon_p_tooltip": "Width as HWHM relative to the most frequent radius: P = σ·√(2 ln 2) (Mittelbach & Glatter 1998).",
+    "decon_run": "Compute profile",
+    "decon_run_tooltip": "Radial contrast profile as convolution square root of p(r): sphere for p(r), cylinder cross-section for p_c(r), symmetric lamella for p_t(r). Constant start profile (Glatter 1981) plus further start profiles; equally good but different solutions are shown as alternatives.",
+    "decon_steps": "Step model",
+    "decon_steps_run": "Optimise step model",
+    "decon_steps_tooltip": "Few steps (2–4) with variable widths: boundaries and heights are optimised (Glatter & Hainisch 1984), with the same polydispersity as the profile. Yields e.g. core and outer radius.",
+    "decon_need_profile": "Compute the profile first.",
+    "decon_running": "DECON running …",
+    "decon_scan_running": "Polydispersity scan: {j} of {n} …",
+    "decon_cancelled": "DECON cancelled.",
+    "decon_hint": "DECON derives the radial contrast profile of centrosymmetric particles from p(r) (Glatter 1981; Glatter & Hainisch 1984), optionally with polydispersity (Mittelbach & Glatter 1998). Press “Compute profile” to start.",
+    "decon_not_available": "DECON is only defined for p(r), p_c(r) (cross-section) and p_t(r) (thickness), not for size distributions.",
+    "decon_profile": "Δρ(r)",
+    "decon_alternative": "Alternative",
+    "decon_step_label": "step model ({n} steps: {edges} nm)",
+    "decon_p_axis": "polydispersity P / %",
+    "decon_status": "{geometry}, R = {R} nm · {poly} · MD(p) = {md} · MD(I) = {md_q} · λ = {lam} · alternatives: {n}. Sign: ∫Δρ dV > 0 (the global sign is undetermined).",
+    "decon_status_poly": "P = {p} % (σ = {sigma})",
+    "decon_status_mono": "monodisperse",
+    "decon_status_steps": "Step model: boundaries {edges} nm, heights {heights}, MD(p) = {md}.",
+    "decon_geom": {
+      "sphere": "sphere",
+      "cylinder": "cylinder cross-section",
+      "lamella": "lamella"
+    },
+    "dmax_suggest_none": "No Dmax with smooth p(r) and good fit found — use the explorer (Dmax × λ map).",
+    "lambda_method": "λ choice",
+    "lambda_method_inflexion": "Inflexion point (Glatter)",
+    "lambda_method_evidence": "Evidence maximum (Bayes)",
+    "lambda_method_manual": "manual",
+    "lambda_method_tooltip": "Inflexion point: plateau of log N_c before the MD rise (Glatter 1977, default). Evidence maximum: most probable λ after Hansen (2000), the same quantity as in DREAM. Manual: value below, e.g. from the explorer or from DREAM.",
+    "lambda_label_inflexion": "inflexion point",
+    "lambda_label_evidence": "evidence maximum",
+    "lambda_label_manual": "manual",
+    "lambda_chosen": "chosen",
+    "lambda_evidence_axis": "log evidence − maximum",
+    "dream_adopt": "Adopt λ and Dmax from DREAM",
+    "dream_adopt_tooltip": "Sets λ (manual) and Dmax to the posterior medians of the DREAM analysis; then recompute.",
+    "dream_adopted": "λ/Dmax adopted from DREAM — recompute.",
+    "explorer_mode": "Scan",
+    "explorer_mode_map": "Map Dmax × λ",
+    "explorer_mode_dmax": "Scan over Dmax",
+    "explorer_mode_lam": "Scan over λ",
+    "explorer_mode_n_splines": "Scan over N",
+    "explorer_metric": "Metric",
+    "explorer_run": "Compute",
+    "explorer_points": "Points",
+    "explorer_osc": "Oscillation",
+    "explorer_osc_tooltip": "Threshold for a “smooth p(r)” in the green region (SasView definition; sphere ≈ 1.1).",
+    "explorer_hint": "Clicking into the plot adopts Dmax or λ (manual) or N. Green: smooth p(r) (oscillation ≤ threshold, I(0) > 0, p(r) decays before Dmax) with a full fit.",
+    "explorer_done": "Computed in {t} s.",
+    "explorer_empty": "No scan yet — “Compute”. Based on the current calculation (q range, N, K, background, for GIFT S(q) at the optimum).",
+    "explorer_adopted": "Values adopted.",
+    "explorer_stale": "outdated (settings changed) — recompute",
+    "explorer_map_title": "white: inflexion λ · cyan dotted: evidence maximum · green: good region · ★ current",
+    "explorer_no_inflexion": "no inflexion point",
+    "explorer_current": "current",
+    "explorer_good": "good region",
+    "batch": "Series…",
+    "batch_tooltip": "Apply the current settings to several loaded datasets (export with sidecar per dataset, summary as CSV).",
+    "batch_title": "IFT/GIFT series",
+    "batch_hint": "Applies the dialog settings (q range incl. automatic q_min, N, λ choice, K, background, S(q) model if any) to the selected datasets. Each dataset is exported to its GIFT folder with its own sidecar; the summary is saved as CSV.",
+    "batch_all": "All",
+    "batch_none": "None",
+    "batch_dmax_suggest": "Suggest Dmax per dataset",
+    "batch_dmax_fixed": "Dmax and N as in the dialog",
+    "batch_dmax_tooltip": "Suggest: Dmax and N per dataset from the explorer (useful when the particle size changes, e.g. aggregation).",
+    "batch_groups": "Add results as groups",
+    "batch_start": "Start series",
+    "batch_status": "Status",
+    "batch_running": "Dataset {k}/{n}: {name} …",
+    "batch_done": "{n} datasets analysed in {t} s. Summary: {path}",
+    "batch_cancelled": "Series cancelled.",
+    "batch_plot_title": "p(r)/I(0) of the series (* = Dmax suggested)",
+    "metric": {
+      "oscillation": "Oscillation",
+      "md": "MD",
+      "chi2_dof": "χ²/dof",
+      "log_evidence": "log evidence",
+      "positive_fraction": "Positive fraction",
+      "positive_1sigma": "1σ positive fraction",
+      "n_peaks": "Maxima",
+      "end_fraction": "Edge fraction p(0.9·Dmax…Dmax)",
+      "rg": "Rg",
+      "i0": "I(0)",
+      "n_good": "N_g (eff. parameters)",
+      "background": "Background"
+    },
+    "cause": {
+      "no_inflexion": "no inflexion point found",
+      "dmax_small": "Dmax probably too small (particle > π/q_min)",
+      "md_high": "MD ≫ 1 (check model, σ or background)",
+      "many_splines": "many splines compared to the Shannon channels",
+      "lambda_small": "λ more than a decade below the evidence optimum",
+      "none": "check the explorer (Dmax × λ)"
+    },
+    "tab_uncertainty": "Uncertainty",
+    "group_dream": "Uncertainty (DREAM)",
+    "dream_hint": "MCMC analysis (DREAM(ZS)) of the finished calculation: the spline coefficients are integrated out analytically (Hansen 2000); the selected S(q) parameters, log λ and Dmax are sampled. Result: intervals, correlations and posterior bands.",
+    "dream_col_sample": "sample",
+    "dream_gauss_tooltip": "Optional Gaussian prior μ ± σ (e.g. φ from the sample preparation). σ = – → uniform between the bounds.",
+    "dream_prior_defaults": "Default bounds",
+    "dream_prior_defaults_tooltip": "Reset the prior bounds: S(q) as the BSSA search range, log λ = optimum ± 4 decades, Dmax = 0.75 … 1.5 × Dmax.",
+    "dream_dmax_limit": "π/q_min as upper bound for Dmax",
+    "dream_dmax_limit_tooltip": "The Dmax prior ends at π/q_min. Unchecked, exceeding it is only reported as a flag.",
+    "dream_scale_sigma": "Scale σ by √MD",
+    "dream_scale_sigma_tooltip": "Scales the errors so that MD = 1 at the optimum (for clearly over- or underestimated error bars). Reported as a flag and in the sidecar.",
+    "dream_chains": "Chains",
+    "dream_chains_tooltip": "Number of DREAM chains (evaluations per generation).",
+    "dream_budget": "Budget",
+    "dream_budget_tooltip": "Maximum number of likelihood evaluations. The run stops earlier once R̂ < target and enough samples are available.",
+    "dream_rhat_tooltip": "Convergence criterion: Gelman-Rubin R̂ of all parameters below this value.",
+    "dream_run": "Determine uncertainty",
+    "dream_run_tooltip": "Runs screening, DREAM and posterior prediction for the current calculation (background, cancellable).",
+    "dream_nothing": "No quantity selected for sampling.",
+    "dream_starting": "Starting DREAM …",
+    "dream_screening": "Screening the posterior landscape ({n} points) …",
+    "dream_predict": "Posterior prediction (bands) …",
+    "dream_running": "DREAM: {n} evaluations, generation {gen}, max. R̂ = {rhat}, acceptance {acc} %",
+    "dream_stale": "DREAM result discarded: the calculation has changed in the meantime.",
+    "dream_done": "DREAM converged: {n} evaluations in {t} s (max. R̂ = {rhat}).",
+    "dream_done_not_converged": "DREAM not converged after {n} evaluations ({t} s, max. R̂ = {rhat}) — increase the budget.",
+    "dream_cancelled": "DREAM cancelled.",
+    "dream_reproduced": "DREAM repeated. Posterior median (sidecar → new):\n{lines}",
+    "dream_median_95": "median [95 %]",
+    "dream_not_run": "No uncertainty analysis yet — run “Determine uncertainty”.",
+    "dream_info": "<b>{evals}</b> evaluations, {gens} generations × {chains} chains; burn-in {burn} generations, {samples} posterior states; acceptance {acc} %, max. R̂ = {rhat}; {t} s with {workers} processes.<br><b>Rg</b> = {rg} nm, <b>I(0)</b> = {i0} (median [95 %])",
+    "dream_col_param": "Parameter",
+    "dream_col_reference": "Optimum",
+    "dream_col_median": "Median",
+    "dream_tab_overview": "Overview",
+    "dream_tab_corner": "Corner plot",
+    "dream_tab_traces": "Chains",
+    "dream_tab_bands": "Bands",
+    "dream_corner_legend": "— median · · 95 % – – optimum (BSSA/IFT)",
+    "dream_generation": "Generation",
+    "dream_trace_title": "DREAM chains (grey: burn-in, discarded)",
+    "dream_median": "Posterior median",
+    "dream_point_estimate": "Point estimate (IFT/GIFT)",
+    "apparent_hint": "S_ave parameters are apparent model parameters; the actual result is p(r) or P(q) (Weyerich et al. 1999).",
+    "run_gift": "Run GIFT",
+    "cancel": "Cancel",
+    "gift_stale": "Settings changed — press “Run GIFT”.",
+    "gift_starting": "Starting BSSA search …",
+    "gift_running": "BSSA running: {n} evaluations, T = {T}, MD = {md} (cycle {cycle})",
+    "gift_done": "Done: {n} evaluations in {t} s, {cycles} λ cycle(s)",
+    "gift_cancelled": "Cancelled.",
+    "start_outside": "The start value of {name} lies outside the bounds.",
+    "need_compute": "Please run GIFT with the current settings first (“Run GIFT”).",
+    "tab_sq": "S(q) & P(q)",
+    "tab_bssa": "BSSA history",
+    "only_gift": "GIFT only (structure factor model ≠ “None”)",
+    "bssa_title": "Boltzmann simplex simulated annealing ({evals} evaluations)",
+    "bssa_evals": "Function evaluations",
+    "bssa_normalized": "Parameters (normalized to bounds)",
+    "keep_nonpositive": "Use values I ≤ 0 ({n} points)",
+    "keep_nonpositive_tooltip": "After background subtraction, I ≤ 0 at high q is legitimate. The main plot hides such points for log scaling; the IFT should use them.",
+    "group_qrange": "q fit range",
+    "qrange_mode": "Selection",
+    "qrange_full": "Full range",
+    "qrange_sigma": "{n}σ (significance)",
+    "qrange_manual": "Manual",
+    "qrange_sigma_disabled": "The σ presets require an error column.",
+    "window": "Smoothing window",
+    "window_tooltip": "Window (points) of the rolling median of the significance |I/σ| — as in the Significance plot.",
+    "qrange_info": "{n} of {total} points, q = {q_min} … {q_max} nm⁻¹",
+    "group_ift": "IFT (Glatter 1977)",
+    "dmax_limit_tooltip": "Set Dmax to the limit π/q_min",
+    "nsplines": "Splines N",
+    "nsplines_tooltip": "Number of cubic B-splines for p(r) (typically 20–30)",
+    "lambda_auto": "λ automatic (point of inflexion)",
+    "lambda_manual": "manual",
+    "lambda_inflexion": "point of inflexion",
+    "k_type": "Smoothing K",
+    "k_dirichlet": "1st differences, zero ends (default)",
+    "k_glatter": "1st differences (Glatter 1977)",
+    "k_curvature": "2nd differences (curvature)",
+    "k_tooltip": "Stabilisation norm of the spline coefficients. Glatter's original form does not penalise a constant component; with missing small-angle data the default variant is more stable.",
+    "background": "Fit constant background",
+    "background_tooltip": "Additionally fits a constant background. It is strongly correlated with p(r) at small r (large uncertainty).",
+    "background_value": "Background",
+    "group_output": "Output",
+    "out_dir": "Target folder: {path}",
+    "change_out_dir": "Change target folder...",
+    "write_w3c": "Also write W3C PROV-JSON",
+    "live_preview": "Live preview",
+    "tab_iq": "I(q) & fit",
+    "tab_pr": "p(r)",
+    "tab_lambda": "λ selection",
+    "tab_significance": "Significance",
+    "tab_provenance": "Provenance",
+    "prov_key": "Field",
+    "prov_value": "Value",
+    "compute": "Compute",
+    "load_sidecar": "Settings from sidecar...",
+    "load_sidecar_tooltip": "Loads all settings from a *_GIFT_prov.json and recomputes (reproducibility).",
+    "apply": "Apply",
+    "apply_tooltip": "Writes p(r), fit and provenance sidecar and creates a PDDF group.",
+    "error": "Computation not possible",
+    "legend_data": "Data (fit range)",
+    "legend_excluded": "excluded",
+    "legend_fit": "IFT fit",
+    "md_axis": "MD (mean deviation)",
+    "lambda_title": "Point of inflexion: log N_c and MD vs. λ",
+    "no_errors": "No error column — significance not available",
+    "sidecar_invalid": "Sidecar could not be read: {error}",
+    "sidecar_hash_mismatch": "Warning: the data file has changed since the stored analysis (SHA-256 differs).",
+    "sidecar_reproduced": "Settings loaded and recomputed.\nRg (sidecar) = {rg_old} nm\nRg (new) = {rg_new} nm",
+    "overwrite": "The following files already exist and will be overwritten:\n{files}\n\nContinue?",
+    "applied": "Results written to\n{dir}\n\n{files}",
+    "label_fit": "{name} – IFT fit",
+    "label_pr": "{name} – p(r)",
+    "group_name": "GIFT: {name}",
+    "flag": {
+      "gift_sticky": {
+        "no_attraction": "Stickiness τ runs to the upper bound ({tau}): no attraction detectable — the model corresponds to hard spheres (PY)."
+      },
+      "gift_sticky_coupled": {
+        "coupled": "Well width δ and stickiness τ are both free — they are strongly coupled (only their combination can be determined). Keep δ fixed (SasView: 0.01–0.1)."
+      },
+      "gift_fractal": {
+        "aggregate": "Fractal aggregate: ≈ {n} building blocks, Rg ≈ {rg} nm. p(r) describes the building blocks; r₀ and p(r) are coupled (check the DREAM correlation).",
+        "xi_unresolved": "ξ exceeds ~2/q_min (q_min·ξ = {qxi}): the Guinier region of the aggregates is not measured, ξ (and the aggregate size) cannot be determined."
+      },
+      "gift_rod": {
+        "degenerate": "S_rod depends on q only through the rod form factor F(qL); the model-free p(r) can largely absorb the structure factor. The parameters can hardly be determined from the data alone — set c from the concentration and keep it fixed (c = (π/4)·n·L²·D). Valid only for thin rods (qR < 1, L ≫ R)."
+      },
+      "lowq_artifacts": {
+        "excluded": "{n} points at low q (up to {q} nm⁻¹) detected as artefacts and excluded (sign changes or insignificant transition, e.g. beamstop region). q_min = {q_min} nm⁻¹; adjust manually if needed."
+      },
+      "lowq_rise": {
+        "rise": "I(q) rises at the start of the fit range up to q = {q} nm⁻¹ — beamstop edge shadow (increase q_min) or repulsive interaction (→ GIFT)."
+      },
+      "guinier_missing": {
+        "missing": "No Guinier region found: the particles are probably larger than π/q_min = {limit} nm. A Dmax ≤ π/q_min then forces an oscillating p(r) — determine Dmax with the explorer or “Suggest”; the largest distances remain uncertain."
+      },
+      "pr_smoothness": {
+        "ok": "Oscillation {osc} (sphere ≈ 1.1)",
+        "elevated": "p(r) oscillates slightly (oscillation {osc}, sphere ≈ 1.1). Probable cause: {causes}.",
+        "oscillating": "p(r) oscillates (oscillation {osc}, sphere ≈ 1.1). Probable cause: {causes}."
+      },
+      "pr_peaks": {
+        "several": "p(r) has {n} maxima — core-shell structure, aggregates or oscillation (compare with the oscillation metric)."
+      },
+      "dream_convergence": {
+        "ok": "DREAM converged (max. R̂ = {rhat}, {evals} evaluations).",
+        "not_converged": "DREAM not converged: R̂ ≥ {target} for {names} after {evals} evaluations — increase the budget; the intervals are preliminary.",
+        "no_burn_in": "DREAM did not finish the burn-in (R̂ ≥ {target} for {names} after {evals} evaluations) — increase the budget or narrow the prior bounds."
+      },
+      "dream_identifiability": {
+        "unidentifiable": "Not identifiable: {names} — the posterior is hardly narrower than the prior; the data do not determine these quantities."
+      },
+      "dream_boundary": {
+        "at_bound": "Posterior mass at a prior bound ({names}) — widen the bounds; otherwise the interval is truncated."
+      },
+      "dream_correlation": {
+        "strong": "Strongly correlated parameters: {pairs} — only combinations are well determined (e.g. z ↔ R_HS ↔ φ for charged systems)."
+      },
+      "dream_multimodal": {
+        "multimodal": "Several separate posterior modes: {names} — median and intervals describe the distribution only partially (check the corner plot)."
+      },
+      "dream_reference": {
+        "outside": "BSSA optimum outside the 95 % interval ({names}) — the main posterior mode and the MD minimum disagree.",
+        "hyper": "The data prefer other values than chosen ({names}; chosen → posterior median)."
+      },
+      "dream_dmax_qmin": {
+        "ok": "Dmax posterior entirely below π/q_min = {limit} nm.",
+        "tail": "The upper part of the Dmax posterior (97.5 %: {q97} nm) extends beyond π/q_min = {limit} nm.",
+        "exceeded": "Dmax posterior (median {median} nm) exceeds π/q_min = {limit} nm — information at small q is missing."
+      },
+      "dream_sigma": {
+        "scaled": "σ was scaled by √MD = {factor} (adapted to the observed scatter)."
+      },
+      "dream_acceptance": {
+        "low": "Low acceptance rate ({rate} %) — chains mix slowly; check the result with more evaluations."
+      },
+      "gift_multistart": {
+        "ok": "All {n} BSSA runs find the same minimum.",
+        "partial": "Best minimum found in {hits} of {n} BSSA runs (secondary minima present).",
+        "rare": "The best minimum was found in only 1 of {n} BSSA runs — the MD surface has secondary minima; use more starts or fix known quantities (e.g. φ)."
+      },
+      "gift_rmsa_degenerate": {
+        "charge_salt": "Charge and salt concentration are both free — they cannot be determined independently (Fritz et al. 2000). Keep one of them fixed."
+      },
+      "gift_rmsa_rescaled": {
+        "rescaled": "Hansen-Hayter rescaling active: effective diameter σ' = {factor}·σ (plain MSA would give g(σ+) < 0)."
+      },
+      "gift_bound": {
+        "ok": "All free S(q) parameters within bounds",
+        "at_bound": "Parameter at the edge of the allowed bounds ({names}) — widen the bounds or the model is unsuitable (Bergmann et al. 2000)."
+      },
+      "gift_structure_factor": {
+        "negative": "S(q) becomes negative (min {min}) — unphysical."
+      },
+      "gift_improvement": {
+        "improved": "MD without S(q) = {md_ift} → with S(q) = {md_gift}",
+        "small": "S(q) hardly improves the fit (MD {md_ift} → {md_gift}) — interaction may be negligible."
+      },
+      "gift_lambda": {
+        "not_converged": "λ did not stabilize between the GIFT cycles — check the result (set λ manually)."
+      },
+      "gift_errors": {
+        "undetermined": "Errors from the MD curvature could not be determined for {names} (flat or non-convex MD surface)."
+      },
+      "gift_apparent": {
+        "apparent": "S_ave parameters are apparent model parameters of limited physical meaning; the result is p(r) or P(q) (Weyerich et al. 1999)."
+      },
+      "dmax_qmin": {
+        "ok": "Dmax ≤ π/q_min = {limit} nm (Dmax·q_min/π = {ratio})",
+        "exceeded": "Dmax = {dmax} nm > π/q_min = {limit} nm (Dmax·q_min/π = {ratio}): the largest distances are not covered by the measured q range."
+      },
+      "shannon": {
+        "ok": "{ns} Shannon channels in the fit range",
+        "few": "Only {ns} Shannon channels in the fit range — very low information content.",
+        "coarse": "N = {n} splines < {ns} Shannon channels: the basis is coarser than the information content of the data (recommended: N ≥ {suggest})."
+      },
+      "q_range": {
+        "ok": "{selected} of {total} points in the fit range ({q_min}–{q_max} nm⁻¹)",
+        "excluded": "{excluded} of {total} points ({frac}) lie outside the fit range."
+      },
+      "sigma_estimated": {
+        "estimated": "No error column: σ was estimated from the data.",
+        "relative": "σ assumed as {pct} % of |I| (e.g. simulated data) — MD and error bands are only relatively meaningful."
+      },
+      "lambda": {
+        "evidence": "λ determined by the evidence maximum (log λ_rel = {lam_ev}; inflexion point: {lam_infl}).",
+        "ok": "λ determined by the point-of-inflexion method",
+        "manual": "λ set manually (point of inflexion not used)",
+        "not_found": "No point of inflexion found in log N_c(λ) — according to Glatter a hint of inconsistency between data and assumptions (Dmax, N, background)."
+      },
+      "fit_quality": {
+        "ok": "MD = {md}",
+        "estimated": "MD = {md} (σ estimated — only relatively meaningful)",
+        "high": "MD = {md} ≫ 1: the fit does not describe the data within the errors (Dmax too small, background, interaction?).",
+        "low": "MD = {md} ≪ 1: the errors σ are probably overestimated."
+      },
+      "pr_end": {
+        "ok": "p(r) approaches 0 before Dmax",
+        "high": "p(r) is still at {ratio} of its maximum shortly before Dmax — Dmax is probably too small."
+      },
+      "pr_tail": {
+        "ok": "No long zero tail before Dmax",
+        "long": "p(r) is not significantly different from 0 beyond r ≈ {r} nm ({frac} of the range) — Dmax may be too large."
+      },
+      "cross_section_lowq": {
+        "ok": "{quantity} decreases monotonically from q_min (factorisation valid, Glatter 1980b)",
+        "rising": "{quantity} rises at the start of the fit range — finite length or area of the particles; increase q_min (roughly to the maximum of {quantity}). Quantitative only for length/cross-section ≥ 10 (Glatter 1980b)."
+      },
+      "size_distribution": {
+        "ok": "D_V mostly positive (negative {neg})",
+        "negative": "D_V is {neg} negative — very narrow (nearly monodisperse) distribution, for which negative values are needed, or the assumed particle shape does not fit (core-shell, anisotropic, interaction) or R_max/λ are unsuitable (Glatter 1980a)."
+      },
+      "decon_ambiguous": {
+        "ok": "DECON: all start profiles lead to the same solution (up to the sign)",
+        "several": "DECON: {n} further, clearly different profiles describe p(r) similarly well — the convolution square root is not unique (typical for contrast inversion). Compare the alternatives in the DECON tab."
+      },
+      "decon_fit": {
+        "ok": "DECON: MD(p) = {md}, MD(I) = {md_q}",
+        "worse": "DECON: the profile does not describe p(r) (MD = {md}) — polydispersity (use the P scan, Mittelbach & Glatter 1998) or deviation from symmetry (Glatter 1981).",
+        "worse_poly": "DECON: the profile does not describe p(r) even with polydispersity (MD = {md}) — particles not centrosymmetric or geometry unsuitable (test of symmetry, Glatter 1981)."
+      },
+      "decon_poly": {
+        "found": "DECON: polydispersity P = {p} % (σ = {sigma}) from the minimum of MD(P) (Mittelbach & Glatter 1998).",
+        "boundary": "DECON: minimum of MD(P) at the edge of the scan range (P = {p} %) — extend the range or check the distribution type."
+      },
+      "pr_negative": {
+        "ok": "No significantly negative p(r) values",
+        "negative": "p(r) is significantly negative (down to {depth} of the maximum) — background, oscillation, unaccounted interaction (→ GIFT) or (rarely) a contrast change within the particle?"
+      },
+      "pr_oscillation": {
+        "oscillating": "p(r) changes sign significantly {n}× — typical for interparticle interaction (→ GIFT with structure factor)."
+      },
+      "rg_consistency": {
+        "ok": "Rg(IFT) = {rg_ift} nm, Rg(Guinier) = {rg_guinier} nm",
+        "deviation": "Rg(IFT) = {rg_ift} nm deviates by {dev} from Rg(Guinier) = {rg_guinier} nm."
+      }
+    }
   }
 }
