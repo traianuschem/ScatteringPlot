@@ -161,6 +161,30 @@ Tests: `python -m unittest discover -s tests/analysis -t .` → 150 Tests (≈ 1
 
 ---
 
+## Version 8.0.1 — Bugfix
+
+**Release Date:** 24. September 2026
+
+### 🐞 Fix: Fehlerspalte fälschlich verworfen, wenn einzelne σ = 0 sind
+
+Im GIFT-Dialog wurde die Fehlerspalte eines Datensatzes komplett verworfen (Anzeige
+„keine Fehlerspalte — wird geschätzt"), sobald **ein einziger** Datenpunkt σ ≤ 0 hatte —
+z. B. bei ASAXS-Separationsergebnissen, bei denen einzelne q-Bins eine degenerierte
+Varianz von genau 0 ergeben. Die Spaltenzuordnung selbst (`col_x`/`col_y`/`col_err`) war
+davon nicht betroffen und funktionierte bereits korrekt.
+
+- `dataset_arrays()` (`dialogs/gift_dialog.py`) schließt jetzt nur noch die einzelnen
+  Punkte mit σ ≤ 0 aus (analog zur bestehenden Behandlung von q ≤ 0 / nicht-finiten
+  Werten), statt die gesamte Fehlerspalte zu verwerfen.
+- Betroffen waren u. a. ESRF-ASAXS-Separationsdateien mit vereinzelten σ = 0 Punkten.
+
+| Datei | Änderungen |
+|-------|------------|
+| `dialogs/gift_dialog.py` | `dataset_arrays()`: σ ≤ 0 punktweise statt spaltenweise ausschließen |
+| `core/version.py` | `8.0.0` → `8.0.1` |
+
+---
+
 ## 👥 Contributors & AI Transparency
 
 **Development:**

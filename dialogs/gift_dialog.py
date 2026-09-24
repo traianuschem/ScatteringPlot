@@ -83,7 +83,10 @@ def dataset_arrays(ds):
     err = data[:, 2] if data.shape[1] > 2 else None
     keep = np.isfinite(q) & np.isfinite(I) & (q > 0)
     if err is not None:
-        keep &= np.isfinite(err)
+        # σ ≤ 0 ist kein gültiger Messfehler (z.B. degenerierte Punkte bei der
+        # ASAXS-Separation) — einzelne solche Punkte ausschließen statt die
+        # gesamte Fehlerspalte zu verwerfen (siehe has_errors in GiftDialog).
+        keep &= np.isfinite(err) & (err > 0)
     order = np.argsort(q[keep])
     q, I = q[keep][order], I[keep][order]
     err = err[keep][order] if err is not None else None
