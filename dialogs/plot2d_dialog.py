@@ -1130,7 +1130,6 @@ class Plot2DDialog(QDialog):
         kind = self._last_result[0]
         try:
             from core.models import DataSet
-            import tempfile, os
 
             if kind == 'azimuthal':
                 _, phi, I, q_lo, q_hi = self._last_result
@@ -1139,28 +1138,21 @@ class Plot2DDialog(QDialog):
                     f"{self.dataset.name}_azim_{q_lo:.3f}-{q_hi:.3f}"
                     + (corr.replace('/', '_div_').replace('·', '_mul_') if corr else '')
                 )
-                header   = f"# phi [deg]\tI{corr} [a.u.]\n"
-                data_arr = np.column_stack([phi, I])
-                fmt      = ['%.4f', '%.6e']
+                arrays = (phi, I, None)
             elif kind == 'sector':
                 _, q, I, I_err, phi_lo, phi_hi = self._last_result
-                name     = f"{self.dataset.name}_sector_{phi_lo:.0f}-{phi_hi:.0f}deg"
-                header   = f"# q [nm^-1]\tI [a.u.]\tsigma\n"
-                data_arr = np.column_stack([q, I, I_err])
-                fmt      = ['%.6e', '%.6e', '%.6e']
+                name = f"{self.dataset.name}_sector_{phi_lo:.0f}-{phi_hi:.0f}deg"
+                arrays = (q, I, I_err)
             else:
                 return
 
-            tmp_fd, tmp_path = tempfile.mkstemp(
-                suffix='.dat', prefix='scatterforge_proj_')
-            os.close(tmp_fd)
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                f.write(header)
-                np.savetxt(f, data_arr, fmt=fmt, delimiter='\t')
-
+            # v8.1: Projektion als abgeleiteter Datensatz im Speicher (wird in Sessions
+            # inline gespeichert, statt als Temp-Datei nach Neustart verloren zu gehen).
             # filter_nonpositive=False: azimutale Profile haben negative φ-Werte
             # (−180…0°) und dürfen nicht durch den SAXS-log-Plot-Filter beschnitten werden.
-            ds = DataSet(tmp_path, name=name, apply_auto_style=False, filter_nonpositive=False)
+            ds = DataSet.from_arrays(*arrays, name=name,
+                                     derived_from={'source': str(self.dataset.filepath),
+                                                   'projection': kind})
             ds.display_label = name
             self.projection_ready.emit(ds)
             QMessageBox.information(

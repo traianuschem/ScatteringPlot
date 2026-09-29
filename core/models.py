@@ -65,8 +65,13 @@ class DataSet:
         self.y_min = None
         self.y_max = None
 
+        # Abgeleitete Datensätze ohne eigene Datei (v8.1, z. B. ASAXS-Verhältnisse):
+        # Rohdaten liegen im Speicher und werden in Sessions inline gespeichert.
+        self.inline_data = None
+        self.derived_from = None   # dict mit Herkunft (Größe, Quelldatensätze, ...)
+
         # ASAXS (v7.3)
-        self.data_term = ''        # '', 'normal', 'cross', 'anomalous'
+        self.data_term = ''        # '', 'normal', 'cross', 'anomalous', v8.1: 'ratio' (abgeleitet)
         self.snr_visualization = False  # SNR-basierte Qualitätsmarker
         # SNR-Visualisierungseinstellungen
         self.snr_threshold = 1.0          # SNR-Schwellenwert (Standard: 1)
@@ -151,7 +156,10 @@ class DataSet:
         """
         logger = logging.getLogger(__name__)
         try:
-            self.raw_data = load_raw_data(self.filepath)
+            if self.inline_data is not None:
+                self.raw_data = np.asarray(self.inline_data, dtype=float)
+            else:
+                self.raw_data = load_raw_data(self.filepath)
             if not self._columns_configured:
                 self.col_x, self.col_y, self.col_err = default_column_mapping(self.raw_data.shape[1])
             self._apply_column_selection()
@@ -173,6 +181,34 @@ class DataSet:
         self.x = self.data[:, 0]
         self.y = self.data[:, 1]
         self.y_err = self.data[:, 2] if self.data.shape[1] > 2 else None
+
+    @classmethod
+    def from_arrays(cls, x, y, y_err=None, name='derived', data_term='', derived_from=None,
+                    filter_nonpositive=False):
+        """Erzeugt einen abgeleiteten Datensatz aus Arrays (v8.1), ohne Datei.
+
+        Args:
+            data_term: ASAXS-Term, z. B. 'ratio' für abgeleitete Verhältnisse
+            derived_from: Herkunftsangaben (werden in Sessions mitgespeichert)
+            filter_nonpositive: Standard False – Verhältnisse/Korrelationen dürfen ≤ 0 sein
+        """
+        columns = [np.asarray(x, dtype=float), np.asarray(y, dtype=float)]
+        if y_err is not None:
+            columns.append(np.asarray(y_err, dtype=float))
+        ds = cls(f"{name}.dat", name, apply_auto_style=False, skip_load=True,
+                 filter_nonpositive=filter_nonpositive)
+        ds.inline_data = np.column_stack(columns)
+        ds.derived_from = derived_from
+        # Dateinamen-Heuristiken übersteuern (z. B. "_IN" in "IA_IN", "_pr" in "_projection")
+        ds.data_term = data_term
+        ds.is_pr_data = False
+        ds.set_pddf_role('')
+        ds.load_data()
+        return ds
+
+    def is_derived(self):
+        """True für Datensätze ohne eigene Datei (Daten liegen inline vor)."""
+        return self.inline_data is not None
 
     def set_column_mapping(self, col_x, col_y, col_err):
         """Setzt die x/y/error-Spaltenzuordnung neu und wendet sie auf die
@@ -287,6 +323,10 @@ class DataSet:
             'col_y': self.col_y,
             'col_err': self.col_err,
             'columns_configured': self._columns_configured,
+            # v8.1: abgeleitete Datensätze ohne Datei
+            'inline_data': (np.asarray(self.inline_data).tolist()
+                            if self.inline_data is not None else None),
+            'derived_from': self.derived_from,
         }
 
     @classmethod
@@ -326,6 +366,10 @@ class DataSet:
         ds.col_x = data.get('col_x')
         ds.col_y = data.get('col_y')
         ds.col_err = data.get('col_err')
+        if data.get('inline_data') is not None:
+            ds.inline_data = np.asarray(data['inline_data'], dtype=float)
+            ds.is_pr_data = False  # wie in from_arrays(): keine Dateinamen-Heuristik
+        ds.derived_from = data.get('derived_from')
 
         # Versuche Daten zu laden, aber ignoriere Fehler (z.B. fehlende Dateien)
         ds.load_data(raise_on_error=False)
@@ -346,10 +390,9 @@ class DataGroup:
         self.legend_bold = False
         self.legend_italic = False
         self.display_label = name
-        # Subplot-Zuweisung (v7.3.1): 'both' | 'main' | 'sub'
-        # Steuert, in welchem Axes-Bereich diese Gruppe gerendert wird,
-        # wenn ein Subplot aktiv ist (ASAXS ± Subplot, PDDF).
-        self.subplot_target = 'both'
+        # Panel-Zuordnung (v8.1): None = automatisch (alle aktiven Panels, deren
+        # Panel-Typ die Datensätze akzeptiert), sonst Liste von Panel-IDs.
+        self.panel_ids = None
         # Provenance (v7.8): record_id des GIFT-Sidecars, aus dem die Gruppe stammt
         self.provenance_record_id = None
 
@@ -361,17 +404,6 @@ class DataGroup:
         """Datensatz entfernen"""
         if dataset in self.datasets:
             self.datasets.remove(dataset)
-
-    def auto_suggest_pddf_subplot(self):
-        """Setzt subplot_target anhand der Dateinamen — nur wenn noch Default 'both'."""
-        if self.subplot_target != 'both' or not self.datasets:
-            return
-        pr_count = sum(1 for ds in self.datasets if ds.is_pofr())
-        if pr_count == len(self.datasets):
-            self.subplot_target = 'sub'
-        elif pr_count == 0:
-            self.subplot_target = 'main'
-        # Gemischt → bleibt 'both'
 
     def to_dict(self):
         """Serialisierung"""
@@ -385,7 +417,7 @@ class DataGroup:
             'legend_bold': self.legend_bold,
             'legend_italic': self.legend_italic,
             'display_label': self.display_label,
-            'subplot_target': self.subplot_target,
+            'panel_ids': list(self.panel_ids) if self.panel_ids is not None else None,
             'provenance_record_id': self.provenance_record_id,
             'datasets': [ds.to_dict() for ds in self.datasets]
         }
@@ -400,7 +432,11 @@ class DataGroup:
         group.legend_bold = data.get('legend_bold', False)
         group.legend_italic = data.get('legend_italic', False)
         group.display_label = data.get('display_label', group.name)
-        group.subplot_target = data.get('subplot_target', 'both')
+        if 'panel_ids' in data:
+            group.panel_ids = list(data['panel_ids']) if data['panel_ids'] is not None else None
+        else:
+            # Sessions ≤ v8.0: 'both' | 'main' | 'sub' (Subplot hat nach der Migration die ID 'sub')
+            group.panel_ids = {'main': ['main'], 'sub': ['sub']}.get(data.get('subplot_target'))
         group.provenance_record_id = data.get('provenance_record_id')
         group.datasets = [DataSet.from_dict(ds_data) for ds_data in data.get('datasets', [])]
         return group

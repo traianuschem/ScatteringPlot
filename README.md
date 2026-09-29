@@ -1,8 +1,8 @@
-# ScatterForge Plot v8.0.0
+# ScatterForge Plot v8.1.0
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-8.0.0-blue)
+![Version](https://img.shields.io/badge/version-8.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,6 +63,8 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
+| **ASAXS-Auswertung** | Eigener Dialog: I_A/I_N, I_cross/I_N und Korrelation I_cross/2√(I_N·I_A) mit Fehlerfortpflanzung, automatischer Proben-Erkennung und Übernahme als abgeleitete Datensätze (Ratio-Panel, sessionfest) | ✅ **v8.1.0** |
+| **Flexibles Panel-Layout** | Freies Grid aus Panels (Zeilen × Spalten, Spans, Verhältnisse), jedes ein-/ausschaltbar mit eigenem Typ (u. a. P(r), Significance, I linear), gekoppelte X-Achsen, eigene Achsen/Titel/Legende; Gruppen wählen ihre Panels; alte Sessions werden migriert | ✅ **v8.1.0** |
 | **Weitere Glatter-Auswertungen** | IFT-Arten Querschnitt p_c(r) und Dicke p_t(r), Größenverteilungen D_V(R)/D_N(R) für Kugeln, Zylinder und Lamellen; DECON: radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, Polydispersitäts-Scan (Mittelbach & Glatter 1998) und optimiertem Stufenmodell | ✅ **v8.0.0** |
 | **Weitere GIFT-Strukturfaktoren** | S_eff polydisperser harter Kugeln (Vrij, Schulz), klebrige harte Kugeln (Baxter), fraktales Aggregat (Teixeira), Stäbchen (Mean-Field) — validiert gegen sasmodels bzw. PY-Grenzfälle, mit Flags zur Bestimmbarkeit | ✅ **v7.14.0** |
 | **p(r)-Explorer & Kennzahlen** | SasView-kompatible Kennzahlen (Oszillation, Positive Fraction, Maxima, χ²) plus N_g und Evidenz; Karte Dmax × λ mit „gutem Bereich“ und Klick-Übernahme, 1D-Scans über Dmax/λ/N, Dmax-Vorschlag, λ per Evidenz-Maximum, automatische Artefakterkennung bei kleinem q, Serienauswertung mit CSV-Übersicht | ✅ **v7.13.0** |
@@ -98,6 +100,25 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 | **Session-Verwaltung** | Komplette Projektzustände speichern/laden | ✅ |
 | **Annotations** | Interaktiv verschiebbar, LaTeX-Support | ✅ |
 | **Dark Mode** | Vollständige Dark-Mode-Unterstützung | ✅ |
+
+---
+
+## 🎉 Was ist neu in v8.1?
+
+**Minor Release v8.1.0** — Flexibles Panel-Layout statt fest gekoppelter Subplots
+
+### Hauptfeatures v8.1
+
+- 🗂 **Panels im freien Grid**: Hauptpanel plus beliebig viele weitere Panels in Zeilen und Spalten, jedes per Häkchen ein-/ausschaltbar
+- 🔀 **Panel-Typ frei wählbar**: alle Plot-Typen sowie **P(r)**, **Significance** und **I linear** (ASAXS-Cross-Term) – z. B. Log-Log + Kratky + P(r) + Significance als 2 × 2
+- 🎯 **Gruppen → Panels**: „Automatisch“ (passende Panels, P(r) nur im P(r)-Panel) oder freie Mehrfachauswahl im Gruppen-Dialog und Kontextmenü
+- 📐 **Layout-Dialog** mit Grid-Vorschau, X-Achsen-Kopplung, Legenden-Modus und Optionen je Panel; Achsen- und Titel-Dialog arbeiten pro Panel
+- 🔄 **Migration**: Sessions mit PDDF/Significance/ASAXS-Subplot werden automatisch in Panels übersetzt
+- 🔬 **ASAXS-Dialog** (Analyse → ASAXS-Auswertung…): I_A/I_N, I_cross/I_N und Korrelationskoeffizient mit Fehlerbändern; Ergebnisse per Klick zurück in den Datentree (Ratio-Panel), Export als ASCII/PNG
+- 💾 Abgeleitete Datensätze (ASAXS, 2D-Projektionen) werden inline in der Session gespeichert
+- 🩹 Guinier-Plot mit Fehlerbalken stürzt nicht mehr ab (σ(ln I) = σ/I)
+
+**Vollständige Änderungen:** Siehe [CHANGELOG_v8.1.md](CHANGELOG_v8.1.md)
 
 ---
 
@@ -520,7 +541,9 @@ Strg+O → Dateien auswählen
 
 ### 2. Plot-Typ wählen
 
-ScatterForge Plot bietet 11 spezialisierte Plot-Typen für verschiedene Analysen:
+ScatterForge Plot bietet 13 spezialisierte Darstellungen („Panel-Typen“). Die Auswahl
+„Plot-Typ“ legt den Typ des **Hauptpanels** fest; weitere Panels kommen über die
+**Panel-Liste** hinzu (siehe unten):
 
 | Plot-Typ | X-Achse | Y-Achse | Anwendung |
 |----------|---------|---------|-----------|
@@ -530,11 +553,24 @@ ScatterForge Plot bietet 11 spezialisierte Plot-Typen für verschiedene Analysen
 | **Guinier** | q² [nm⁻²] | ln(I) | Trägheitsradius Rg bestimmen |
 | **Bragg Spacing** | d [nm] | I [a.u.] | Realraum-Darstellung (d = 2π/q) |
 | **2-Theta** | 2θ [°] | I [a.u.] | XRD-Winkeldarstellung |
-| **PDDF** | r [nm] | p(r) | Paardistanzverteilungsfunktion |
+| **P(r)** | r [nm] | p(r) | Paardistanzverteilungsfunktion (bis v8.0: Plot-Typ „PDDF“ mit Subplot) |
 | **Azimuthal Profile** | φ [°] | I [a.u.] | Azimutale Intensitätsprofile aus 2D-Daten |
-| **ASAXS** | q [nm⁻¹] | I [cm⁻¹] | Anomale SAXS-Separation (I_N, I_cross, I_A) |
+| **ASAXS** | q [nm⁻¹] | I [cm⁻¹] | Anomale SAXS-Separation (I_N, I_cross, I_A), symlog-Skala |
+| **I linear** | q [nm⁻¹] | I [cm⁻¹] | Lineare Y-Achse inkl. negativer Werte, z. B. für I_cross |
 | **dlnI/dlnq** | q [nm⁻¹] | d ln(I)/d ln(q) | Versteckte Features/Schultern in Streukurven identifizieren |
-| **Significance** | q [nm⁻¹] | I [a.u.] | Hauptplot wie Log-Log; Subplot zeigt |I(q)/σ(q)| zur Beurteilung des vertrauenswürdigen q-Bereichs |
+| **Ratio** | q [nm⁻¹] | Verhältnis | Abgeleitete Größen, z. B. ASAXS I_A/I_N oder Korrelation |
+| **Significance** | q [nm⁻¹] | \|I(q)\|/σ(q) | Punktweise Signifikanz zur Beurteilung des vertrauenswürdigen q-Bereichs |
+
+**Panels (v8.1):**
+```
+Panel-Liste (linke Seite):
+  Häkchen      → Panel ein-/ausschalten
+  +            → Panel eines Typs hinzufügen (q-Panels unter dem Hauptpanel teilen dessen X-Achse)
+  −            → ausgewähltes Panel entfernen
+  Layout…      → Grid, Position/Span, X-Kopplung, Legende, Panel-Optionen
+  Vorlage…     → Haupt + P(r) | Haupt + Significance | Haupt + I linear | 2 × 2
+Gruppe → Rechtsklick → „Anzeigen in Panel“ (oder Gruppen-Dialog → Panels)
+```
 
 **Plot-Typ wechseln:**
 ```
@@ -547,7 +583,9 @@ Strg+1 bis Strg+7 (Tastaturkürzel)
 ```
 1. Plot-Typ „ASAXS" wählen
 2. Datensätze laden → Term-Typ wird auto-erkannt (_IN, _Icross, _IA)
-3. „± Subplot" Button aktivieren für linearen I_cross-Subplot
+3. Panel „I linear“ hinzufügen (oder Vorlage „Haupt + I linear“) für I_cross inkl. negativer Werte
+4. Analyse → ASAXS-Auswertung… (oder Rechtsklick auf die Gruppe): I_A/I_N, I_cross/I_N,
+   Korrelation berechnen und „In Datentree übernehmen“ → erscheint im Ratio-Panel
 4. Per Rechtsklick → „Kurve bearbeiten" → ASAXS: Term-Typ manuell überschreiben
 ```
 
@@ -559,19 +597,19 @@ Ansicht → 2-Theta-Einstellungen...
 
 **dlnI/dlnq-Spezial-Einstellung (v7.4.0):**
 ```
-1. Plot-Typ „dlnI/dlnq" wählen
-2. Glättungsfenster im Options-Panel einstellen (Savitzky-Golay, Standard: 5)
+1. Plot-Typ „dlnI/dlnq" wählen (oder als weiteres Panel hinzufügen)
+2. Glättungsfenster im Layout-Dialog unter „Optionen des Panel-Typs“ einstellen (Savitzky-Golay, Standard: 5)
    → größer = glatter, kann aber feine Features abschwächen
 ```
 
 **Significance-Spezial-Einstellung (v7.6.0):**
 ```
-1. Plot-Typ „Significance" wählen
-2. Hauptplot zeigt I(q) + Fehlerband wie gewohnt; Subplot zeigt |I(q)/σ(q)|
+1. Vorlage „Haupt + Significance“ wählen (oder Panel „Significance“ hinzufügen)
+2. Hauptpanel zeigt I(q) + Fehlerband wie gewohnt; Significance-Panel zeigt |I(q)/σ(q)|
    → dünn: Rohdaten, dick: gleitender Median (Ausreißer-robust)
-3. Im Options-Panel einstellbar:
+3. Im Layout-Dialog unter „Optionen des Panel-Typs“ einstellbar:
    - Signifikanz-Fenster (Punkte, ungerade, Standard: 9)
-   - σ-Schwellen (kommagetrennt, Standard: „3,2,1") → gestrichelte Linien im Subplot
+   - σ-Schwellen (kommagetrennt, Standard: „3,2,1") → gestrichelte Linien im Panel
 ```
 
 ---
@@ -1198,7 +1236,7 @@ Vollständige Referenz aller Tastaturkürzel.
 | `Strg+4` | Guinier |
 | `Strg+5` | Bragg Spacing |
 | `Strg+6` | 2-Theta |
-| `Strg+7` | PDDF |
+| `Strg+7` | Vorlage Haupt + P(r) (früher PDDF) |
 
 #### Editoren
 

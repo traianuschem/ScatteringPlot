@@ -17,7 +17,7 @@ class AxesSettingsDialog(QDialog):
     """Dialog für Achsen-Einstellungen"""
 
     def __init__(self, parent, current_xlabel=None, current_ylabel=None, plot_type='Log-Log', axis_limits=None,
-                 font_settings=None, subplot_kind=None, sub_axis_limits=None, sub_default_ylabel=''):
+                 font_settings=None, panels=None):
         super().__init__(parent)
         self.setWindowTitle(tr("axes.title"))
         self.resize(650, 900)
@@ -29,17 +29,10 @@ class AxesSettingsDialog(QDialog):
 
         self.plot_type = plot_type
 
-        # v7.7: Subplot-Achse (PDDF P(r) / ASAXS-Cross-Term / Significance)
-        # 'PDDF', 'ASAXS', 'Significance' oder None (aktueller Plot-Typ hat keinen Subplot)
-        self.subplot_kind = subplot_kind
-        if sub_axis_limits is None:
-            sub_axis_limits = {'xlabel': None, 'ylabel': None,
-                                'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
-                                'auto': True, 'yscale': None}
-        # Unveränderte Kopie: wird zurückgegeben, wenn kein Subplot aktiv ist (die
-        # zugehörigen Widgets werden dann gar nicht erst in die UI eingebaut).
-        self._sub_axis_limits_original = dict(sub_axis_limits)
-        self.sub_default_ylabel = sub_default_ylabel
+        # v8.1: Achsen der weiteren Panels (alle außer dem Hauptpanel). Jeder Eintrag:
+        # {'id', 'name', 'type', 'axis' (dict), 'default_xlabel', 'default_ylabel', 'shared_x'}
+        self.panels = [dict(p, axis=dict(p['axis'])) for p in (panels or [])]
+        self._current_panel_index = None
 
         layout = QVBoxLayout(self)
 
@@ -189,102 +182,64 @@ class AxesSettingsDialog(QDialog):
         limits_group.setLayout(limits_layout)
         layout.addWidget(limits_group)
 
-        # Subplot-Achse (v7.7): PDDF P(r)-Plot, ASAXS-Cross-Term oder Significance
-        subplot_group = QGroupBox(tr("axes.subplot.title"))
-        subplot_layout = QGridLayout()
+        # Weitere Panels (v8.1): Achsentitel, Limits und Skalen je Panel
+        panel_group = QGroupBox(tr("axes.panels.title"))
+        panel_layout = QGridLayout()
         row = 0
 
-        # Immer anlegen (auch wenn versteckt), damit get_sub_axis_limits() konsistent bleibt
-        self.sub_ylabel_edit = QLineEdit()
+        self.panel_combo = QComboBox()
+        self.panel_info_label = QLabel()
+        self.panel_info_label.setWordWrap(True)
         self.sub_xlabel_edit = QLineEdit()
+        self.sub_ylabel_edit = QLineEdit()
         self.sub_xmin_edit = QLineEdit()
         self.sub_xmax_edit = QLineEdit()
         self.sub_ymin_edit = QLineEdit()
         self.sub_ymax_edit = QLineEdit()
-        self.sub_auto_checkbox = QCheckBox(tr("axes.subplot.auto_scaling"))
+        self.sub_auto_checkbox = QCheckBox(tr("axes.panels.auto_scaling"))
+        self.sub_xscale_combo = QComboBox()
         self.sub_yscale_combo = QComboBox()
+        for combo in (self.sub_xscale_combo, self.sub_yscale_combo):
+            combo.addItem(tr("axes.panels.scale_auto"), userData=None)
+            combo.addItem(tr("axes.panels.scale_linear"), userData='linear')
+            combo.addItem(tr("axes.panels.scale_log"), userData='log')
+        self.sub_yscale_combo.addItem(tr("axes.panels.scale_symlog"), userData='symlog')
 
-        if self.subplot_kind is None:
-            no_subplot_label = QLabel(tr("axes.subplot.no_subplot"))
-            no_subplot_label.setWordWrap(True)
-            subplot_layout.addWidget(no_subplot_label, row, 0, 1, 2)
-            row += 1
+        if not self.panels:
+            no_panel_label = QLabel(tr("axes.panels.no_panels"))
+            no_panel_label.setWordWrap(True)
+            panel_layout.addWidget(no_panel_label, row, 0, 1, 2)
         else:
-            info_key = 'info_pddf' if self.subplot_kind == 'PDDF' else 'info_shared_x'
-            subplot_info = QLabel(tr(f"axes.subplot.{info_key}"))
-            subplot_info.setWordWrap(True)
-            subplot_layout.addWidget(subplot_info, row, 0, 1, 2)
+            panel_layout.addWidget(QLabel(tr("axes.panels.panel")), row, 0)
+            for p in self.panels:
+                self.panel_combo.addItem(f"{p['name']} ({p['type']})", userData=p['id'])
+            panel_layout.addWidget(self.panel_combo, row, 1)
             row += 1
-
-            # Y-Achsentitel-Override
-            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_title")), row, 0)
-            self.sub_ylabel_edit.setPlaceholderText(
-                tr("axes.subplot.auto_based_on_default", default=self.sub_default_ylabel))
-            if sub_axis_limits.get('ylabel'):
-                self.sub_ylabel_edit.setText(sub_axis_limits['ylabel'])
-            subplot_layout.addWidget(self.sub_ylabel_edit, row, 1)
+            panel_layout.addWidget(self.panel_info_label, row, 0, 1, 2)
             row += 1
-
-            if self.subplot_kind == 'PDDF':
-                # Unabhängige r-Achse: eigener Titel + eigene Limits möglich
-                subplot_layout.addWidget(QLabel(tr("axes.subplot.x_title")), row, 0)
-                self.sub_xlabel_edit.setPlaceholderText(
-                    tr("axes.subplot.auto_based_on_default", default='r / nm'))
-                if sub_axis_limits.get('xlabel'):
-                    self.sub_xlabel_edit.setText(sub_axis_limits['xlabel'])
-                subplot_layout.addWidget(self.sub_xlabel_edit, row, 1)
+            for label_key, widget in (("x_title", self.sub_xlabel_edit), ("y_title", self.sub_ylabel_edit),
+                                      ("x_min", self.sub_xmin_edit), ("x_max", self.sub_xmax_edit),
+                                      ("y_min", self.sub_ymin_edit), ("y_max", self.sub_ymax_edit)):
+                panel_layout.addWidget(QLabel(tr(f"axes.panels.{label_key}")), row, 0)
+                panel_layout.addWidget(widget, row, 1)
                 row += 1
-
-                subplot_layout.addWidget(QLabel(tr("axes.subplot.x_min")), row, 0)
-                if sub_axis_limits.get('xmin') is not None:
-                    self.sub_xmin_edit.setText(str(sub_axis_limits['xmin']))
-                subplot_layout.addWidget(self.sub_xmin_edit, row, 1)
-                row += 1
-
-                subplot_layout.addWidget(QLabel(tr("axes.subplot.x_max")), row, 0)
-                if sub_axis_limits.get('xmax') is not None:
-                    self.sub_xmax_edit.setText(str(sub_axis_limits['xmax']))
-                subplot_layout.addWidget(self.sub_xmax_edit, row, 1)
-                row += 1
-
-            # Y-Limits
-            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_min")), row, 0)
-            if sub_axis_limits.get('ymin') is not None:
-                self.sub_ymin_edit.setText(str(sub_axis_limits['ymin']))
-            subplot_layout.addWidget(self.sub_ymin_edit, row, 1)
+            panel_layout.addWidget(self.sub_auto_checkbox, row, 0, 1, 2)
             row += 1
-
-            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_max")), row, 0)
-            if sub_axis_limits.get('ymax') is not None:
-                self.sub_ymax_edit.setText(str(sub_axis_limits['ymax']))
-            subplot_layout.addWidget(self.sub_ymax_edit, row, 1)
+            panel_layout.addWidget(QLabel(tr("axes.panels.x_scale")), row, 0)
+            panel_layout.addWidget(self.sub_xscale_combo, row, 1)
             row += 1
-
-            self.sub_auto_checkbox.setChecked(sub_axis_limits.get('auto', True))
-            subplot_layout.addWidget(self.sub_auto_checkbox, row, 0, 1, 2)
+            panel_layout.addWidget(QLabel(tr("axes.panels.y_scale")), row, 0)
+            panel_layout.addWidget(self.sub_yscale_combo, row, 1)
             row += 1
-
-            subplot_layout.addWidget(QLabel(tr("axes.subplot.y_scale")), row, 0)
-            self.sub_yscale_combo.addItem(tr("axes.subplot.y_scale_auto"), userData=None)
-            self.sub_yscale_combo.addItem(tr("axes.subplot.y_scale_linear"), userData='linear')
-            self.sub_yscale_combo.addItem(tr("axes.subplot.y_scale_log"), userData='log')
-            sub_yscale_val = sub_axis_limits.get('yscale', None)
-            if sub_yscale_val == 'linear':
-                self.sub_yscale_combo.setCurrentIndex(1)
-            elif sub_yscale_val == 'log':
-                self.sub_yscale_combo.setCurrentIndex(2)
-            else:
-                self.sub_yscale_combo.setCurrentIndex(0)
-            subplot_layout.addWidget(self.sub_yscale_combo, row, 1)
-            row += 1
-
-            reset_sub_limits_btn = QPushButton(tr("axes.subplot.reset"))
+            reset_sub_limits_btn = QPushButton(tr("axes.panels.reset"))
             reset_sub_limits_btn.clicked.connect(self.reset_sub_limits)
-            subplot_layout.addWidget(reset_sub_limits_btn, row, 0, 1, 2)
-            row += 1
+            panel_layout.addWidget(reset_sub_limits_btn, row, 0, 1, 2)
 
-        subplot_group.setLayout(subplot_layout)
-        layout.addWidget(subplot_group)
+            self.panel_combo.currentIndexChanged.connect(self._on_panel_changed)
+            self._on_panel_changed(0)
+
+        panel_group.setLayout(panel_layout)
+        layout.addWidget(panel_group)
 
         # Schriftart-Einstellungen für Achsenbeschriftungen
         labels_font_group = QGroupBox(tr("axes.font_labels.title"))
@@ -388,15 +343,70 @@ class AxesSettingsDialog(QDialog):
         self.symlog_linscale_spin.setValue(1.0)
 
     def reset_sub_limits(self):
-        """Setzt die Subplot-Achseneinstellungen zurück (v7.7)"""
-        self.sub_ylabel_edit.clear()
-        self.sub_xlabel_edit.clear()
-        self.sub_xmin_edit.clear()
-        self.sub_xmax_edit.clear()
-        self.sub_ymin_edit.clear()
-        self.sub_ymax_edit.clear()
+        """Setzt die Achseneinstellungen des gewählten Panels zurück (v8.1)"""
+        for edit in (self.sub_xlabel_edit, self.sub_ylabel_edit, self.sub_xmin_edit,
+                     self.sub_xmax_edit, self.sub_ymin_edit, self.sub_ymax_edit):
+            edit.clear()
         self.sub_auto_checkbox.setChecked(True)
+        self.sub_xscale_combo.setCurrentIndex(0)
         self.sub_yscale_combo.setCurrentIndex(0)
+
+    @staticmethod
+    def _set_combo_data(combo, value):
+        index = combo.findData(value)
+        combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def _store_current_panel(self):
+        """Übernimmt die Eingaben in die Arbeitskopie des aktuell gewählten Panels."""
+        if self._current_panel_index is None:
+            return
+
+        def _to_float(edit):
+            try:
+                return float(edit.text()) if edit.text() else None
+            except ValueError:
+                return None
+
+        axis = self.panels[self._current_panel_index]['axis']
+        axis.update({
+            'xlabel': self.sub_xlabel_edit.text().strip() or None,
+            'ylabel': self.sub_ylabel_edit.text().strip() or None,
+            'xmin': _to_float(self.sub_xmin_edit),
+            'xmax': _to_float(self.sub_xmax_edit),
+            'ymin': _to_float(self.sub_ymin_edit),
+            'ymax': _to_float(self.sub_ymax_edit),
+            'auto': self.sub_auto_checkbox.isChecked(),
+            'xscale': self.sub_xscale_combo.currentData(),
+            'yscale': self.sub_yscale_combo.currentData(),
+        })
+
+    def _on_panel_changed(self, index):
+        """Lädt die Achseneinstellungen des gewählten Panels in die Eingabefelder."""
+        self._store_current_panel()
+        if index < 0 or index >= len(self.panels):
+            return
+        self._current_panel_index = index
+        p = self.panels[index]
+        axis = p['axis']
+        self.sub_xlabel_edit.setPlaceholderText(
+            tr("axes.panels.auto_based_on_default", default=p.get('default_xlabel', '')))
+        self.sub_ylabel_edit.setPlaceholderText(
+            tr("axes.panels.auto_based_on_default", default=p.get('default_ylabel', '')))
+        self.sub_xlabel_edit.setText(axis.get('xlabel') or '')
+        self.sub_ylabel_edit.setText(axis.get('ylabel') or '')
+        for edit, key in ((self.sub_xmin_edit, 'xmin'), (self.sub_xmax_edit, 'xmax'),
+                          (self.sub_ymin_edit, 'ymin'), (self.sub_ymax_edit, 'ymax')):
+            edit.setText('' if axis.get(key) is None else str(axis[key]))
+        self.sub_auto_checkbox.setChecked(axis.get('auto', True))
+        self._set_combo_data(self.sub_xscale_combo, axis.get('xscale'))
+        self._set_combo_data(self.sub_yscale_combo, axis.get('yscale'))
+
+        # Gekoppelte X-Achse: X-Limits/-Skala kommen vom Kopplungsziel
+        shared = p.get('shared_x', False)
+        for widget in (self.sub_xmin_edit, self.sub_xmax_edit, self.sub_xscale_combo):
+            widget.setEnabled(not shared)
+        self.panel_info_label.setText(tr("axes.panels.info_shared_x") if shared
+                                      else tr("axes.panels.info_independent"))
 
     def _update_symlog_controls_visibility(self):
         """Zeigt die Symlog-Feinsteuerung nur, wenn Symlog als Y-Skala gewählt ist"""
@@ -445,32 +455,10 @@ class AxesSettingsDialog(QDialog):
             'symlog_linscale': self.symlog_linscale_spin.value()
         }
 
-    def get_sub_axis_limits(self):
-        """Gibt die Subplot-Achseneinstellungen zurück (v7.7: PDDF/ASAXS/Significance)"""
-        if self.subplot_kind is None:
-            # Kein Subplot beim aktuellen Plot-Typ -> Widgets existieren nicht in der UI,
-            # unveränderte Ausgangswerte zurückgeben
-            return dict(self._sub_axis_limits_original)
-
-        def _to_float(edit):
-            try:
-                return float(edit.text()) if edit.text() else None
-            except ValueError:
-                return None
-
-        xlabel = self.sub_xlabel_edit.text().strip() or None
-        ylabel = self.sub_ylabel_edit.text().strip() or None
-
-        return {
-            'xlabel': xlabel,
-            'ylabel': ylabel,
-            'xmin': _to_float(self.sub_xmin_edit),
-            'xmax': _to_float(self.sub_xmax_edit),
-            'ymin': _to_float(self.sub_ymin_edit),
-            'ymax': _to_float(self.sub_ymax_edit),
-            'auto': self.sub_auto_checkbox.isChecked(),
-            'yscale': self.sub_yscale_combo.currentData(),
-        }
+    def get_panel_axes(self):
+        """Gibt die Achseneinstellungen der weiteren Panels zurück (v8.1): {panel_id: axis}"""
+        self._store_current_panel()
+        return {p['id']: p['axis'] for p in self.panels}
 
     def get_font_settings(self):
         """Gibt die Schriftart-Einstellungen zurück"""

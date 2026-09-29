@@ -10,7 +10,8 @@
     "analysis": {
       "title": "Analysis",
       "gift": "Compute P(r) (IFT/GIFT)...",
-      "verify_sidecar": "Verify provenance sidecar..."
+      "verify_sidecar": "Verify provenance sidecar...",
+      "asaxs": "ASAXS analysis (I_A/I_N, correlation)..."
     },
     "file": {
       "title": "File",
@@ -59,7 +60,9 @@
     "provenance_tooltip": "GIFT result · record_id {record_id}",
     "unassigned": "▼ Unassigned",
     "annotations": "▼ Annotations & Reference Lines",
-    "section_2d": "▼ 2D Datasets"
+    "section_2d": "▼ 2D Datasets",
+    "panels_auto": "automatic",
+    "panels_tooltip": "Panels: {panels}"
   },
 
   "2d": {
@@ -133,7 +136,10 @@
     "reset_color": "Reset Color",
     "set_plot_limits": "Set Plot Limits...",
     "update_filepath": "Update File Path...",
-    "delete": "Delete"
+    "delete": "Delete",
+    "show_in_panels": "🗂 Show in panel",
+    "panels_auto": "Automatic (matching panels)",
+    "asaxs": "ASAXS analysis..."
   },
 
   "dialogs": {
@@ -333,26 +339,6 @@
       "reset": "Reset Limits"
     },
 
-    "subplot": {
-      "title": "Subplot Axis (P(r) / Cross-Term / Significance)",
-      "no_subplot": "The current plot type has no subplot. These settings apply to PDDF, ASAXS (with the ± subplot enabled) and Significance.",
-      "info_pddf": "The P(r) subplot has its own, independent r-axis (not linked to the main plot).",
-      "info_shared_x": "This subplot's X-axis is linked to the main plot (shared q-axis, log scale) and cannot be changed separately here.",
-      "x_title": "X-Axis Title:",
-      "y_title": "Y-Axis Title:",
-      "auto_based_on_default": "Auto: '{default}'",
-      "x_min": "X-Minimum:",
-      "x_max": "X-Maximum:",
-      "y_min": "Y-Minimum:",
-      "y_max": "Y-Maximum:",
-      "auto_scaling": "Automatic Scaling (ignores values above)",
-      "y_scale": "Y-Axis Scale:",
-      "y_scale_auto": "Auto (default)",
-      "y_scale_linear": "Linear",
-      "y_scale_log": "Logarithmic",
-      "reset": "Reset Subplot Settings"
-    },
-
     "font_labels": {
       "title": "Axis Labels Font",
       "family": "Font Family:",
@@ -365,7 +351,29 @@
       "title": "Axis Values (Ticks) Font"
     },
 
-    "reset_default": "Reset to Default"
+    "reset_default": "Reset to Default",
+    "panels": {
+      "title": "Further panels",
+      "no_panels": "There is only the main panel. Add further panels via the panel list in the main window.",
+      "panel": "Panel:",
+      "info_shared_x": "The x axis of this panel is linked to another panel; x limits and x scale come from there.",
+      "info_independent": "This panel has its own, independent x axis.",
+      "x_title": "X axis title:",
+      "y_title": "Y axis title:",
+      "auto_based_on_default": "Auto: '{default}'",
+      "x_min": "X minimum:",
+      "x_max": "X maximum:",
+      "y_min": "Y minimum:",
+      "y_max": "Y maximum:",
+      "auto_scaling": "Automatic scaling (ignores values above)",
+      "x_scale": "X axis scale:",
+      "y_scale": "Y axis scale:",
+      "scale_auto": "Auto (panel type default)",
+      "scale_linear": "Linear",
+      "scale_log": "Logarithmic",
+      "scale_symlog": "Symmetric log (symlog)",
+      "reset": "Reset panel settings"
+    }
   },
 
   "grid": {
@@ -497,13 +505,10 @@
 
     "text_color_dialog": "Choose Text Color",
     "background_color_dialog": "Choose Background Color",
-
-    "subplot": {
-      "title": "Subplot Title",
-      "label": "Title:",
-      "placeholder": "e.g. Significance (optional)",
-      "info": "Additional title above the lower subplot area. Uses the color and font from above (slightly smaller). The main title remains a separate, figure-wide title regardless.",
-      "no_subplot": "The current plot type has no subplot. This title applies to PDDF, ASAXS (with the ± subplot enabled) and Significance."
+    "panels": {
+      "title": "Panel titles",
+      "placeholder": "(optional)",
+      "info": "Individual title per panel; only shown when more than one panel is active. Uses color and font from above (slightly smaller). The main title is then drawn as figure title."
     }
   },
 
@@ -706,25 +711,14 @@
       "snr_errorbars_tooltip": "Subtle error bars on all visible SNR points"
     },
 
-    "subplot": {
-      "title": "Plot Area",
-      "show_in": "Display in:",
-      "both": "Main Plot and Subplot",
-      "main": "Main Plot Only",
-      "sub": "Subplot Only",
-      "pddf_both": "I(q) and P(r)",
-      "pddf_main": "I(q) only",
-      "pddf_sub": "P(r) only",
-      "tooltip": "Controls which axes area this group is rendered in\nwhen a subplot is active (ASAXS ± Subplot, PDDF)."
-    },
-
     "asaxs": {
       "title": "ASAXS",
       "term_type": "Term Type:",
       "none": "(none)",
       "normal": "Normal (I_N)",
       "cross": "Cross-Term (I_cross)",
-      "anomalous": "Anomalous (I_A)"
+      "anomalous": "Anomalous (I_A)",
+      "ratio": "Derived (ratio/correlation)"
     },
 
     "pddf_role": {
@@ -735,6 +729,11 @@
       "fit": "I(q) Fit",
       "pofr": "P(r)",
       "tooltip": "Overrides the automatic filename detection (is_pr_data / \"fit\" in name).\nCorrects misclassified files and determines whether this curve is drawn on the\nI(q) main plot or the P(r) subplot in PDDF plots."
+    },
+    "panels": {
+      "title": "Panels",
+      "auto": "Automatic (all matching panels)",
+      "auto_tooltip": "The group appears in all active panels whose type can display the data\n(e.g. P(r) curves only in the P(r) panel). Uncheck to choose panels yourself."
     }
   },
 
@@ -1005,6 +1004,114 @@
       "change_location_title": "Save User Config As",
       "json_filter": "JSON Files (*.json)"
     }
+  },
+
+  "panels": {
+    "title": "Panels",
+    "main": "main",
+    "disabled": "off",
+    "main_type_tooltip": "Representation of the main panel. Add further panels (P(r), Significance, …) via the panel list below.",
+    "list_tooltip": "Checkbox: enable/disable panel. Double click: edit panel in the layout dialog.",
+    "item_tooltip": "{type} · row {row}, column {col}",
+    "add_tooltip": "Add panel",
+    "remove_tooltip": "Remove selected panel",
+    "layout_button": "Layout…",
+    "layout_tooltip": "Edit grid, panel types, x-axis linking and options",
+    "preset_placeholder": "Preset…",
+    "preset_tooltip": "Apply a panel layout preset (the main panel is kept)",
+    "target_panel": "Panel:",
+    "cannot_remove_main": "The main panel cannot be removed.",
+    "preset": {
+      "single": "Main panel only",
+      "main+P(r)": "Main + P(r) (former PDDF)",
+      "main+Significance": "Main + Significance",
+      "main+I linear": "Main + I linear (ASAXS ±)",
+      "2x2": "2 × 2 grid"
+    }
+  },
+
+  "layout_dialog": {
+    "title": "Panel layout",
+    "add_panel": "+ Panel",
+    "remove_panel": "− Remove panel",
+    "confirm_remove": "Remove panel '{name}'?",
+    "disabled_panels": "Disabled (not drawn): {names}",
+    "grid": {
+      "title": "Grid",
+      "rows": "Rows:",
+      "cols": "Columns:",
+      "row_ratios": "Height ratios:",
+      "col_ratios": "Width ratios:",
+      "ratios_tooltip": "Comma separated ratios, one per row or column (e.g. 3, 1)"
+    },
+    "panel": {
+      "title": "Panel",
+      "select": "Panel:",
+      "name": "Name:",
+      "type": "Type:",
+      "enabled": "Active (drawn)",
+      "row": "Row:",
+      "col": "Column:",
+      "rowspan": "Rows spanned:",
+      "colspan": "Columns spanned:",
+      "share_x": "Share x axis with:",
+      "share_x_tooltip": "Linked x axis (common zoom/limits). Only panels with the same x quantity (e.g. q) are offered.",
+      "share_none": "— (independent)",
+      "legend": "Legend:",
+      "legend_all": "All curves",
+      "legend_own": "Curves of this panel only",
+      "legend_off": "None",
+      "apply_stack": "Apply group stack factors",
+      "apply_stack_tooltip": "Multiplies curves by the stack factor of their group (if stacking is enabled)."
+    },
+    "options": {
+      "title": "Panel type options",
+      "none": "This panel type has no further options.",
+      "normalize_area": "Normalize P(r) to unit area (∫P(r)dr = 1)",
+      "normalize_area_tooltip": "Allows direct shape comparison for different intensities."
+    }
+  },
+
+  "asaxs": {
+    "title": "ASAXS analysis",
+    "samples": {
+      "title": "Samples (detected automatically)",
+      "sample": "Sample",
+      "redetect": "Detect again",
+      "redetect_tooltip": "Search loaded datasets again for ASAXS terms (_IN, _IA, _Icross or term type)"
+    },
+    "calc": {
+      "title": "Calculation",
+      "quantity": "Quantity:",
+      "q_min": "q min:",
+      "q_max": "q max:",
+      "q_auto": "auto",
+      "show_errors": "Show error bands",
+      "log_y": "Log scale (bottom)",
+      "log_y_tooltip": "Only applied if all values are positive"
+    },
+    "quantity": {
+      "ia_in": "I_A / I_N",
+      "icross_in": "I_cross / I_N",
+      "correlation": "Correlation I_cross / 2√(I_N·I_A)"
+    },
+    "no_samples": "No ASAXS datasets found (term type I_N / I_A / I_cross).",
+    "missing_terms": "Missing for this quantity: {terms}",
+    "info": {
+      "points": "Points: {n}",
+      "range": "q range: {qmin} … {qmax} nm⁻¹",
+      "median": "Median: {value}",
+      "interpolated": "{n} numerator points interpolated (different q grids)",
+      "above_one": "⚠ |c| > 1 for {percent} % of the points – check the separation"
+    },
+    "apply_sample": "Add to data tree",
+    "apply_all": "Add all samples",
+    "apply_tooltip": "Creates the results as derived datasets in a new group (shown in the Ratio panel; saved in sessions)",
+    "export_ascii": "Export ASCII...",
+    "export_png": "Export PNG...",
+    "nothing_to_apply": "No results – please assign the required terms.",
+    "applied": "{n} dataset(s) added.",
+    "group_name": "ASAXS {quantity}"
   },
 
   "common": {

@@ -65,7 +65,8 @@ class CurveSettingsDialog(QDialog):
         }
 
     def __init__(self, parent, dataset, current_color_scheme=None,
-                 color_schemes=None, group=None, preset_mode=False, plot_type=None):
+                 color_schemes=None, group=None, preset_mode=False, plot_type=None,
+                 panels=None):
         """
         Args:
             parent: Parent Widget
@@ -75,10 +76,13 @@ class CurveSettingsDialog(QDialog):
             group: Optionales DataGroup-Objekt für den 'Plotbereich'-Abschnitt.
             preset_mode: True = Stil-Vorlagen-Modus (kein Farb-/ASAXS-Abschnitt,
                          Name + Beschreibung editierbar, SNR immer verfügbar).
-            plot_type: Aktueller Plot-Typ (z.B. 'PDDF') für kontextspezifische Labels.
+            plot_type: Plot-Typ des Hauptpanels (für kontextspezifische Labels).
+            panels: Liste von (panel_id, Anzeigename) für die Panel-Zuordnung einer
+                    Gruppe (v8.1).
         """
         super().__init__(parent)
         self.plot_type = plot_type
+        self.panels = panels or []
         self.dataset = dataset
         self.group = group
         self.preset_mode = preset_mode
@@ -442,32 +446,34 @@ class CurveSettingsDialog(QDialog):
         self.snr_viz_check.toggled.connect(self.snr_detail_widget.setVisible)
 
         # ── PLOTBEREICH (nur bei Gruppen-Bearbeitung, nicht im preset_mode) ──
+        # v8.1: Mehrfachauswahl der Panels; 'Automatisch' = alle aktiven Panels,
+        # deren Typ die Datensätze akzeptiert (z. B. P(r) nur im P(r)-Panel).
+        self.panel_auto_check = None
+        self.panel_checks = {}
         if self.group is not None and not preset_mode:
-            subplot_group = QGroupBox(tr("curve_settings.subplot.title"))
-            subplot_layout = QGridLayout()
+            subplot_group = QGroupBox(tr("curve_settings.panels.title"))
+            subplot_layout = QVBoxLayout()
+            current = getattr(self.group, 'panel_ids', None)
 
-            subplot_layout.addWidget(QLabel(tr("curve_settings.subplot.show_in")), 0, 0)
-            self.subplot_target_combo = QComboBox()
-            if plot_type == 'PDDF':
-                self.subplot_target_combo.addItem(tr("curve_settings.subplot.pddf_both"), "both")
-                self.subplot_target_combo.addItem(tr("curve_settings.subplot.pddf_main"), "main")
-                self.subplot_target_combo.addItem(tr("curve_settings.subplot.pddf_sub"),  "sub")
-            else:
-                self.subplot_target_combo.addItem(tr("curve_settings.subplot.both"), "both")
-                self.subplot_target_combo.addItem(tr("curve_settings.subplot.main"), "main")
-                self.subplot_target_combo.addItem(tr("curve_settings.subplot.sub"),  "sub")
-            current_target = getattr(self.group, 'subplot_target', 'both')
-            for i in range(self.subplot_target_combo.count()):
-                if self.subplot_target_combo.itemData(i) == current_target:
-                    self.subplot_target_combo.setCurrentIndex(i)
-                    break
-            self.subplot_target_combo.setToolTip(tr("curve_settings.subplot.tooltip"))
-            subplot_layout.addWidget(self.subplot_target_combo, 0, 1)
+            self.panel_auto_check = QCheckBox(tr("curve_settings.panels.auto"))
+            self.panel_auto_check.setToolTip(tr("curve_settings.panels.auto_tooltip"))
+            self.panel_auto_check.setChecked(current is None)
+            subplot_layout.addWidget(self.panel_auto_check)
+
+            for panel_id, name in self.panels:
+                check = QCheckBox(name)
+                check.setChecked(current is not None and panel_id in current)
+                check.setEnabled(current is not None)
+                subplot_layout.addWidget(check)
+                self.panel_checks[panel_id] = check
+
+            def _on_auto_toggled(auto):
+                for check in self.panel_checks.values():
+                    check.setEnabled(not auto)
+            self.panel_auto_check.toggled.connect(_on_auto_toggled)
 
             subplot_group.setLayout(subplot_layout)
             layout.addWidget(subplot_group)
-        else:
-            self.subplot_target_combo = None
 
         # ── ASAXS (nicht im preset_mode) ──────────────────────────────────
         if not preset_mode:
@@ -480,6 +486,7 @@ class CurveSettingsDialog(QDialog):
             self.asaxs_term_combo.addItem(tr("curve_settings.asaxs.normal"), "normal")
             self.asaxs_term_combo.addItem(tr("curve_settings.asaxs.cross"), "cross")
             self.asaxs_term_combo.addItem(tr("curve_settings.asaxs.anomalous"), "anomalous")
+            self.asaxs_term_combo.addItem(tr("curve_settings.asaxs.ratio"), "ratio")
             current_term = getattr(dataset, 'data_term', '')
             for i in range(self.asaxs_term_combo.count()):
                 if self.asaxs_term_combo.itemData(i) == current_term:
@@ -688,10 +695,10 @@ class CurveSettingsDialog(QDialog):
                 self.asaxs_term_combo.currentData()
                 if self.asaxs_term_combo is not None else ''
             )
-            result['subplot_target'] = (
-                self.subplot_target_combo.currentData()
-                if self.subplot_target_combo is not None else None
-            )
+            if self.panel_auto_check is not None:
+                # v8.1: None = automatisch, sonst Liste der gewählten Panel-IDs
+                chosen = [pid for pid, check in self.panel_checks.items() if check.isChecked()]
+                result['panel_ids'] = None if (self.panel_auto_check.isChecked() or not chosen) else chosen
             result['pddf_role'] = (
                 self.pddf_role_combo.currentData()
                 if self.pddf_role_combo is not None else None

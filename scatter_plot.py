@@ -30,11 +30,6 @@ import sys
 from pathlib import Path
 import json
 import numpy as np
-from scipy.signal import savgol_filter
-
-# numpy 2.0 renamed trapz() to trapezoid() and removed the old name; numpy <1.24
-# only has trapz(). This shim keeps requirements.txt's numpy>=1.20.0 working either way.
-np_trapezoid = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
 # Qt6 imports
 from PySide6.QtWidgets import (
@@ -42,7 +37,7 @@ from PySide6.QtWidgets import (
     QSplitter, QTreeWidget, QTreeWidgetItem, QPushButton, QLabel,
     QCheckBox, QComboBox, QLineEdit, QFileDialog, QMessageBox,
     QInputDialog, QDialog, QDialogButtonBox, QGroupBox, QGridLayout,
-    QMenu, QDoubleSpinBox, QSpinBox
+    QMenu, QDoubleSpinBox, QListWidget, QListWidgetItem
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QColor, QPalette, QShortcut, QKeySequence
@@ -57,7 +52,9 @@ from matplotlib.gridspec import GridSpec
 
 # Eigene Module
 from core.models import DataSet, DataGroup, Dataset2D
-from core.constants import PLOT_TYPES
+from core.panel_types import PANEL_TYPE_ORDER
+from core.plot_layout import (PlotLayout, MAIN_ID, PRESET_NAMES, LEGACY_PLOT_TYPES,
+                              default_axis_settings, migrate_legacy_session)
 from core.version import __version__, get_version_string
 from dialogs.settings_dialog import PlotSettingsDialog
 from dialogs.group_dialog import CreateGroupDialog
@@ -160,8 +157,64 @@ class DataTreeWidget(QTreeWidget):
             self.main_app.sync_data_from_tree()
 
 
+class _Curve:
+    """Eine zu zeichnende Kurve: Datensatz + Gruppe (None = nicht zugeordnet),
+    zugewiesene Farbe und Stack-Faktor."""
+    __slots__ = ('dataset', 'group', 'color', 'stack_factor')
+
+    def __init__(self, dataset, group, color, stack_factor):
+        self.dataset = dataset
+        self.group = group
+        self.color = color
+        self.stack_factor = stack_factor
+
+
 class ScatterPlotApp(QMainWindow):
     """Hauptanwendung (Qt-basiert)"""
+
+    # ------------------------------------------------------------------
+    # v8.1: Plot-Typ, Achsenlimits und Achsentitel gehören dem Hauptpanel.
+    # Die Properties halten die bisherigen Attribute für Dialoge, Designs
+    # und Standard-Einstellungen kompatibel.
+    # ------------------------------------------------------------------
+
+    @property
+    def plot_type(self):
+        return self.plot_layout.main.panel_type
+
+    @plot_type.setter
+    def plot_type(self, value):
+        self.plot_layout.main.set_type(value)
+
+    @property
+    def axis_limits(self):
+        return self.plot_layout.main.axis
+
+    @axis_limits.setter
+    def axis_limits(self, value):
+        axis = self.plot_layout.main.axis
+        new = dict(value or {})
+        labels = {k: axis.get(k) for k in ('xlabel', 'ylabel')}
+        axis.clear()
+        axis.update(default_axis_settings())
+        axis.update(new)
+        axis.update(labels)  # Achsentitel werden über custom_xlabel/custom_ylabel gesetzt
+
+    @property
+    def custom_xlabel(self):
+        return self.plot_layout.main.axis.get('xlabel')
+
+    @custom_xlabel.setter
+    def custom_xlabel(self, value):
+        self.plot_layout.main.axis['xlabel'] = value
+
+    @property
+    def custom_ylabel(self):
+        return self.plot_layout.main.axis.get('ylabel')
+
+    @custom_ylabel.setter
+    def custom_ylabel(self, value):
+        self.plot_layout.main.axis['ylabel'] = value
 
     def __init__(self):
         super().__init__()
@@ -197,14 +250,10 @@ class ScatterPlotApp(QMainWindow):
         self.datasets_2d = []  # 2D SAXS datasets (NeXus/HDF5)
 
         # Plot-Einstellungen
-        self.plot_type = 'Log-Log'
+        # v8.1: Panel-Layout (freies Grid); Hauptpanel trägt Plot-Typ und Achsenlimits
+        self.plot_layout = PlotLayout()
+        self.panel_axes = {}
         self.stack_mode = True
-        self.axis_limits = {'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None, 'auto': True, 'yscale': None,
-                             'symlog_decades': 4, 'symlog_linscale': 1.0}
-        # v7.7: Einstellungen für die untere Subplot-Achse (PDDF/ASAXS-Cross-Term/Significance)
-        self.sub_axis_limits = {'xlabel': None, 'ylabel': None,
-                                 'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
-                                 'auto': True, 'yscale': None}
         self.wavelength = 0.1524  # Standardwellenlänge: Cu K-alpha in nm
 
         # Erweiterte Einstellungen (Version 5.1)
@@ -227,8 +276,7 @@ class ScatterPlotApp(QMainWindow):
             'background_alpha': 0.8,
             'size': 14,
             'bold': True,
-            'italic': False,
-            'subplot_text': ''  # v7.7: optionaler Titel für die untere Subplot-Achse
+            'italic': False
         }
         self.grid_settings = {
             'major_enable': True,
@@ -422,6 +470,12 @@ class ScatterPlotApp(QMainWindow):
         verify_action.triggered.connect(self.verify_gift_sidecar)
         analysis_menu.addAction(verify_action)
 
+        # ASAXS-Auswertung (v8.1): I_A/I_N, I_cross/I_N, Korrelation
+        analysis_menu.addSeparator()
+        asaxs_action = QAction(tr("menu.analysis.asaxs"), self)
+        asaxs_action.triggered.connect(lambda: self.show_asaxs_dialog())
+        analysis_menu.addAction(asaxs_action)
+
         # Design-Menü
         design_menu = menubar.addMenu(tr("menu.design.title"))
 
@@ -493,7 +547,10 @@ class ScatterPlotApp(QMainWindow):
         delete_shortcut.activated.connect(self.delete_selected)
 
     def change_plot_type_shortcut(self, plot_type):
-        """Ändert den Plot-Typ via Shortcut (v7.0)"""
+        """Ändert den Plot-Typ via Shortcut (v7.0; v8.1: 'PDDF' → Vorlage Hauptplot + P(r))"""
+        if plot_type in LEGACY_PLOT_TYPES:
+            self.apply_legacy_plot_type(plot_type)
+            return
         index = self.plot_type_combo.findText(plot_type)
         if index >= 0:
             self.plot_type_combo.setCurrentIndex(index)
@@ -604,7 +661,8 @@ class ScatterPlotApp(QMainWindow):
         # Plot-Typ
         options_layout.addWidget(QLabel(tr("options.plot_type")), 0, 0)
         self.plot_type_combo = QComboBox()
-        self.plot_type_combo.addItems(list(PLOT_TYPES.keys()))
+        self.plot_type_combo.addItems(PANEL_TYPE_ORDER)
+        self.plot_type_combo.setToolTip(tr("panels.main_type_tooltip"))
         self.plot_type_combo.currentTextChanged.connect(self.change_plot_type)
         options_layout.addWidget(self.plot_type_combo, 0, 1)
 
@@ -631,66 +689,11 @@ class ScatterPlotApp(QMainWindow):
         self.wavelength_edit.editingFinished.connect(self.update_wavelength)
         options_layout.addWidget(self.wavelength_edit, 3, 1)
 
-        # ASAXS: Linearer Cross-Term Subplot (nur sichtbar im ASAXS-Modus)
-        self.asaxs_subplot_btn = QPushButton("± Subplot")
-        self.asaxs_subplot_btn.setCheckable(True)
-        self.asaxs_subplot_btn.setVisible(False)
-        self.asaxs_subplot_btn.setToolTip(
-            "Linearen Cross-Term Subplot anzeigen (zeigt I_cross inkl. negativer Werte)"
-        )
-        self.asaxs_subplot_btn.toggled.connect(self.update_plot)
-        options_layout.addWidget(self.asaxs_subplot_btn, 4, 0, 1, 2)
-
-        # PDDF: Flächen-Normierung für P(r)-Subplot (nur sichtbar im PDDF-Modus)
-        self.pddf_norm_btn = QPushButton("P(r) norm.")
-        self.pddf_norm_btn.setCheckable(True)
-        self.pddf_norm_btn.setVisible(False)
-        self.pddf_norm_btn.setToolTip(
-            "P(r)-Kurven auf Fläche 1 normieren (∫P(r)dr = 1)\n"
-            "Ermöglicht direkten Formvergleich bei unterschiedlichen Intensitäten."
-        )
-        self.pddf_norm_btn.toggled.connect(self.update_plot)
-        options_layout.addWidget(self.pddf_norm_btn, 5, 0, 1, 2)
-
-        # dlnI/dlnq: Glättungsfenster für die Ableitung (nur sichtbar im dlnI/dlnq-Modus)
-        self.dlnidlnq_smooth_label = QLabel(tr("options.dlnidlnq_smooth_window"))
-        self.dlnidlnq_smooth_label.setVisible(False)
-        options_layout.addWidget(self.dlnidlnq_smooth_label, 6, 0)
-        self.dlnidlnq_smooth_spin = QSpinBox()
-        self.dlnidlnq_smooth_spin.setRange(3, 51)
-        self.dlnidlnq_smooth_spin.setSingleStep(2)
-        self.dlnidlnq_smooth_spin.setValue(5)
-        self.dlnidlnq_smooth_spin.setToolTip(tr("options.dlnidlnq_smooth_window_tooltip"))
-        self.dlnidlnq_smooth_spin.setVisible(False)
-        self.dlnidlnq_smooth_spin.valueChanged.connect(self._on_dlnidlnq_smooth_changed)
-        options_layout.addWidget(self.dlnidlnq_smooth_spin, 6, 1)
-
-        # Significance: Glättungsfenster für die Median-Kurve (nur sichtbar im Significance-Modus)
-        self.significance_window_label = QLabel(tr("options.significance_window"))
-        self.significance_window_label.setVisible(False)
-        options_layout.addWidget(self.significance_window_label, 7, 0)
-        self.significance_window_spin = QSpinBox()
-        self.significance_window_spin.setRange(3, 51)
-        self.significance_window_spin.setSingleStep(2)
-        self.significance_window_spin.setValue(9)
-        self.significance_window_spin.setToolTip(tr("options.significance_window_tooltip"))
-        self.significance_window_spin.setVisible(False)
-        self.significance_window_spin.valueChanged.connect(self._on_significance_window_changed)
-        options_layout.addWidget(self.significance_window_spin, 7, 1)
-
-        # Significance: σ-Schwellenwerte für die gestrichelten Referenzlinien im Subplot
-        self.significance_thresholds_label = QLabel(tr("options.significance_thresholds"))
-        self.significance_thresholds_label.setVisible(False)
-        options_layout.addWidget(self.significance_thresholds_label, 8, 0)
-        self.significance_thresholds_edit = QLineEdit()
-        self.significance_thresholds_edit.setText("3,2,1")
-        self.significance_thresholds_edit.setToolTip(tr("options.significance_thresholds_tooltip"))
-        self.significance_thresholds_edit.setVisible(False)
-        self.significance_thresholds_edit.editingFinished.connect(self.update_plot)
-        options_layout.addWidget(self.significance_thresholds_edit, 8, 1)
-
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
+
+        # Panels (v8.1): Liste der Plot-Panels im Grid, jedes ein-/ausschaltbar
+        layout.addWidget(self._create_panels_box())
 
         # Update Button
         update_btn = QPushButton(tr("options.update_plot"))
@@ -698,6 +701,217 @@ class ScatterPlotApp(QMainWindow):
         layout.addWidget(update_btn)
 
         return widget
+
+    # ------------------------------------------------------------------
+    # Panels (v8.1)
+    # ------------------------------------------------------------------
+
+    def _create_panels_box(self):
+        """Box mit der Panel-Liste: Checkbox je Panel (an/aus), Hinzufügen,
+        Entfernen, Layout-Dialog und Vorlagen."""
+        box = QGroupBox(tr("panels.title"))
+        box_layout = QVBoxLayout(box)
+
+        self.panel_list = QListWidget()
+        self.panel_list.setMaximumHeight(110)
+        self.panel_list.setToolTip(tr("panels.list_tooltip"))
+        self.panel_list.itemChanged.connect(self._on_panel_item_changed)
+        self.panel_list.itemDoubleClicked.connect(
+            lambda item: self.show_layout_dialog(item.data(Qt.UserRole)))
+        box_layout.addWidget(self.panel_list)
+
+        buttons = QHBoxLayout()
+        add_btn = QPushButton("+")
+        add_btn.setToolTip(tr("panels.add_tooltip"))
+        add_menu = QMenu(add_btn)
+        for panel_type in PANEL_TYPE_ORDER:
+            add_menu.addAction(panel_type, lambda pt=panel_type: self.add_panel(pt))
+        add_btn.setMenu(add_menu)
+        buttons.addWidget(add_btn)
+
+        remove_btn = QPushButton("−")
+        remove_btn.setToolTip(tr("panels.remove_tooltip"))
+        remove_btn.clicked.connect(self.remove_selected_panel)
+        buttons.addWidget(remove_btn)
+
+        layout_btn = QPushButton(tr("panels.layout_button"))
+        layout_btn.setToolTip(tr("panels.layout_tooltip"))
+        layout_btn.clicked.connect(lambda: self.show_layout_dialog(self._selected_panel_id()))
+        buttons.addWidget(layout_btn)
+
+        self.panel_preset_combo = QComboBox()
+        self.panel_preset_combo.addItem(tr("panels.preset_placeholder"), None)
+        for name in PRESET_NAMES:
+            self.panel_preset_combo.addItem(tr(f"panels.preset.{name}"), name)
+        self.panel_preset_combo.setToolTip(tr("panels.preset_tooltip"))
+        self.panel_preset_combo.activated.connect(self._on_panel_preset_chosen)
+        buttons.addWidget(self.panel_preset_combo, 1)
+
+        box_layout.addLayout(buttons)
+        self.refresh_panel_list()
+        return box
+
+    def refresh_panel_list(self):
+        """Synchronisiert die Panel-Liste und die Plot-Typ-Combo mit dem Layout."""
+        if not hasattr(self, 'panel_list'):
+            return
+        self.panel_list.blockSignals(True)
+        self.panel_list.clear()
+        for panel in self.plot_layout.panels:
+            text = panel.name if panel.name == panel.panel_type else f"{panel.name} ({panel.panel_type})"
+            if panel.is_main:
+                text = f"{text} — {tr('panels.main')}"
+            item = QListWidgetItem(text)
+            item.setData(Qt.UserRole, panel.id)
+            if panel.is_main:
+                # Hauptpanel ist immer aktiv: Häkchen sichtbar, aber nicht umschaltbar
+                item.setFlags(item.flags() & ~Qt.ItemIsUserCheckable)
+            else:
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if (panel.enabled or panel.is_main) else Qt.Unchecked)
+            item.setToolTip(tr("panels.item_tooltip", row=panel.row + 1, col=panel.col + 1,
+                               type=panel.panel_type))
+            self.panel_list.addItem(item)
+        self.panel_list.blockSignals(False)
+
+        if hasattr(self, 'plot_type_combo') and self.plot_type_combo.currentText() != self.plot_type:
+            self.plot_type_combo.blockSignals(True)
+            self.plot_type_combo.setCurrentText(self.plot_type)
+            self.plot_type_combo.blockSignals(False)
+
+    def _selected_panel_id(self):
+        item = self.panel_list.currentItem() if hasattr(self, 'panel_list') else None
+        return item.data(Qt.UserRole) if item else None
+
+    def _on_panel_item_changed(self, item):
+        panel = self.plot_layout.get(item.data(Qt.UserRole))
+        if panel is None or panel.is_main:
+            return
+        panel.enabled = item.checkState() == Qt.Checked
+        errors = self.plot_layout.validate()
+        if errors:
+            # z. B. Überlappung mit einem anderen aktiven Panel → Änderung zurücknehmen
+            panel.enabled = not panel.enabled
+            QMessageBox.warning(self, tr("panels.title"), "\n".join(errors))
+            self.refresh_panel_list()
+            return
+        self.logger.info(f"Panel '{panel.name}' {'aktiviert' if panel.enabled else 'deaktiviert'}")
+        self.update_plot()
+
+    def add_panel(self, panel_type):
+        """Hängt ein neues Panel des gewählten Typs an (erste freie Zelle bzw. neue Zeile).
+        q-Raum-Panels unter dem Hauptpanel teilen dessen X-Achse."""
+        layout = self.plot_layout
+        panel = layout.add_panel(panel_type)
+        main = layout.main
+        if (panel.type_info.x_domain == main.type_info.x_domain
+                and panel.col == main.col and panel.row == main.row + main.rowspan):
+            panel.share_x_with = MAIN_ID
+        self.logger.info(f"Panel '{panel.name}' hinzugefügt (Zeile {panel.row + 1}, Spalte {panel.col + 1})")
+        self.refresh_panel_list()
+        self.update_plot()
+        return panel
+
+    def ensure_panel(self, panel_type):
+        """Sorgt dafür, dass ein aktives Panel des Typs existiert (aktiviert ein
+        vorhandenes oder legt eines an). Gibt das Panel zurück."""
+        if self.plot_type == panel_type:
+            return self.plot_layout.main
+        for panel in self.plot_layout.panels:
+            if panel.panel_type == panel_type:
+                if not panel.enabled:
+                    panel.enabled = True
+                    if self.plot_layout.validate():
+                        panel.enabled = False
+                        continue
+                    self.refresh_panel_list()
+                    self.update_plot()
+                return panel
+        return self.add_panel(panel_type)
+
+    def remove_selected_panel(self):
+        panel_id = self._selected_panel_id()
+        if panel_id is None:
+            return
+        if panel_id == MAIN_ID:
+            QMessageBox.information(self, tr("panels.title"), tr("panels.cannot_remove_main"))
+            return
+        panel = self.plot_layout.get(panel_id)
+        self.plot_layout.remove_panel(panel_id)
+        self.plot_layout.compact()
+        # Gruppen-Zuordnungen auf das entfernte Panel lösen
+        for group in self.groups:
+            if group.panel_ids is not None and panel_id in group.panel_ids:
+                group.panel_ids = [pid for pid in group.panel_ids if pid != panel_id] or None
+        for item in self.annotations + self.reference_lines:
+            if item.get('panel_id') == panel_id:
+                item['panel_id'] = MAIN_ID
+        self.logger.info(f"Panel '{panel.name}' entfernt")
+        self.refresh_panel_list()
+        self.rebuild_tree()
+        self.update_plot()
+
+    def _on_panel_preset_chosen(self, index):
+        name = self.panel_preset_combo.itemData(index)
+        self.panel_preset_combo.setCurrentIndex(0)
+        if name:
+            self.apply_layout_preset(name)
+
+    def apply_layout_preset(self, name):
+        """Ersetzt das Layout durch eine Vorlage; Hauptpanel-Typ und -Achsen bleiben."""
+        main = self.plot_layout.main
+        self.plot_layout = PlotLayout.preset(name, main.panel_type, dict(main.axis))
+        self.plot_layout.main.title = main.title
+        self._drop_stale_panel_refs()
+        self.logger.info(f"Panel-Vorlage '{name}' angewendet")
+        self.refresh_panel_list()
+        self.rebuild_tree()
+        self.update_plot()
+
+    def apply_legacy_plot_type(self, name):
+        """Früherer Plot-Typ (z. B. Shortcut oder Skript): 'PDDF', 'Significance',
+        'ASAXS' und 'ASAXS+sub' werden auf Panel-Vorlagen abgebildet."""
+        with_sub = name.endswith('+sub')
+        name = name.replace('+sub', '')
+        if name in LEGACY_PLOT_TYPES:
+            main_type, preset, enabled = LEGACY_PLOT_TYPES[name]
+            self.plot_type = main_type
+            self.apply_layout_preset(preset)
+            sub = self.plot_layout.get('sub')
+            if sub is not None:
+                sub.enabled = enabled or with_sub
+            self.refresh_panel_list()
+            self.update_plot()
+        else:
+            self.plot_type_combo.setCurrentText(name)
+
+    def _drop_stale_panel_refs(self):
+        """Entfernt Verweise auf nicht mehr existierende Panels (Gruppen, Annotationen)."""
+        ids = {p.id for p in self.plot_layout.panels}
+        for group in self.groups:
+            if group.panel_ids is not None:
+                group.panel_ids = [pid for pid in group.panel_ids if pid in ids] or None
+        for item in self.annotations + self.reference_lines:
+            if item.get('panel_id') not in (None, *ids):
+                item['panel_id'] = MAIN_ID
+
+    def show_layout_dialog(self, panel_id=None):
+        """Öffnet den Layout-Dialog (Grid, Panel-Typen, Kopplung, Optionen)."""
+        from dialogs.plot_layout_dialog import PlotLayoutDialog
+        dialog = PlotLayoutDialog(self, self.plot_layout, select_panel_id=panel_id)
+        if dialog.exec():
+            self.plot_layout = dialog.get_layout()
+            self._drop_stale_panel_refs()
+            self.logger.info(f"Panel-Layout aktualisiert: {self.plot_layout.rows}×{self.plot_layout.cols}, "
+                             f"{len(self.plot_layout.enabled_panels())} aktive Panels")
+            self.refresh_panel_list()
+            self.rebuild_tree()
+            self.update_plot()
+
+    def panel_label(self, panel_id):
+        """Anzeigename eines Panels (für Tree-Tooltips und Menüs)."""
+        panel = self.plot_layout.get(panel_id)
+        return panel.name if panel else panel_id
 
     def create_right_panel(self):
         """Erstellt rechtes Panel mit Plot"""
@@ -788,8 +1002,7 @@ class ScatterPlotApp(QMainWindow):
         return ordered_groups, ordered_unassigned
 
     def update_plot(self):
-        """Aktualisiert den Plot"""
-        # Plot-Einstellungen
+        """Aktualisiert den Plot (v8.1: flexibles Panel-Grid, siehe core/plot_layout.py)"""
         self.stack_mode = self.stack_checkbox.isChecked()
         self.logger.debug(f"Plot-Update: Stack={self.stack_mode}, Gruppen={len(self.groups)}, Unassigned={len(self.unassigned_datasets)}")
 
@@ -803,803 +1016,53 @@ class ScatterPlotApp(QMainWindow):
             warnings.filterwarnings('ignore', message='.*non-positive.*')
             self.fig.clear()
 
-        # PDDF und ASAXS nutzen beide ax_sub als einheitliche Subplot-Achse
-        asaxs_subplot_active = (
-            self.plot_type == 'ASAXS'
-            and getattr(self, 'asaxs_subplot_btn', None) is not None
-            and self.asaxs_subplot_btn.isChecked()
-        )
-        # v7.7: Welcher Subplot-Typ ist aktiv? Bestimmt, welche Achsen-/Titel-Optionen
-        # aus self.sub_axis_limits / self.title_settings['subplot_text'] greifen.
-        _subplot_kind = self._get_active_subplot_kind()
-        _sub_default_xlabel = 'r / nm' if _subplot_kind == 'PDDF' else None
-        _sub_default_ylabel = self._get_default_sub_ylabel(_subplot_kind)
-        _sub_ylabel = self.sub_axis_limits.get('ylabel') or _sub_default_ylabel
-
-        if self.plot_type == 'PDDF':
-            gs = GridSpec(2, 1, height_ratios=[1, 1], hspace=0.35, figure=self.fig)
-            self.ax_main = self.fig.add_subplot(gs[0])
-            ax_sub = self.fig.add_subplot(gs[1])  # Kein sharex: r-Achse ≠ q-Achse
-            ax_sub.set_ylabel(_sub_ylabel)
-            ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
-            self.ax_pddf = ax_sub  # Rückwärtskompatibilität
-        elif asaxs_subplot_active:
-            gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
-            self.ax_main = self.fig.add_subplot(gs[0])
-            ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
-            ax_sub.set_ylabel(_sub_ylabel)
-            ax_sub.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
-            self.ax_pddf = ax_sub
-        elif self.plot_type == 'Significance':
-            gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1, figure=self.fig)
-            self.ax_main = self.fig.add_subplot(gs[0])
-            ax_sub = self.fig.add_subplot(gs[1], sharex=self.ax_main)
-            ax_sub.set_ylabel(_sub_ylabel)
-            for level in self._get_significance_thresholds():
-                ax_sub.axhline(level, color='gray', lw=0.8, ls='--', zorder=0)
-                ax_sub.text(0.01, level, f'{level:g}σ', transform=ax_sub.get_yaxis_transform(),
-                            fontsize=8, color='gray', va='bottom', ha='left')
-            self.ax_pddf = None
+        layout = self.plot_layout
+        layout_errors = layout.validate()
+        if layout_errors:
+            # Ungültiges Layout (sollte der Layout-Dialog verhindern): nur Hauptpanel zeichnen
+            self.logger.warning(f"Ungültiges Panel-Layout, zeichne nur Hauptpanel: {layout_errors}")
+            panels = [layout.main]
         else:
-            self.ax_main = self.fig.add_subplot(111)
-            self.ax_pddf = None
-            ax_sub = None
+            panels = layout.enabled_panels()
 
-        # Farben holen (global)
-        color_scheme = self.color_scheme_combo.currentText()
-        colors = self.config.color_schemes.get(color_scheme, self.config.color_schemes['TUBAF'])
-        color_cycle = iter(colors * 10)  # Genug Farben
+        self.panel_axes = self._build_axes(layout, panels)
+        self.ax_main = self.panel_axes[MAIN_ID]
 
-        # Plotten
-        plot_info = PLOT_TYPES[self.plot_type]
+        # Kurven sammeln (Farbe einmal pro Datensatz) und auf Panels verteilen
+        curves = self._collect_curves(ordered_groups, ordered_unassigned)
+        routed = {panel.id: [] for panel in panels}
+        for curve in curves:
+            for panel in self._route_curve(curve, panels):
+                routed[panel.id].append(curve)
 
-        # Y-Skala: Plot-Typ-Standard, aber überschreibbar via Achsen-Dialog.
-        # Wird schon vor dem Daten-Loop benötigt, da bei symlog (im Gegensatz zu log)
-        # auch negative ASAXS-Cross-Term-Werte im Hauptplot gezeigt werden dürfen.
-        effective_yscale = self.axis_limits.get('yscale') or plot_info.get('yscale', 'log')
-        main_symlog_abs_vals = []  # sammelt |y| für die linthresh-Bestimmung bei symlog
+        for panel in panels:
+            self._render_panel(panel, self.panel_axes[panel.id], routed[panel.id])
+        self._hide_shared_x_labels(panels)
 
-        # v7.0: Verwende Tree-Order statt self.groups
-        # Gruppen plotten in Tree-Reihenfolge
-        for group, datasets_in_order in ordered_groups:
-            if not group.visible:
+        # Legenden (v8.1: pro Panel 'all' | 'own' | 'off')
+        for panel in panels:
+            if panel.legend == 'off':
                 continue
-
-            # Stack-Faktor direkt von der Gruppe verwenden (NICHT kumulativ!)
-            stack_factor = group.stack_factor if self.stack_mode else 1.0
-
-            # Gruppen-Label für Legende (v7.0: Verwendet display_label, das bereits den Faktor enthält)
-            group_label = group.display_label if hasattr(group, 'display_label') and group.display_label else group.name
-
-            # Dummy-Plot für Gruppen-Header in Legende
-            # v7.0: Verwende datasets_in_order (Tree-Order)
-            # Nur wenn Gruppe im Hauptplot gerendert wird (nicht 'sub'-only)
-            _grp_target = getattr(group, 'subplot_target', 'both')
-            has_visible_datasets = any(ds.show_in_legend for ds in datasets_in_order)
-            if has_visible_datasets and _grp_target != 'sub':
-                self.ax_main.plot([], [], color='none', linestyle='', label=group_label)
-                self.logger.debug(f"  Gruppe '{group.name}': {len(datasets_in_order)} Datasets (Tree-Order), Stack=×{stack_factor:.1f}")
-
-            # Gruppenspezifische Farbpalette (v5.4)
-            if group.color_scheme:
-                group_colors = self.config.color_schemes.get(group.color_scheme, colors)
-                group_color_cycle = iter(group_colors * 10)
-                self.logger.debug(f"  Farbpalette: Gruppe '{group.name}' → {group.color_scheme}")
-            else:
-                group_color_cycle = color_cycle
-
-            # v7.0: Plot je Datensatz in Tree-Reihenfolge
-            for dataset in datasets_in_order:
-                # Checkbox steuert Sichtbarkeit komplett
-                if not dataset.show_in_legend:
-                    continue
-
-                # Überspringe Datasets ohne geladene Daten (z.B. fehlende Dateien)
-                if not dataset.data_loaded:
-                    self.logger.warning(f"  Dataset '{dataset.name}' übersprungen (Daten nicht geladen)")
-                    continue
-
-                # Farbe
-                if dataset.color:
-                    color = dataset.color
-                else:
-                    color = next(group_color_cycle)
-                    dataset.color = color
-
-                # Daten mit individuellen Grenzen filtern (v5.7)
-                x_data = dataset.x.copy()
-                y_data = dataset.y.copy()
-                y_err_data = dataset.y_err.copy() if dataset.y_err is not None else None
-
-                # Maske für Grenzen erstellen
-                mask = np.ones(len(x_data), dtype=bool)
-
-                if dataset.x_min is not None:
-                    mask &= (x_data >= dataset.x_min)
-                if dataset.x_max is not None:
-                    mask &= (x_data <= dataset.x_max)
-                if dataset.y_min is not None:
-                    mask &= (y_data >= dataset.y_min)
-                if dataset.y_max is not None:
-                    mask &= (y_data <= dataset.y_max)
-
-                # Daten filtern
-                x_data = x_data[mask]
-                y_data = y_data[mask]
-                if y_err_data is not None:
-                    y_err_data = y_err_data[mask]
-
-                # Daten transformieren
-                x, y = self.transform_data(x_data, y_data, self.plot_type)
-
-                # Stack-Multiplikation mit eigenem Gruppen-Faktor
-                y = y * stack_factor
-
-                # Fehler vorberechnen (wird für SNR und Cross-Term-Subplot benötigt)
-                # dlnI/dlnq: Fehlerfortpflanzung durch Glättung + Ableitung ist nicht
-                # trivial abzuleiten, daher werden hier keine Fehlerbalken angezeigt.
-                y_err_trans = None
-                if y_err_data is not None and self.plot_type != 'dlnI/dlnq':
-                    y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-                    y_err_trans = y_err_trans * stack_factor
-
-                # Subplot-Routing basierend auf group.subplot_target
-                _subplot_target = getattr(group, 'subplot_target', 'both')
-                if self.plot_type == 'PDDF' and ax_sub is not None:
-                    # PDDF-Gruppen können gemischt sein (I(q)-Daten + Fit + P(r)).
-                    # Explizite 'main'/'sub'-Wahl erzwingt weiterhin die gesamte Gruppe
-                    # auf eine Achse; 'both' (Default, auch bei gemischten Gruppen)
-                    # routet jeden Datensatz einzeln anhand is_pofr() (Auto-Erkennung
-                    # oder manuelle Rollen-Übersteuerung, siehe DataSet.set_pddf_role).
-                    if _subplot_target == 'main':
-                        render_in_main, render_in_sub = True, False
-                    elif _subplot_target == 'sub':
-                        render_in_main, render_in_sub = False, True
-                    else:
-                        is_pr = dataset.is_pofr()
-                        render_in_main, render_in_sub = not is_pr, is_pr
-                else:
-                    render_in_main = _subplot_target in ('main', 'both') or ax_sub is None
-                    render_in_sub = _subplot_target in ('sub', 'both') and ax_sub is not None
-
-                # Significance: Signifikanzkurve |I/σ| zusätzlich zum normalen
-                # Hauptplot-Rendering in den Subplot zeichnen (kein Ersatz dafür).
-                is_significance = self.plot_type == 'Significance'
-                if is_significance and ax_sub is not None and render_in_sub:
-                    self._render_significance_subplot(ax_sub, x, y, y_err_trans, dataset, color)
-
-                # ASAXS Cross-Term: in Subplot rendern (alle Werte inkl. negativ).
-                # Im Haupt-Plot: bei symlog-Skala auch negative Werte zeigen,
-                # bei log-Skala nur positive Werte (log kann keine Negativwerte darstellen).
-                if getattr(dataset, 'data_term', '') == 'cross':
-                    if render_in_sub:
-                        self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
-                    if not render_in_main:
-                        continue
-                    if effective_yscale != 'symlog':
-                        pos_mask = y > 0
-                        if not np.any(pos_mask):
-                            continue
-                        x = x[pos_mask]
-                        y = y[pos_mask]
-                        if y_err_trans is not None:
-                            y_err_trans = y_err_trans[pos_mask]
-
-                # PDDF P(r)-Flächen-Normierung für Subplot (originale Werte bleiben für Hauptplot erhalten)
-                y_sub = y
-                y_err_sub = y_err_trans
-                if (render_in_sub and self.plot_type == 'PDDF'
-                        and getattr(self, 'pddf_norm_btn', None) is not None
-                        and self.pddf_norm_btn.isChecked()):
-                    area = np_trapezoid(y, x)
-                    if area > 0:
-                        y_sub = y / area
-                        y_err_sub = y_err_trans / area if y_err_trans is not None else None
-
-                # Ziel-Achsen für normales Rendering bestimmen
-                plot_style = dataset.get_plot_style()
-                errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
-                is_cross = getattr(dataset, 'data_term', '') == 'cross'
-
-                target_axes = []
-                if render_in_main:
-                    target_axes.append(self.ax_main)
-                if render_in_sub and not is_cross and not is_significance:
-                    target_axes.append(ax_sub)
-
-                if not target_axes:
-                    continue
-
-                for i, target_ax in enumerate(target_axes):
-                    # PDDF: normierte Werte für P(r)-Subplot, Original für Hauptplot
-                    _y = y_sub if target_ax is ax_sub else y
-                    _ye = y_err_sub if target_ax is ax_sub else y_err_trans
-
-                    # Werte für die linthresh-Bestimmung der symlog-Skala sammeln
-                    if effective_yscale == 'symlog' and target_ax is self.ax_main:
-                        _nz = _y[_y != 0]
-                        if _nz.size:
-                            main_symlog_abs_vals.append(np.abs(_nz))
-
-                    # Legende nur auf erster Achse, um doppelte Einträge zu vermeiden
-                    ds_label = dataset.display_label if i == 0 else ''
-
-                    # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
-                    if getattr(dataset, 'snr_visualization', False) and _ye is not None and len(x) > 0:
-                        self._render_snr_markers(target_ax, x, _y, _ye, dataset, color, plot_info, label=ds_label)
-                    # Spezialfall: stem plot für XRD-Referenz
-                    elif errorbar_style == 'stem':
-                        markerline, stemlines, baseline = target_ax.stem(
-                            x, _y,
-                            linefmt=color,
-                            markerfmt=dataset.marker_style if dataset.marker_style else 'o',
-                            basefmt=' '
-                        )
-                        markerline.set_markerfacecolor(color)
-                        markerline.set_markeredgecolor(color)
-                        markerline.set_markersize(dataset.marker_size)
-                        stemlines.set_linewidth(dataset.line_width)
-                        stemlines.set_alpha(dataset.errorbar_alpha)
-                        target_ax.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
-                                       markersize=dataset.marker_size, linestyle='',
-                                       label=ds_label)
-                    # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-                    elif _ye is not None and dataset.show_errorbars:
-                        if errorbar_style == 'fill':
-                            target_ax.fill_between(
-                                x, _y - _ye, _y + _ye,
-                                alpha=dataset.errorbar_alpha,
-                                color=color
-                            )
-                            target_ax.plot(x, _y, plot_style, color=color, label=ds_label,
-                                           linewidth=dataset.line_width, markersize=dataset.marker_size)
-                        else:  # 'bars'
-                            target_ax.errorbar(
-                                x, _y, yerr=_ye,
-                                fmt=plot_style,
-                                color=color,
-                                label=ds_label,
-                                linewidth=dataset.line_width,
-                                markersize=dataset.marker_size,
-                                capsize=dataset.errorbar_capsize,
-                                elinewidth=dataset.errorbar_linewidth,
-                                alpha=dataset.errorbar_alpha,
-                                ecolor=color,
-                                capthick=dataset.errorbar_linewidth
-                            )
-                    else:
-                        target_ax.plot(x, _y, plot_style, color=color, label=ds_label,
-                                       linewidth=dataset.line_width, markersize=dataset.marker_size)
-
-        # v7.0: Auch nicht zugeordnete Datensätze plotten in Tree-Order (ohne Stack-Faktor)
-        unassigned_count = sum(1 for ds in ordered_unassigned if ds.show_in_legend)
-        if unassigned_count > 0:
-            self.logger.debug(f"  Unassigned: {unassigned_count} Datasets (Tree-Order, ohne Stacking)")
-
-        for dataset in ordered_unassigned:
-            # Checkbox steuert Sichtbarkeit komplett
-            if not dataset.show_in_legend:
-                continue
-
-            # Überspringe Datasets ohne geladene Daten (z.B. fehlende Dateien)
-            if not dataset.data_loaded:
-                self.logger.warning(f"  Dataset '{dataset.name}' übersprungen (Daten nicht geladen)")
-                continue
-
-            # Farbe
-            if dataset.color:
-                color = dataset.color
-            else:
-                color = next(color_cycle)
-                dataset.color = color
-
-            # Daten mit individuellen Grenzen filtern (v5.7)
-            x_data = dataset.x.copy()
-            y_data = dataset.y.copy()
-            y_err_data = dataset.y_err.copy() if dataset.y_err is not None else None
-
-            # Maske für Grenzen erstellen
-            mask = np.ones(len(x_data), dtype=bool)
-
-            if dataset.x_min is not None:
-                mask &= (x_data >= dataset.x_min)
-            if dataset.x_max is not None:
-                mask &= (x_data <= dataset.x_max)
-            if dataset.y_min is not None:
-                mask &= (y_data >= dataset.y_min)
-            if dataset.y_max is not None:
-                mask &= (y_data <= dataset.y_max)
-
-            # Daten filtern
-            x_data = x_data[mask]
-            y_data = y_data[mask]
-            if y_err_data is not None:
-                y_err_data = y_err_data[mask]
-
-            # Daten transformieren
-            x, y = self.transform_data(x_data, y_data, self.plot_type)
-
-            # Fehler vorberechnen
-            # dlnI/dlnq: Fehlerfortpflanzung durch Glättung + Ableitung ist nicht
-            # trivial abzuleiten, daher werden hier keine Fehlerbalken angezeigt.
-            y_err_trans = None
-            if y_err_data is not None and self.plot_type != 'dlnI/dlnq':
-                y_err_trans = self.transform_data(x_data, y_err_data, self.plot_type)[1]
-
-            # Significance: Signifikanzkurve |I/σ| zusätzlich im Subplot zeichnen
-            if ax_sub is not None and self.plot_type == 'Significance':
-                self._render_significance_subplot(ax_sub, x, y, y_err_trans, dataset, color)
-
-            # ASAXS Cross-Term: in Subplot rendern; im Haupt-Plot bei log-Skala nur
-            # positive Werte zeigen (symlog erlaubt auch negative Werte, s.o.)
-            if ax_sub is not None and getattr(dataset, 'data_term', '') == 'cross':
-                self._render_cross_term_subplot(ax_sub, x, y, y_err_trans, dataset, color)
-                if effective_yscale != 'symlog':
-                    pos_mask = y > 0
-                    if not np.any(pos_mask):
-                        continue
-                    x = x[pos_mask]
-                    y = y[pos_mask]
-                    if y_err_trans is not None:
-                        y_err_trans = y_err_trans[pos_mask]
-
-            # Werte für die linthresh-Bestimmung der symlog-Skala sammeln
-            if effective_yscale == 'symlog':
-                nonzero = y[y != 0]
-                if nonzero.size:
-                    main_symlog_abs_vals.append(np.abs(nonzero))
-
-            # Plotten
-            plot_style = dataset.get_plot_style()
-            errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
-
-            # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
-            if getattr(dataset, 'snr_visualization', False) and y_err_trans is not None and len(x) > 0:
-                self._render_snr_markers(self.ax_main, x, y, y_err_trans, dataset, color, plot_info)
-            # Spezialfall: stem plot für XRD-Referenz
-            elif errorbar_style == 'stem':
-                markerline, stemlines, baseline = self.ax_main.stem(
-                    x, y,
-                    linefmt=color,
-                    markerfmt=dataset.marker_style if dataset.marker_style else 'o',
-                    basefmt=' '
-                )
-                markerline.set_markerfacecolor(color)
-                markerline.set_markeredgecolor(color)
-                markerline.set_markersize(dataset.marker_size)
-                stemlines.set_linewidth(dataset.line_width)
-                stemlines.set_alpha(dataset.errorbar_alpha)
-                self.ax_main.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
-                                 markersize=dataset.marker_size, linestyle='',
-                                 label=dataset.display_label)
-            # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
-            elif y_err_trans is not None and dataset.show_errorbars:
-                if errorbar_style == 'fill':
-                    self.ax_main.fill_between(
-                        x, y - y_err_trans, y + y_err_trans,
-                        alpha=dataset.errorbar_alpha,
-                        color=color
-                    )
-                    self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
-                                     linewidth=dataset.line_width, markersize=dataset.marker_size)
-                else:  # 'bars'
-                    self.ax_main.errorbar(
-                        x, y, yerr=y_err_trans,
-                        fmt=plot_style,
-                        color=color,
-                        label=dataset.display_label,
-                        linewidth=dataset.line_width,
-                        markersize=dataset.marker_size,
-                        capsize=dataset.errorbar_capsize,
-                        elinewidth=dataset.errorbar_linewidth,
-                        alpha=dataset.errorbar_alpha,
-                        ecolor=color,
-                        capthick=dataset.errorbar_linewidth
-                    )
-            else:
-                self.ax_main.plot(x, y, plot_style, color=color, label=dataset.display_label,
-                                 linewidth=dataset.line_width, markersize=dataset.marker_size)
-
-        # Achsen (mit Math Text Support in v5.2, Custom Labels in v5.7, Unit Format in v5.7, v7.0: MathText)
-        if self.custom_xlabel:
-            # v7.0: MathText-Formatierung auch für custom labels
-            xlabel = preprocess_mathtext(self.custom_xlabel)
-        else:
-            xlabel = self.format_axis_label(plot_info['xlabel'])
-            xlabel = self.convert_to_mathtext(xlabel)
-
-        if self.custom_ylabel:
-            # v7.0: MathText-Formatierung auch für custom labels
-            ylabel = preprocess_mathtext(self.custom_ylabel)
-        else:
-            ylabel = self.format_axis_label(plot_info['ylabel'])
-            ylabel = self.convert_to_mathtext(ylabel)
-
-        # Achsenbeschriftungen mit erweiterten Font-Optionen (v5.3)
-        label_weight = 'bold' if self.font_settings.get('labels_bold', False) else 'normal'
-        label_style = 'italic' if self.font_settings.get('labels_italic', False) else 'normal'
-
-        # Unterstrichen wird via LaTeX unterstützt (falls aktiviert)
-        if self.font_settings.get('labels_underline', False):
-            xlabel = r'$\underline{' + xlabel.replace('$', '') + r'}$'
-            ylabel = r'$\underline{' + ylabel.replace('$', '') + r'}$'
-
-        self.ax_main.set_xlabel(xlabel, fontsize=self.font_settings.get('labels_size', 12),
-                               weight=label_weight, style=label_style,
-                               fontfamily=self.font_settings.get('labels_font_family',
-                                                                 self.font_settings.get('font_family', 'sans-serif')))
-        self.ax_main.set_ylabel(ylabel, fontsize=self.font_settings.get('labels_size', 12),
-                               weight=label_weight, style=label_style,
-                               fontfamily=self.font_settings.get('labels_font_family',
-                                                                 self.font_settings.get('font_family', 'sans-serif')))
-        self.ax_main.set_xscale(plot_info['xscale'])
-
-        # Y-Skala anwenden (effective_yscale wurde bereits vor dem Daten-Loop bestimmt)
-        if effective_yscale == 'symlog':
-            linthresh = self._compute_symlog_linthresh(
-                main_symlog_abs_vals,
-                decades=self.axis_limits.get('symlog_decades', 4)
-            )
-            linscale = self.axis_limits.get('symlog_linscale') or 1.0
-            self.ax_main.set_yscale('symlog', linthresh=linthresh, linscale=linscale)
-        else:
-            self.ax_main.set_yscale(effective_yscale)
-
-        # X-Limits: Plot-Typ-spezifische Defaults (z. B. Azimutalprofil → −180 … 180)
-        if self.axis_limits.get('auto', True) and 'xlim' in plot_info:
-            self.ax_main.set_xlim(*plot_info['xlim'])
-
-        # Tick-Einstellungen (v5.7: Erweitert um Länge, Breite, Richtung)
-        tick_weight = 'bold' if self.font_settings.get('ticks_bold', False) else 'normal'
-        tick_style = 'italic' if self.font_settings.get('ticks_italic', False) else 'normal'
-
-        # Tick-Parameter aus grid_settings
-        tick_labelsize = self.grid_settings.get('tick_labelsize', self.font_settings.get('ticks_size', 10))
-
-        # Major Ticks
-        self.ax_main.tick_params(
-            axis='both',
-            which='major',
-            direction=self.grid_settings.get('major_tick_direction', 'in'),
-            length=self.grid_settings.get('major_tick_length', 6.0),
-            width=self.grid_settings.get('major_tick_width', 1.0),
-            labelsize=tick_labelsize
-        )
-
-        # Minor Ticks
-        if self.grid_settings.get('minor_ticks_enable', True):
-            self.ax_main.tick_params(
-                axis='both',
-                which='minor',
-                direction=self.grid_settings.get('minor_tick_direction', 'in'),
-                length=self.grid_settings.get('minor_tick_length', 3.0),
-                width=self.grid_settings.get('minor_tick_width', 0.5)
-            )
-
-        # Font-Eigenschaften für Tick-Labels anwenden
-        for label in self.ax_main.get_xticklabels() + self.ax_main.get_yticklabels():
-            label.set_fontweight(tick_weight)
-            label.set_fontstyle(tick_style)
-            label.set_fontfamily(self.font_settings.get('ticks_font_family',
-                                                        self.font_settings.get('font_family', 'sans-serif')))
-
-        # Tick-Label-Rotation (v5.7)
-        x_rotation = self.grid_settings.get('x_tick_rotation', 0)
-        y_rotation = self.grid_settings.get('y_tick_rotation', 0)
-        if x_rotation != 0:
-            self.ax_main.tick_params(axis='x', rotation=x_rotation)
-        if y_rotation != 0:
-            self.ax_main.tick_params(axis='y', rotation=y_rotation)
-
-        # Grid-Einstellungen (erweitert in v5.1)
-        if self.grid_settings['major_enable']:
-            self.ax_main.grid(True, which='major',
-                            axis=self.grid_settings['major_axis'],
-                            linestyle=self.grid_settings['major_linestyle'],
-                            linewidth=self.grid_settings['major_linewidth'],
-                            color=self.grid_settings['major_color'],
-                            alpha=self.grid_settings['major_alpha'])
-
-        if self.grid_settings['minor_enable']:
-            self.ax_main.minorticks_on()
-            self.ax_main.grid(True, which='minor',
-                            axis=self.grid_settings['minor_axis'],
-                            linestyle=self.grid_settings['minor_linestyle'],
-                            linewidth=self.grid_settings['minor_linewidth'],
-                            color=self.grid_settings['minor_color'],
-                            alpha=self.grid_settings['minor_alpha'])
-
-        # Subplot-Achsenbeschriftung und Grid
-        if ax_sub is not None:
-            font_kwargs = dict(
-                fontsize=self.font_settings.get('labels_size', 12),
-                weight=label_weight, style=label_style,
-                fontfamily=self.font_settings.get('labels_font_family',
-                                                  self.font_settings.get('font_family', 'sans-serif')),
-            )
-            if self.plot_type == 'PDDF':
-                # P(r)-Subplot: unabhängige r-Achse, lin-lin (v7.7: Titel per Dialog überschreibbar)
-                ax_sub.set_xlabel(self.sub_axis_limits.get('xlabel') or _sub_default_xlabel, **font_kwargs)
-            else:
-                # ASAXS/Significance: geteilte q-Achse, log-Skala (Titel folgt dem Hauptplot)
-                ax_sub.set_xlabel(xlabel, **font_kwargs)
-                ax_sub.set_xscale('log')
-            # v7.7: Y-Achsentitel des Subplots erneut mit Schriftart-Einstellungen setzen
-            ax_sub.set_ylabel(_sub_ylabel, **font_kwargs)
-            if self.grid_settings['major_enable']:
-                ax_sub.grid(True, which='major',
-                            linestyle=self.grid_settings['major_linestyle'],
-                            linewidth=self.grid_settings['major_linewidth'],
-                            color=self.grid_settings['major_color'],
-                            alpha=self.grid_settings['major_alpha'])
-
-            # v7.7: Subplot-Achsenlimits und Y-Skala (aus AxesSettingsDialog, Subplot-Bereich)
-            if not self.sub_axis_limits.get('auto', True):
-                if self.plot_type == 'PDDF':
-                    # Nur beim P(r)-Subplot ist die X-Achse unabhängig vom Hauptplot
-                    if self.sub_axis_limits.get('xmin') is not None:
-                        ax_sub.set_xlim(left=self.sub_axis_limits['xmin'])
-                    if self.sub_axis_limits.get('xmax') is not None:
-                        ax_sub.set_xlim(right=self.sub_axis_limits['xmax'])
-                if self.sub_axis_limits.get('ymin') is not None:
-                    ax_sub.set_ylim(bottom=self.sub_axis_limits['ymin'])
-                if self.sub_axis_limits.get('ymax') is not None:
-                    ax_sub.set_ylim(top=self.sub_axis_limits['ymax'])
-            if self.sub_axis_limits.get('yscale'):
-                ax_sub.set_yscale(self.sub_axis_limits['yscale'])
-
-        # Achsenlimits
-        if not self.axis_limits['auto']:
-            if self.axis_limits['xmin'] is not None:
-                self.ax_main.set_xlim(left=self.axis_limits['xmin'])
-            if self.axis_limits['xmax'] is not None:
-                self.ax_main.set_xlim(right=self.axis_limits['xmax'])
-            if self.axis_limits['ymin'] is not None:
-                self.ax_main.set_ylim(bottom=self.axis_limits['ymin'])
-            if self.axis_limits['ymax'] is not None:
-                self.ax_main.set_ylim(top=self.axis_limits['ymax'])
-
-        # Legende (erweitert in v5.1, v5.3: Font-Optionen, v5.7: Individuelle Formatierung, v7.0: Tree-Order)
-        if any(group.visible and datasets_in_order for group, datasets_in_order in ordered_groups) or ordered_unassigned:
-            from matplotlib.lines import Line2D
-
-            # Map für Formatierungen erstellen (Label -> (bold, italic))
-            format_map = {}
-
-            # Gruppen-Labels hinzufügen (wenn show_in_legend=True)
-            new_handles = []
-            new_labels = []
-
-            # v7.0: Verwende Tree-Order
-            for group, datasets_in_order in ordered_groups:
-                if group.visible and datasets_in_order:
-                    # Gruppe als Label hinzufügen, falls gewünscht
-                    if getattr(group, 'show_in_legend', True):
-                        # Dummy-Handle für Gruppen-Label (unsichtbare Linie)
-                        dummy_handle = Line2D([0], [0], color='none', marker='', linestyle='')
-                        new_handles.append(dummy_handle)
-                        group_label = getattr(group, 'display_label', group.name)
-                        # v7.0: MathText-Formatierung anwenden
-                        is_bold = getattr(group, 'legend_bold', False)
-                        is_italic = getattr(group, 'legend_italic', False)
-                        formatted_label = format_legend_text(group_label, is_bold, is_italic)
-                        new_labels.append(formatted_label)
-                        # Speichere Original-Label für Mapping
-                        format_map[formatted_label] = (group_label, is_bold, is_italic)
-
-                    # v7.0: Datasets der Gruppe in Tree-Reihenfolge
-                    for dataset in datasets_in_order:
-                        if dataset.show_in_legend and dataset.data_loaded:
-                            # Handle explizit mit korrekter Farbe und Stil erstellen
-                            plot_style = dataset.get_plot_style()
-                            marker = dataset.marker_style if dataset.marker_style else 'o'
-                            linestyle = dataset.line_style if dataset.line_style else ''
-
-                            # Wenn kein expliziter Stil, dann aus plot_style ableiten
-                            if not dataset.marker_style and not dataset.line_style:
-                                if dataset.is_fit_curve():
-                                    linestyle = '-'
-                                    marker = ''
-                                else:
-                                    marker = 'o'
-                                    linestyle = ''
-
-                            handle = Line2D([0], [0],
-                                          color=dataset.color,
-                                          marker=marker,
-                                          linestyle=linestyle,
-                                          linewidth=dataset.line_width,
-                                          markersize=dataset.marker_size)
-                            new_handles.append(handle)
-                            # v7.0: MathText-Formatierung anwenden
-                            is_bold = getattr(dataset, 'legend_bold', False)
-                            is_italic = getattr(dataset, 'legend_italic', False)
-                            formatted_label = format_legend_text(dataset.display_label, is_bold, is_italic)
-                            new_labels.append(formatted_label)
-                            # Speichere Original-Label für Mapping
-                            format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
-
-            # v7.0: Unassigned Datasets in Tree-Order
-            for dataset in ordered_unassigned:
-                if dataset.show_in_legend and dataset.data_loaded:
-                    # Handle explizit mit korrekter Farbe und Stil erstellen
-                    plot_style = dataset.get_plot_style()
-                    marker = dataset.marker_style if dataset.marker_style else 'o'
-                    linestyle = dataset.line_style if dataset.line_style else ''
-
-                    # Wenn kein expliziter Stil, dann aus plot_style ableiten
-                    if not dataset.marker_style and not dataset.line_style:
-                        if dataset.is_fit_curve():
-                            linestyle = '-'
-                            marker = ''
-                        else:
-                            marker = 'o'
-                            linestyle = ''
-
-                    handle = Line2D([0], [0],
-                                  color=dataset.color,
-                                  marker=marker,
-                                  linestyle=linestyle,
-                                  linewidth=dataset.line_width,
-                                  markersize=dataset.marker_size)
-                    new_handles.append(handle)
-                    # v7.0: MathText-Formatierung anwenden
-                    is_bold = getattr(dataset, 'legend_bold', False)
-                    is_italic = getattr(dataset, 'legend_italic', False)
-                    formatted_label = format_legend_text(dataset.display_label, is_bold, is_italic)
-                    new_labels.append(formatted_label)
-                    # Speichere Original-Label für Mapping
-                    format_map[formatted_label] = (dataset.display_label, is_bold, is_italic)
-
-            # v7.0: Reihenfolge invertieren falls gewünscht (für gestackte Kurven)
-            if self.legend_settings.get('reverse_order', False):
-                new_handles = new_handles[::-1]
-                new_labels = new_labels[::-1]
-                self.logger.debug("  Legende: Reihenfolge invertiert")
-
-            # Legende erstellen
-            legend = self.ax_main.legend(
-                new_handles, new_labels,
-                loc=self.legend_settings['position'],
-                fontsize=self.font_settings.get('legend_size', self.legend_settings.get('fontsize', 10)),
-                ncol=self.legend_settings['ncol'],
-                frameon=self.legend_settings['frameon'],
-                shadow=self.legend_settings['shadow'],
-                fancybox=self.legend_settings['fancybox']
-            )
-            if legend and legend.get_frame():
-                legend.get_frame().set_alpha(self.legend_settings['alpha'])
-
-            # v5.3: Font-Eigenschaften für Legenden-Texte anwenden
-            # v5.7: Individuelle Formatierung pro Eintrag
-            # v7.0: Formatierung erfolgt jetzt über MathText, nur noch Font-Familie setzen
-            if legend:
-                legend_texts = legend.get_texts()
-                for text in legend_texts:
-                    # Font-Familie für alle Einträge setzen
-                    text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
-
-        # Referenzlinien (Version 5.2)
-        for ref_line in self.reference_lines:
-            if ref_line['type'] == 'vertical':
-                self.ax_main.axvline(
-                    x=ref_line['value'],
-                    linestyle=ref_line['linestyle'],
-                    linewidth=ref_line['linewidth'],
-                    color=ref_line['color'],
-                    alpha=ref_line['alpha']
-                )
-                if ref_line['label']:
-                    # Label oben rechts an der Linie
-                    ylim = self.ax_main.get_ylim()
-                    self.ax_main.text(ref_line['value'], ylim[1] * 0.95, ref_line['label'],
-                                     rotation=90, va='top', ha='right',
-                                     fontsize=10, color=ref_line['color'])
-            else:  # horizontal
-                self.ax_main.axhline(
-                    y=ref_line['value'],
-                    linestyle=ref_line['linestyle'],
-                    linewidth=ref_line['linewidth'],
-                    color=ref_line['color'],
-                    alpha=ref_line['alpha']
-                )
-                if ref_line['label']:
-                    # Label rechts an der Linie
-                    xlim = self.ax_main.get_xlim()
-                    self.ax_main.text(xlim[1] * 0.95, ref_line['value'], ref_line['label'],
-                                     ha='right', va='bottom',
-                                     fontsize=10, color=ref_line['color'])
-
-        # Annotations (Version 5.2, erweitert 5.3: draggable, v7.0: MathText)
-        self.annotation_texts = []  # Text-Objekte speichern für draggable
-        for idx, annotation in enumerate(self.annotations):
-            # v7.0: MathText-Formatierung anwenden
-            formatted_text = preprocess_mathtext(annotation['text'])
-
-            text_obj = self.ax_main.text(
-                annotation['x'],
-                annotation['y'],
-                formatted_text,
-                fontsize=annotation['fontsize'],
-                color=annotation['color'],
-                rotation=annotation['rotation'],
-                ha='left',
-                va='bottom',
-                picker=True,
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.1, edgecolor='none')
-            )
-            # Text verschiebbar machen (v5.3)
-            text_obj.set_picker(5)  # Pickable mit Toleranz von 5 Pixeln
-            text_obj._annotation_idx = idx  # Index speichern
-            self.annotation_texts.append(text_obj)
-
-        # Titel rendern (v7.0)
-        # Bei aktivem Subplot (PDDF / ASAXS): fig.suptitle() verwenden, damit
-        # tight_layout den Titel nicht abschneidet. Bei Einzelplot: ax.set_title().
-        _has_subplot = ax_sub is not None
-        _title_active = self.title_settings.get('enabled', False) and self.title_settings.get('text')
-        if _title_active:
-            title_text = self.title_settings['text']
-            title_weight = 'bold' if self.title_settings.get('bold', True) else 'normal'
-            title_style = 'italic' if self.title_settings.get('italic', False) else 'normal'
-            title_color = self.title_settings.get('color', '#000000')
-            title_size = self.title_settings.get('size', 14)
-
-            if _has_subplot:
-                # Figur-weiter Titel über beide Subplots
-                title_obj = self.fig.suptitle(
-                    title_text,
-                    fontsize=title_size,
-                    fontweight=title_weight,
-                    fontstyle=title_style,
-                    color=title_color,
-                    x={'left': 0.05, 'right': 0.95}.get(
-                        self.title_settings.get('position', 'center'), 0.5),
-                    ha=self.title_settings.get('position', 'center'),
-                )
-            else:
-                title_obj = self.ax_main.set_title(
-                    title_text,
-                    fontsize=title_size,
-                    fontweight=title_weight,
-                    fontstyle=title_style,
-                    color=title_color,
-                    loc=self.title_settings.get('position', 'center'),
-                )
-
-            # Hintergrund (falls aktiviert)
-            if self.title_settings.get('background_color'):
-                title_obj.set_bbox(dict(
-                    boxstyle='round,pad=0.5',
-                    facecolor=self.title_settings['background_color'],
-                    alpha=self.title_settings.get('background_alpha', 0.8),
-                    edgecolor='none'
-                ))
-
-        # v7.7: Optionaler Titel für den unteren Subplot-Bereich (PDDF/ASAXS/Significance),
-        # unabhängig vom Haupttitel oben (der bei aktivem Subplot als fig.suptitle() läuft).
-        _subplot_title_text = self.title_settings.get('subplot_text', '')
-        if _has_subplot and _subplot_title_text:
-            ax_sub.set_title(
-                _subplot_title_text,
-                fontsize=max(self.title_settings.get('size', 14) - 2, 6),
-                fontweight='bold' if self.title_settings.get('bold', True) else 'normal',
-                fontstyle='italic' if self.title_settings.get('italic', False) else 'normal',
-                color=self.title_settings.get('color', '#000000'),
-            )
+            only = None
+            if panel.legend == 'own':
+                only = {id(c.dataset) for c in routed[panel.id]}
+            self._render_legend(self.panel_axes[panel.id], ordered_groups, ordered_unassigned, only)
+
+        self._render_reference_lines()
+        self._render_annotations()
+        has_multi = len(panels) > 1
+        title_active = self._render_titles(panels, has_multi)
 
         # tight_layout() mit Fehlerbehandlung für ungültiges MathText (v6.2)
         # und stem plots (die manchmal tight_layout stören).
-        # rect=[0, 0, 1, 0.93] reserviert 7 % oben für suptitle wenn nötig.
-        # Mit Subplot + Titel: Platz für suptitle; mit Subplot ohne Titel: kleiner Top-Rand
-        if _has_subplot and _title_active:
+        # Mit mehreren Panels + Titel: Platz für suptitle; ohne Titel: kleiner Top-Rand
+        if has_multi and title_active:
             _tl_rect = [0, 0, 1, 0.93]
-        elif _has_subplot:
+        elif has_multi:
             _tl_rect = [0, 0, 1, 0.98]
         else:
             _tl_rect = None
         try:
-            import warnings
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*tight_layout.*')
                 if _tl_rect:
@@ -1611,15 +1074,524 @@ class ScatterPlotApp(QMainWindow):
             error_msg = str(e)
             if "ParseException" in error_msg or "Expected end of text" in error_msg:
                 self.logger.warning(f"MathText-Fehler in Legende ignoriert: {error_msg[:100]}...")
-                # Versuche Plot ohne tight_layout zu zeichnen
             else:
-                # Andere ValueError durchreichen
                 raise
         except Exception as e:
             # Andere Fehler loggen aber nicht abstürzen (z.B. stem plots)
             self.logger.debug(f"tight_layout fehlgeschlagen: {e}")
 
         self.canvas.draw()
+
+    # ------------------------------------------------------------------
+    # Panel-Rendering (v8.1)
+    # ------------------------------------------------------------------
+
+    def _build_axes(self, layout, panels):
+        """Legt für jedes aktive Panel eine Achse im GridSpec an. Panels, deren
+        X-Achse gekoppelt ist, werden nach ihrem Kopplungsziel erzeugt (sharex)."""
+        gs = GridSpec(layout.rows, layout.cols, figure=self.fig,
+                      height_ratios=layout.row_ratios, width_ratios=layout.col_ratios,
+                      hspace=layout.hspace, wspace=layout.wspace)
+        axes = {}
+        for panel in layout.creation_order(panels):
+            share = axes.get(panel.share_x_with) if panel.share_x_with else None
+            cell = gs[panel.row:panel.row + panel.rowspan, panel.col:panel.col + panel.colspan]
+            axes[panel.id] = self.fig.add_subplot(cell, sharex=share)
+        return axes
+
+    def _collect_curves(self, ordered_groups, ordered_unassigned):
+        """Sichtbare Kurven in Tree-Reihenfolge. Farben werden hier – unabhängig von
+        der Anzahl der Panels – genau einmal pro Datensatz vergeben."""
+        color_scheme = self.color_scheme_combo.currentText()
+        colors = self.config.color_schemes.get(color_scheme, self.config.color_schemes['TUBAF'])
+        color_cycle = iter(colors * 10)  # Genug Farben
+
+        def usable(dataset):
+            # Checkbox steuert Sichtbarkeit komplett
+            if not dataset.show_in_legend:
+                return False
+            # Überspringe Datasets ohne geladene Daten (z.B. fehlende Dateien)
+            if not dataset.data_loaded:
+                self.logger.warning(f"  Dataset '{dataset.name}' übersprungen (Daten nicht geladen)")
+                return False
+            return True
+
+        def color_for(dataset, cycle):
+            if not dataset.color:
+                dataset.color = next(cycle)
+            return dataset.color
+
+        curves = []
+        for group, datasets_in_order in ordered_groups:
+            if not group.visible:
+                continue
+            # Stack-Faktor direkt von der Gruppe verwenden (NICHT kumulativ!)
+            stack_factor = group.stack_factor if self.stack_mode else 1.0
+            # Gruppenspezifische Farbpalette (v5.4)
+            if group.color_scheme:
+                group_colors = self.config.color_schemes.get(group.color_scheme, colors)
+                group_cycle = iter(group_colors * 10)
+            else:
+                group_cycle = color_cycle
+            for dataset in datasets_in_order:
+                if usable(dataset):
+                    curves.append(_Curve(dataset, group, color_for(dataset, group_cycle), stack_factor))
+
+        # Nicht zugeordnete Datensätze (ohne Stack-Faktor)
+        for dataset in ordered_unassigned:
+            if usable(dataset):
+                curves.append(_Curve(dataset, None, color_for(dataset, color_cycle), 1.0))
+        return curves
+
+    def _route_curve(self, curve, panels):
+        """Bestimmt die Panels, in denen eine Kurve gezeichnet wird.
+
+        - Gruppe ohne feste Zuordnung (panel_ids=None) und nicht zugeordnete Datensätze:
+          alle aktiven Panels, deren Typ den Datensatz akzeptiert (z. B. P(r)-Daten nur
+          im P(r)-Panel); akzeptiert keines, landet er im Hauptpanel.
+        - Feste Zuordnung: davon die akzeptierenden Panels; akzeptiert keines, wird die
+          Zuordnung erzwungen (wie früher 'main'/'sub' bei PDDF). Sind alle zugeordneten
+          Panels deaktiviert, wird im Hauptpanel gezeichnet.
+        """
+        main = next(p for p in panels if p.id == MAIN_ID)
+        panel_ids = curve.group.panel_ids if curve.group is not None else None
+        if panel_ids is None:
+            candidates, explicit = panels, False
+        else:
+            candidates = [p for p in panels if p.id in panel_ids]
+            explicit = True
+            if not candidates:
+                return [main]
+        accepted = [p for p in candidates if p.type_info.accepts(curve.dataset)]
+        if accepted:
+            return accepted
+        return candidates if explicit else [main]
+
+    def _prepare_xy(self, dataset):
+        """Kopie der Daten, gefiltert mit den individuellen Plotgrenzen (v5.7)."""
+        x = dataset.x.copy()
+        y = dataset.y.copy()
+        y_err = dataset.y_err.copy() if dataset.y_err is not None else None
+        mask = np.ones(len(x), dtype=bool)
+        if dataset.x_min is not None:
+            mask &= (x >= dataset.x_min)
+        if dataset.x_max is not None:
+            mask &= (x <= dataset.x_max)
+        if dataset.y_min is not None:
+            mask &= (y >= dataset.y_min)
+        if dataset.y_max is not None:
+            mask &= (y <= dataset.y_max)
+        return x[mask], y[mask], (y_err[mask] if y_err is not None else None)
+
+    def _panel_scales(self, panel):
+        """Effektive (xscale, yscale) eines Panels: Override aus dem Achsen-Dialog
+        oder Standard des Panel-Typs."""
+        info = panel.type_info
+        return (panel.axis.get('xscale') or info.xscale,
+                panel.axis.get('yscale') or info.yscale)
+
+    def _render_panel(self, panel, ax, curves):
+        """Zeichnet alle Kurven eines Panels und formatiert dessen Achsen."""
+        info = panel.type_info
+        xscale, yscale = self._panel_scales(panel)
+        ctx = {'wavelength': self.wavelength, 'options': panel.options}
+        symlog_abs_vals = []  # sammelt |y| für die linthresh-Bestimmung bei symlog
+
+        if info.zero_line:
+            ax.axhline(0, color='gray', lw=0.8, ls='--', zorder=0)
+        if info.renderer == 'significance':
+            for level in self._get_significance_thresholds(panel):
+                ax.axhline(level, color='gray', lw=0.8, ls='--', zorder=0)
+                ax.text(0.01, level, f'{level:g}σ', transform=ax.get_yaxis_transform(),
+                        fontsize=8, color='gray', va='bottom', ha='left')
+
+        for curve in curves:
+            dataset, color = curve.dataset, curve.color
+            x, y, y_err = self._prepare_xy(dataset)
+            x, y, y_err = info.transform(x, y, y_err, ctx)
+            if not info.show_errors:
+                y_err = None
+            stack = curve.stack_factor if panel.apply_stack else 1.0
+            y = y * stack
+            if y_err is not None:
+                y_err = y_err * stack
+
+            if info.renderer == 'significance':
+                self._render_significance(ax, x, y, y_err, dataset, color, panel)
+                continue
+
+            # ASAXS Cross-Term: bei log-Skala nur positive Werte (symlog und linear
+            # zeigen auch die negativen Werte)
+            if getattr(dataset, 'data_term', '') == 'cross' and yscale == 'log':
+                pos = y > 0
+                if not np.any(pos):
+                    continue
+                x, y = x[pos], y[pos]
+                if y_err is not None:
+                    y_err = y_err[pos]
+
+            if yscale == 'symlog':
+                nonzero = y[y != 0]
+                if nonzero.size:
+                    symlog_abs_vals.append(np.abs(nonzero))
+
+            self._render_curve(ax, x, y, y_err, dataset, color, yscale)
+
+        self._style_axes(panel, ax, xscale, yscale, symlog_abs_vals)
+
+    def _render_curve(self, ax, x, y, y_err, dataset, color, yscale, label=None):
+        """Zeichnet einen Datensatz (SNR-Marker, Stem, Fehlerfläche/-balken oder Linie)."""
+        if label is None:
+            label = dataset.display_label
+        plot_style = dataset.get_plot_style()
+        errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
+
+        # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
+        if getattr(dataset, 'snr_visualization', False) and y_err is not None and len(x) > 0:
+            self._render_snr_markers(ax, x, y, y_err, dataset, color, yscale, label=label)
+        # Spezialfall: stem plot für XRD-Referenz
+        elif errorbar_style == 'stem':
+            markerline, stemlines, baseline = ax.stem(
+                x, y,
+                linefmt=color,
+                markerfmt=dataset.marker_style if dataset.marker_style else 'o',
+                basefmt=' '
+            )
+            markerline.set_markerfacecolor(color)
+            markerline.set_markeredgecolor(color)
+            markerline.set_markersize(dataset.marker_size)
+            stemlines.set_linewidth(dataset.line_width)
+            stemlines.set_alpha(dataset.errorbar_alpha)
+            ax.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
+                    markersize=dataset.marker_size, linestyle='', label=label)
+        # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
+        elif y_err is not None and dataset.show_errorbars:
+            if errorbar_style == 'fill':
+                ax.fill_between(x, y - y_err, y + y_err, alpha=dataset.errorbar_alpha, color=color)
+                ax.plot(x, y, plot_style, color=color, label=label,
+                        linewidth=dataset.line_width, markersize=dataset.marker_size)
+            else:  # 'bars'
+                ax.errorbar(
+                    x, y, yerr=np.abs(y_err),
+                    fmt=plot_style,
+                    color=color,
+                    label=label,
+                    linewidth=dataset.line_width,
+                    markersize=dataset.marker_size,
+                    capsize=dataset.errorbar_capsize,
+                    elinewidth=dataset.errorbar_linewidth,
+                    alpha=dataset.errorbar_alpha,
+                    ecolor=color,
+                    capthick=dataset.errorbar_linewidth
+                )
+        else:
+            ax.plot(x, y, plot_style, color=color, label=label,
+                    linewidth=dataset.line_width, markersize=dataset.marker_size)
+
+    def _axis_label(self, override, default):
+        """Achsentitel: Override (MathText) oder formatierter Standard des Panel-Typs."""
+        if override:
+            return preprocess_mathtext(override)
+        return self.convert_to_mathtext(self.format_axis_label(default))
+
+    def _style_axes(self, panel, ax, xscale, yscale, symlog_abs_vals):
+        """Achsentitel, Skalen, Ticks, Grid und Limits eines Panels (für alle Panels gleich)."""
+        info = panel.type_info
+        xlabel = self._axis_label(panel.axis.get('xlabel'), info.xlabel)
+        ylabel = self._axis_label(panel.axis.get('ylabel'), info.default_ylabel(panel.options))
+
+        # Achsenbeschriftungen mit erweiterten Font-Optionen (v5.3)
+        label_weight = 'bold' if self.font_settings.get('labels_bold', False) else 'normal'
+        label_style = 'italic' if self.font_settings.get('labels_italic', False) else 'normal'
+
+        # Unterstrichen wird via LaTeX unterstützt (falls aktiviert)
+        if self.font_settings.get('labels_underline', False):
+            xlabel = r'$\underline{' + xlabel.replace('$', '') + r'}$'
+            ylabel = r'$\underline{' + ylabel.replace('$', '') + r'}$'
+
+        font_kwargs = dict(
+            fontsize=self.font_settings.get('labels_size', 12),
+            weight=label_weight, style=label_style,
+            fontfamily=self.font_settings.get('labels_font_family',
+                                              self.font_settings.get('font_family', 'sans-serif')),
+        )
+        ax.set_xlabel(xlabel, **font_kwargs)
+        ax.set_ylabel(ylabel, **font_kwargs)
+
+        # Skalen (X nur setzen, wenn die Achse nicht von einem anderen Panel geerbt wird)
+        if not panel.share_x_with:
+            ax.set_xscale(xscale)
+        if yscale == 'symlog':
+            linthresh = self._compute_symlog_linthresh(
+                symlog_abs_vals, decades=panel.axis.get('symlog_decades', 4))
+            linscale = panel.axis.get('symlog_linscale') or 1.0
+            ax.set_yscale('symlog', linthresh=linthresh, linscale=linscale)
+        else:
+            ax.set_yscale(yscale)
+
+        # X-Limits: Plot-Typ-spezifische Defaults (z. B. Azimutalprofil → −180 … 180)
+        if panel.axis.get('auto', True) and info.xlim and not panel.share_x_with:
+            ax.set_xlim(*info.xlim)
+
+        # Tick-Einstellungen (v5.7: Erweitert um Länge, Breite, Richtung)
+        tick_weight = 'bold' if self.font_settings.get('ticks_bold', False) else 'normal'
+        tick_style = 'italic' if self.font_settings.get('ticks_italic', False) else 'normal'
+        tick_labelsize = self.grid_settings.get('tick_labelsize', self.font_settings.get('ticks_size', 10))
+
+        ax.tick_params(
+            axis='both', which='major',
+            direction=self.grid_settings.get('major_tick_direction', 'in'),
+            length=self.grid_settings.get('major_tick_length', 6.0),
+            width=self.grid_settings.get('major_tick_width', 1.0),
+            labelsize=tick_labelsize
+        )
+        if self.grid_settings.get('minor_ticks_enable', True):
+            ax.tick_params(
+                axis='both', which='minor',
+                direction=self.grid_settings.get('minor_tick_direction', 'in'),
+                length=self.grid_settings.get('minor_tick_length', 3.0),
+                width=self.grid_settings.get('minor_tick_width', 0.5)
+            )
+
+        # Font-Eigenschaften für Tick-Labels anwenden
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_fontweight(tick_weight)
+            label.set_fontstyle(tick_style)
+            label.set_fontfamily(self.font_settings.get('ticks_font_family',
+                                                        self.font_settings.get('font_family', 'sans-serif')))
+
+        # Tick-Label-Rotation (v5.7)
+        x_rotation = self.grid_settings.get('x_tick_rotation', 0)
+        y_rotation = self.grid_settings.get('y_tick_rotation', 0)
+        if x_rotation != 0:
+            ax.tick_params(axis='x', rotation=x_rotation)
+        if y_rotation != 0:
+            ax.tick_params(axis='y', rotation=y_rotation)
+
+        # Grid-Einstellungen (erweitert in v5.1)
+        if self.grid_settings['major_enable']:
+            ax.grid(True, which='major',
+                    axis=self.grid_settings['major_axis'],
+                    linestyle=self.grid_settings['major_linestyle'],
+                    linewidth=self.grid_settings['major_linewidth'],
+                    color=self.grid_settings['major_color'],
+                    alpha=self.grid_settings['major_alpha'])
+        if self.grid_settings['minor_enable']:
+            ax.minorticks_on()
+            ax.grid(True, which='minor',
+                    axis=self.grid_settings['minor_axis'],
+                    linestyle=self.grid_settings['minor_linestyle'],
+                    linewidth=self.grid_settings['minor_linewidth'],
+                    color=self.grid_settings['minor_color'],
+                    alpha=self.grid_settings['minor_alpha'])
+
+        # Achsenlimits (X nur bei unabhängiger X-Achse)
+        if not panel.axis.get('auto', True):
+            if not panel.share_x_with:
+                if panel.axis.get('xmin') is not None:
+                    ax.set_xlim(left=panel.axis['xmin'])
+                if panel.axis.get('xmax') is not None:
+                    ax.set_xlim(right=panel.axis['xmax'])
+            if panel.axis.get('ymin') is not None:
+                ax.set_ylim(bottom=panel.axis['ymin'])
+            if panel.axis.get('ymax') is not None:
+                ax.set_ylim(top=panel.axis['ymax'])
+
+    def _hide_shared_x_labels(self, panels):
+        """Bei gekoppelter X-Achse: X-Titel und Tick-Beschriftung eines Panels
+        ausblenden, wenn direkt darunter (gleiche Spalten) ein Panel derselben
+        Kopplungsgruppe liegt – wie bei den früheren ASAXS-/Significance-Subplots."""
+        def root(p):
+            seen = set()
+            while p.share_x_with and p.id not in seen:
+                seen.add(p.id)
+                nxt = self.plot_layout.get(p.share_x_with)
+                if nxt is None:
+                    break
+                p = nxt
+            return p.id
+
+        for upper in panels:
+            for lower in panels:
+                if lower is upper or root(lower) != root(upper):
+                    continue
+                if lower.row != upper.row + upper.rowspan:
+                    continue
+                cols_upper = set(range(upper.col, upper.col + upper.colspan))
+                cols_lower = set(range(lower.col, lower.col + lower.colspan))
+                if cols_upper & cols_lower:
+                    ax = self.panel_axes[upper.id]
+                    ax.set_xlabel('')
+                    ax.tick_params(axis='x', labelbottom=False)
+                    break
+
+    def _render_legend(self, ax, ordered_groups, ordered_unassigned, only=None):
+        """Legende (v5.1/v5.3/v5.7/v7.0: Tree-Order, individuelle Formatierung).
+
+        `only`: Menge von id(dataset) – nur diese Datensätze (Legenden-Modus 'own');
+        None = alle sichtbaren Datensätze (Modus 'all').
+        """
+        from matplotlib.lines import Line2D
+
+        def include(dataset):
+            return (dataset.show_in_legend and dataset.data_loaded
+                    and (only is None or id(dataset) in only))
+
+        def dataset_handle(dataset):
+            marker = dataset.marker_style if dataset.marker_style else 'o'
+            linestyle = dataset.line_style if dataset.line_style else ''
+            # Wenn kein expliziter Stil, dann aus dem Auto-Stil ableiten
+            if not dataset.marker_style and not dataset.line_style:
+                if dataset.is_fit_curve():
+                    linestyle, marker = '-', ''
+                else:
+                    marker, linestyle = 'o', ''
+            return Line2D([0], [0], color=dataset.color, marker=marker, linestyle=linestyle,
+                          linewidth=dataset.line_width, markersize=dataset.marker_size)
+
+        handles, labels = [], []
+
+        def add(handle, text, bold, italic):
+            handles.append(handle)
+            labels.append(format_legend_text(text, bold, italic))
+
+        for group, datasets_in_order in ordered_groups:
+            if not group.visible or not datasets_in_order:
+                continue
+            members = [ds for ds in datasets_in_order if include(ds)]
+            if only is not None and not members:
+                continue
+            # Gruppe als Label hinzufügen, falls gewünscht (unsichtbares Dummy-Handle)
+            if getattr(group, 'show_in_legend', True):
+                add(Line2D([0], [0], color='none', marker='', linestyle=''),
+                    getattr(group, 'display_label', group.name),
+                    getattr(group, 'legend_bold', False), getattr(group, 'legend_italic', False))
+            for dataset in members:
+                add(dataset_handle(dataset), dataset.display_label,
+                    getattr(dataset, 'legend_bold', False), getattr(dataset, 'legend_italic', False))
+
+        for dataset in ordered_unassigned:
+            if include(dataset):
+                add(dataset_handle(dataset), dataset.display_label,
+                    getattr(dataset, 'legend_bold', False), getattr(dataset, 'legend_italic', False))
+
+        if not handles:
+            return
+
+        # v7.0: Reihenfolge invertieren falls gewünscht (für gestackte Kurven)
+        if self.legend_settings.get('reverse_order', False):
+            handles, labels = handles[::-1], labels[::-1]
+
+        legend = ax.legend(
+            handles, labels,
+            loc=self.legend_settings['position'],
+            fontsize=self.font_settings.get('legend_size', self.legend_settings.get('fontsize', 10)),
+            ncol=self.legend_settings['ncol'],
+            frameon=self.legend_settings['frameon'],
+            shadow=self.legend_settings['shadow'],
+            fancybox=self.legend_settings['fancybox']
+        )
+        if legend:
+            if legend.get_frame():
+                legend.get_frame().set_alpha(self.legend_settings['alpha'])
+            # v7.0: Formatierung erfolgt über MathText, nur noch Font-Familie setzen
+            for text in legend.get_texts():
+                text.set_fontfamily(self.font_settings.get('font_family', 'sans-serif'))
+
+    def _axes_for_panel_id(self, panel_id):
+        """Achse eines Panels; Fallback Hauptpanel (z. B. wenn das Panel deaktiviert ist)."""
+        return self.panel_axes.get(panel_id or MAIN_ID, self.ax_main)
+
+    def _render_reference_lines(self):
+        """Referenzlinien (v5.2; v8.1: pro Panel über 'panel_id')."""
+        for ref_line in self.reference_lines:
+            ax = self._axes_for_panel_id(ref_line.get('panel_id'))
+            if ref_line['type'] == 'vertical':
+                ax.axvline(x=ref_line['value'], linestyle=ref_line['linestyle'],
+                           linewidth=ref_line['linewidth'], color=ref_line['color'],
+                           alpha=ref_line['alpha'])
+                if ref_line['label']:
+                    # Label oben rechts an der Linie
+                    ylim = ax.get_ylim()
+                    ax.text(ref_line['value'], ylim[1] * 0.95, ref_line['label'],
+                            rotation=90, va='top', ha='right',
+                            fontsize=10, color=ref_line['color'])
+            else:  # horizontal
+                ax.axhline(y=ref_line['value'], linestyle=ref_line['linestyle'],
+                           linewidth=ref_line['linewidth'], color=ref_line['color'],
+                           alpha=ref_line['alpha'])
+                if ref_line['label']:
+                    # Label rechts an der Linie
+                    xlim = ax.get_xlim()
+                    ax.text(xlim[1] * 0.95, ref_line['value'], ref_line['label'],
+                            ha='right', va='bottom', fontsize=10, color=ref_line['color'])
+
+    def _render_annotations(self):
+        """Annotations (v5.2, 5.3: draggable, v7.0: MathText, v8.1: pro Panel)."""
+        self.annotation_texts = []  # Text-Objekte speichern für draggable
+        for idx, annotation in enumerate(self.annotations):
+            ax = self._axes_for_panel_id(annotation.get('panel_id'))
+            text_obj = ax.text(
+                annotation['x'], annotation['y'],
+                preprocess_mathtext(annotation['text']),
+                fontsize=annotation['fontsize'],
+                color=annotation['color'],
+                rotation=annotation['rotation'],
+                ha='left', va='bottom',
+                picker=True,
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.1, edgecolor='none')
+            )
+            text_obj.set_picker(5)  # Pickable mit Toleranz von 5 Pixeln
+            text_obj._annotation_idx = idx
+            self.annotation_texts.append(text_obj)
+
+    def _render_titles(self, panels, has_multi):
+        """Figurentitel und Panel-Titel. Bei mehreren Panels läuft der Haupttitel als
+        fig.suptitle() über dem ganzen Grid, damit tight_layout ihn nicht abschneidet.
+
+        Returns:
+            True, wenn ein Haupttitel gezeichnet wurde.
+        """
+        title_active = bool(self.title_settings.get('enabled', False) and self.title_settings.get('text'))
+        title_weight = 'bold' if self.title_settings.get('bold', True) else 'normal'
+        title_style = 'italic' if self.title_settings.get('italic', False) else 'normal'
+        title_color = self.title_settings.get('color', '#000000')
+        title_size = self.title_settings.get('size', 14)
+
+        if title_active:
+            if has_multi:
+                title_obj = self.fig.suptitle(
+                    self.title_settings['text'],
+                    fontsize=title_size, fontweight=title_weight, fontstyle=title_style,
+                    color=title_color,
+                    x={'left': 0.05, 'right': 0.95}.get(self.title_settings.get('position', 'center'), 0.5),
+                    ha=self.title_settings.get('position', 'center'),
+                )
+            else:
+                title_obj = self.ax_main.set_title(
+                    self.title_settings['text'],
+                    fontsize=title_size, fontweight=title_weight, fontstyle=title_style,
+                    color=title_color, loc=self.title_settings.get('position', 'center'),
+                )
+            # Hintergrund (falls aktiviert)
+            if self.title_settings.get('background_color'):
+                title_obj.set_bbox(dict(
+                    boxstyle='round,pad=0.5',
+                    facecolor=self.title_settings['background_color'],
+                    alpha=self.title_settings.get('background_alpha', 0.8),
+                    edgecolor='none'
+                ))
+
+        # Panel-Titel (nur bei mehreren Panels; Schrift wie Haupttitel, etwas kleiner)
+        if has_multi:
+            for panel in panels:
+                if panel.title:
+                    self.panel_axes[panel.id].set_title(
+                        preprocess_mathtext(panel.title),
+                        fontsize=max(title_size - 2, 6), fontweight=title_weight,
+                        fontstyle=title_style, color=title_color,
+                    )
+        return title_active
 
     def convert_to_mathtext(self, text):
         """Konvertiert Unicode-Exponenten in Math Text (Version 5.2)"""
@@ -1683,7 +1655,7 @@ class ScatterPlotApp(QMainWindow):
 
         return label
 
-    def _render_snr_markers(self, ax, x, y, y_err, dataset, color, plot_info, label=None):
+    def _render_snr_markers(self, ax, x, y, y_err, dataset, color, yscale, label=None):
         """Rendert Datenpunkte mit SNR-basierten Qualitätsmarkern.
 
         Gute Punkte (SNR ≥ Schwellenwert): konfigurierbarer gefüllter Marker.
@@ -1703,8 +1675,7 @@ class ScatterPlotApp(QMainWindow):
         mask_poor = (snr < threshold) & np.isfinite(snr)
 
         # Bei log-Skala nur positive y-Werte
-        current_yscale = self.axis_limits.get('yscale') or plot_info.get('yscale', 'log')
-        if current_yscale == 'log':
+        if yscale == 'log':
             pos = y > 0
             mask_good &= pos
             mask_poor &= pos
@@ -1738,45 +1709,35 @@ class ScatterPlotApp(QMainWindow):
                             fmt='none', ecolor=color, elinewidth=0.8,
                             capsize=2, capthick=0.8, alpha=0.3, zorder=2)
 
-    def _render_cross_term_subplot(self, ax_sub, x, y, y_err, dataset, color):
-        """Rendert den Cross-Term vollständig (inkl. negativer Werte) im linearen Subplot."""
-        plot_style = dataset.get_plot_style()
-        ax_sub.plot(x, y, plot_style, color=color,
-                    linewidth=dataset.line_width, markersize=dataset.marker_size)
-        if y_err is not None and dataset.show_errorbars:
-            ax_sub.fill_between(x, y - y_err, y + y_err,
-                                alpha=dataset.errorbar_alpha, color=color)
-
-    def _get_significance_thresholds(self):
-        """Parst die σ-Schwellenwerte aus dem Options-Eingabefeld (Fallback: 3,2,1)."""
-        default = [3.0, 2.0, 1.0]
-        widget = getattr(self, 'significance_thresholds_edit', None)
-        if widget is None:
-            return default
+    def _get_significance_thresholds(self, panel):
+        """σ-Schwellenwerte für die gestrichelten Referenzlinien eines Significance-Panels
+        (Panel-Option 'thresholds', Fallback: 3, 2, 1)."""
         values = []
-        for token in widget.text().split(','):
-            token = token.strip()
-            if not token:
-                continue
+        for v in panel.options.get('thresholds') or []:
             try:
-                values.append(float(token))
-            except ValueError:
+                values.append(float(v))
+            except (TypeError, ValueError):
                 continue
-        return values if values else default
+        return values if values else [3.0, 2.0, 1.0]
 
-    def _render_significance_subplot(self, ax_sub, x, y, y_err, dataset, color):
-        """Rendert die punktweise Signifikanz |I(q)/σ(q)| im Subplot:
+    def _significance_window(self):
+        """Glättungsfenster des ersten Significance-Panels (Default 9), z. B. für GIFT."""
+        for panel in self.plot_layout.panels:
+            if panel.panel_type == 'Significance':
+                return int(panel.options.get('window', 9))
+        return 9
+
+    def _render_significance(self, ax, x, y, y_err, dataset, color, panel):
+        """Rendert die punktweise Signifikanz |I(q)/σ(q)|:
         dünn = Rohdaten, dick = über ein gleitendes Median-Fenster geglättet
         (robust gegen einzelne Ausreißer-Rauschspitzen)."""
         if y_err is None or len(x) == 0:
             return
         significance = compute_significance(y, y_err)
-        ax_sub.plot(x, significance, '-', color=color,
-                    linewidth=max(dataset.line_width * 0.6, 0.5), alpha=0.4)
-        window_widget = getattr(self, 'significance_window_spin', None)
-        window = window_widget.value() if window_widget is not None else 9
-        smoothed = self._rolling_median(significance, window)
-        ax_sub.plot(x, smoothed, '-', color=color, linewidth=dataset.line_width * 1.8)
+        ax.plot(x, significance, '-', color=color,
+                linewidth=max(dataset.line_width * 0.6, 0.5), alpha=0.4)
+        smoothed = self._rolling_median(significance, int(panel.options.get('window', 9)))
+        ax.plot(x, smoothed, '-', color=color, linewidth=dataset.line_width * 1.8)
 
     @staticmethod
     def _rolling_median(arr, window):
@@ -1803,73 +1764,6 @@ class ScatterPlotApp(QMainWindow):
                 return float(10 ** (np.floor(np.log10(max_val)) - decades))
         return 1e-3
 
-    def transform_data(self, x, y, plot_type):
-        """Transformiert Daten je nach Plot-Typ"""
-        if plot_type == 'Porod':
-            return x, y * (x ** 4)
-        elif plot_type == 'Kratky':
-            return x, y * (x ** 2)
-        elif plot_type == 'Guinier':
-            return x ** 2, np.log(y)
-        elif plot_type == 'dlnI/dlnq':
-            # Logarithmische Ableitung d(ln I)/d(ln q) zur Identifikation
-            # versteckter Features (Schultern) in Streukurven.
-            pos_mask = (x > 0) & (y > 0)
-            x_pos = x[pos_mask]
-            y_pos = y[pos_mask]
-            if len(x_pos) < 2:
-                return np.array([]), np.array([])
-
-            log_x = np.log(x_pos)
-            log_y = np.log(y_pos)
-
-            window_widget = getattr(self, 'dlnidlnq_smooth_spin', None)
-            window = window_widget.value() if window_widget is not None else 5
-            if window % 2 == 0:
-                window -= 1
-            # Größtes gültiges (ungerades) Fenster, das nicht mehr Punkte
-            # verlangt als vorhanden sind
-            max_window = len(log_y) if len(log_y) % 2 == 1 else len(log_y) - 1
-            window = min(window, max_window)
-
-            if window >= 3:
-                log_y = savgol_filter(log_y, window_length=window, polyorder=2)
-            else:
-                self.logger.warning(
-                    "dlnI/dlnq: Zu wenige Datenpunkte für Glättung, "
-                    "verwende ungeglättete Ableitung"
-                )
-
-            dlnI_dlnq = np.gradient(log_y, log_x)
-            return x_pos, dlnI_dlnq
-        elif plot_type == 'Bragg Spacing':
-            # d = 2*pi/q (q in nm^-1, d in nm)
-            d = 2 * np.pi / x
-            return d, y
-        elif plot_type == '2-Theta':
-            # 2theta = 2 * arcsin(lambda * q / (4*pi))
-            # lambda in nm, q in nm^-1, result in degrees
-            # Nur Werte berechnen, bei denen das Argument von arcsin <= 1 ist
-            arg = self.wavelength * x / (4 * np.pi)
-            # Warnung wenn Werte außerhalb des gültigen Bereichs liegen
-            if np.any(arg > 1):
-                valid_mask = arg <= 1
-                x_valid = x[valid_mask]
-                y_valid = y[valid_mask]
-                if len(x_valid) > 0:
-                    theta = np.arcsin(self.wavelength * x_valid / (4 * np.pi))
-                    two_theta = 2 * theta * 180 / np.pi
-                    return two_theta, y_valid
-                else:
-                    # Alle Werte sind ungültig, gebe leere Arrays zurück
-                    return np.array([]), np.array([])
-            else:
-                theta = np.arcsin(arg)
-                two_theta = 2 * theta * 180 / np.pi
-                return two_theta, y
-        else:
-            return x, y
-
     def convert_reference_line_value(self, value, from_plot_type, to_plot_type):
         """
         Konvertiert einen X-Wert einer Referenzlinie von einem Plottyp zu einem anderen.
@@ -1883,7 +1777,7 @@ class ScatterPlotApp(QMainWindow):
             Der konvertierte X-Wert im Ziel-Plottyp
         """
         # Plottypen, die q verwenden (keine Transformation der X-Achse)
-        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS', 'dlnI/dlnq', 'Significance'}
+        q_types = {'Log-Log', 'Porod', 'Kratky', 'PDDF', 'ASAXS', 'dlnI/dlnq', 'Significance', 'I linear'}
 
         # Zuerst auf q zurückrechnen (Basiseinheit)
         if from_plot_type in q_types:
@@ -1926,11 +1820,13 @@ class ScatterPlotApp(QMainWindow):
 
     def on_annotation_press(self, event):
         """Maus-Press für Annotation-Drag (Version 5.3)"""
-        if event.inaxes != self.ax_main:
+        if event.inaxes is None:
             return
 
-        # Prüfen, ob ein Text-Objekt angeklickt wurde
+        # Prüfen, ob ein Text-Objekt angeklickt wurde (v8.1: in jedem Panel)
         for text_obj in getattr(self, 'annotation_texts', []):
+            if text_obj.axes is not event.inaxes:
+                continue
             contains, _ = text_obj.contains(event)
             if contains:
                 self._dragged_annotation = text_obj
@@ -1941,7 +1837,7 @@ class ScatterPlotApp(QMainWindow):
         """Maus-Motion für Annotation-Drag (Version 5.3)"""
         if not hasattr(self, '_dragged_annotation') or self._dragged_annotation is None:
             return
-        if event.inaxes != self.ax_main:
+        if event.inaxes is not self._dragged_annotation.axes:
             return
 
         # Position aktualisieren
@@ -2338,19 +2234,35 @@ class ScatterPlotApp(QMainWindow):
             # IFT/GIFT (v7.8)
             gift_action = menu.addAction(tr("context_menu.gift"))
 
+        # ASAXS-Auswertung (v8.1): für Datensätze/Gruppen mit ASAXS-Termen
+        asaxs_action = None
+        if data and data[0] in ('dataset', 'group'):
+            members = [data[1]] if data[0] == 'dataset' else data[1].datasets
+            if any(getattr(ds, 'data_term', '') in ('normal', 'anomalous', 'cross') for ds in members):
+                asaxs_action = menu.addAction(tr("context_menu.asaxs"))
+
         # Gruppe bearbeiten (v6.2)
         edit_group_action = None
         if data and data[0] == 'group':
             edit_group_action = menu.addAction(tr("context_menu.edit_group"))
 
-        # PDDF: Schnell-Toggle Subplot-Ziel
-        pddf_subplot_menu = None
-        pddf_subplot_actions = {}
-        if data and data[0] == 'group' and self.plot_type == 'PDDF':
-            pddf_subplot_menu = menu.addMenu("Subplot")
-            pddf_subplot_actions['main'] = pddf_subplot_menu.addAction("I(q)-Plot")
-            pddf_subplot_actions['sub']  = pddf_subplot_menu.addAction("P(r)-Plot")
-            pddf_subplot_actions['both'] = pddf_subplot_menu.addAction("Beide")
+        # Panel-Zuordnung (v8.1): Untermenü 'Anzeigen in' mit checkbaren Panels
+        panel_menu = None
+        panel_actions = {}
+        panel_auto_action = None
+        if data and data[0] == 'group' and len(self.plot_layout.panels) > 1:
+            group_ids = data[1].panel_ids
+            panel_menu = menu.addMenu(tr("context_menu.show_in_panels"))
+            panel_auto_action = panel_menu.addAction(tr("context_menu.panels_auto"))
+            panel_auto_action.setCheckable(True)
+            panel_auto_action.setChecked(group_ids is None)
+            panel_menu.addSeparator()
+            for panel in self.plot_layout.panels:
+                act = panel_menu.addAction(panel.name if panel.enabled or panel.is_main
+                                           else f"{panel.name} ({tr('panels.disabled')})")
+                act.setCheckable(True)
+                act.setChecked(group_ids is not None and panel.id in group_ids)
+                panel_actions[act] = panel.id
 
         rename_action = menu.addAction(tr("context_menu.rename"))
 
@@ -2458,6 +2370,9 @@ class ScatterPlotApp(QMainWindow):
         elif action == gift_action and gift_action:
             # IFT/GIFT (v7.8)
             self.show_gift_dialog(data[1])
+        elif action == asaxs_action and asaxs_action:
+            # ASAXS-Auswertung (v8.1)
+            self.show_asaxs_dialog([data[1]] if data[0] == 'dataset' else list(data[1].datasets))
         elif action == edit_group_action and edit_group_action:
             # Gruppe bearbeiten (v6.2)
             self.edit_group_settings(item)
@@ -2496,14 +2411,23 @@ class ScatterPlotApp(QMainWindow):
                 if action == color_action:
                     self.set_group_quick_color(item, color)
                     break
-        elif pddf_subplot_menu and action in pddf_subplot_actions.values():
-            # PDDF Subplot-Ziel schnell umschalten
-            for target, target_action in pddf_subplot_actions.items():
-                if action == target_action:
-                    data[1].subplot_target = target
-                    self.rebuild_tree()
-                    self.update_plot()
-                    break
+        elif panel_menu and action == panel_auto_action:
+            data[1].panel_ids = None
+            self.rebuild_tree()
+            self.update_plot()
+        elif panel_menu and action in panel_actions:
+            # Panel in der festen Zuordnung ein-/ausschalten (aus 'Automatisch' heraus:
+            # Start mit genau diesem Panel)
+            group = data[1]
+            panel_id = panel_actions[action]
+            ids = list(group.panel_ids) if group.panel_ids is not None else []
+            if panel_id in ids:
+                ids.remove(panel_id)
+            else:
+                ids.append(panel_id)
+            group.panel_ids = ids or None
+            self.rebuild_tree()
+            self.update_plot()
         elif action == reset_color_action and reset_color_action:
             self.reset_dataset_color(item)
         elif action == set_limits_action and set_limits_action:
@@ -2722,6 +2646,7 @@ class ScatterPlotApp(QMainWindow):
             color_schemes=self.config.color_schemes,
             group=group,
             plot_type=self.plot_type,
+            panels=[(p.id, p.name) for p in self.plot_layout.panels],
         )
         dialog.setWindowTitle(f"Gruppeneinstellungen für '{group.name}' ({len(group.datasets)} Kurven)")
 
@@ -2729,8 +2654,8 @@ class ScatterPlotApp(QMainWindow):
             settings = dialog.get_settings()
 
             # Gruppenspezifische Einstellungen direkt am Group-Objekt setzen
-            if settings.get('subplot_target') is not None:
-                group.subplot_target = settings['subplot_target']
+            if 'panel_ids' in settings:
+                group.panel_ids = settings['panel_ids']
 
             # Kurveneinstellungen auf ALLE Datasets in der Gruppe anwenden
             for dataset in group.datasets:
@@ -2962,10 +2887,7 @@ class ScatterPlotApp(QMainWindow):
             QMessageBox.warning(self, tr("messages.error"),
                                 tr("messages.gift_not_loaded", name=dataset.name))
             return
-        try:
-            window = self.significance_window_spin.value()
-        except AttributeError:
-            window = 9
+        window = self._significance_window()
         try:
             dlg = GiftDialog(dataset, parent=self, significance_window=window,
                              datasets=self._loaded_datasets)
@@ -3022,9 +2944,46 @@ class ScatterPlotApp(QMainWindow):
         self.logger.info(f"GIFT-Ergebnisse als Gruppe '{group_name}' übernommen "
                          f"(record_id {group.provenance_record_id})")
 
-        idx = self.plot_type_combo.findText('PDDF')
-        if idx >= 0 and self.plot_type_combo.currentIndex() != idx:
-            self.plot_type_combo.setCurrentIndex(idx)   # löst change_plot_type/update_plot aus
+        # v8.1: P(r)-Panel aktivieren bzw. anlegen (früher: Plot-Typ 'PDDF')
+        self.ensure_panel('P(r)')
+        self.rebuild_tree()
+        self.update_plot()
+
+    # ------------------------------------------------------------------
+    # ASAXS-Auswertung (v8.1)
+    # ------------------------------------------------------------------
+
+    def show_asaxs_dialog(self, preselect=None):
+        """Öffnet den ASAXS-Dialog (nicht-modal) für I_A/I_N, I_cross/I_N und Korrelation."""
+        from dialogs.asaxs_dialog import AsaxsDialog
+        dlg = AsaxsDialog(self._loaded_datasets, parent=self, preselect=preselect)
+        dlg.datasets_ready.connect(self.add_derived_datasets)
+        self._asaxs_dialogs = [d for d in getattr(self, '_asaxs_dialogs', []) if d.isVisible()]
+        self._asaxs_dialogs.append(dlg)
+        dlg.show()
+
+    def add_derived_datasets(self, info):
+        """Übernimmt abgeleitete Datensätze (z. B. aus dem ASAXS-Dialog) als neue Gruppe
+        und zeigt sie in einem Ratio-Panel (wird bei Bedarf angelegt)."""
+        datasets = info.get('datasets') or []
+        if not datasets:
+            return
+        existing = {g.name for g in self.groups}
+        group_name = base = info.get('group_name') or tr("asaxs.title")
+        i = 2
+        while group_name in existing:
+            group_name = f"{base} ({i})"
+            i += 1
+        group = DataGroup(group_name)
+        for ds in datasets:
+            group.add_dataset(ds)
+        self.groups.append(group)
+        self.logger.info(f"{len(datasets)} abgeleitete Datensätze als Gruppe '{group_name}' übernommen")
+
+        if any(getattr(ds, 'data_term', '') == 'ratio' for ds in datasets):
+            panel = self.ensure_panel('Ratio')
+            if info.get('ylabel') and not panel.axis.get('ylabel'):
+                panel.axis['ylabel'] = info['ylabel']
         self.rebuild_tree()
         self.update_plot()
 
@@ -3061,14 +3020,7 @@ class ScatterPlotApp(QMainWindow):
         """Baut Tree komplett neu auf"""
         self.tree.clear()
 
-        # Spaltenheader je nach Plot-Typ
-        if self.plot_type == 'PDDF':
-            self.tree.headerItem().setText(1, "Subplot")
-            # Auto-Suggest für Gruppen ohne manuell gesetzten Subplot-Target
-            for group in self.groups:
-                group.auto_suggest_pddf_subplot()
-        else:
-            self.tree.headerItem().setText(1, "×")
+        self.tree.headerItem().setText(1, "×")
 
         # "Nicht zugeordnet" Sektion
         self.unassigned_item = QTreeWidgetItem(self.tree, [tr("tree.unassigned"), ""])
@@ -3082,12 +3034,14 @@ class ScatterPlotApp(QMainWindow):
 
         # Gruppen
         for group in self.groups:
-            if self.plot_type == 'PDDF':
-                target = getattr(group, 'subplot_target', 'both')
-                col2 = {'both': 'I(q)+P(r)', 'main': 'I(q)', 'sub': 'P(r)'}.get(target, '')
-            else:
-                col2 = format_stack_factor(group.stack_factor)
+            col2 = format_stack_factor(group.stack_factor)
             group_item = QTreeWidgetItem(self.tree, [group.name, col2])
+            # v8.1: Panel-Zuordnung als Tooltip der Faktor-Spalte
+            if group.panel_ids is None:
+                panels_text = tr("tree.panels_auto")
+            else:
+                panels_text = ", ".join(self.panel_label(pid) for pid in group.panel_ids)
+            group_item.setToolTip(1, tr("tree.panels_tooltip", panels=panels_text))
             group_item.setExpanded(not group.collapsed)
             group_item.setFlags(group_item.flags() | Qt.ItemIsUserCheckable)
             group_item.setCheckState(0, Qt.Checked if group.visible else Qt.Unchecked)
@@ -3137,50 +3091,17 @@ class ScatterPlotApp(QMainWindow):
 
         self.plot_type = new_plot_type
 
-        # ASAXS Subplot Button sichtbar/unsichtbar
-        if hasattr(self, 'asaxs_subplot_btn'):
-            is_asaxs = new_plot_type == 'ASAXS'
-            self.asaxs_subplot_btn.setVisible(is_asaxs)
-            if not is_asaxs:
-                self.asaxs_subplot_btn.setChecked(False)
+        # v8.1: Panels, deren X-Achse mit dem Hauptpanel gekoppelt ist, verlieren die
+        # Kopplung, wenn der neue Typ eine andere X-Größe hat (z. B. q → 2θ)
+        main_domain = self.plot_layout.main.type_info.x_domain
+        for panel in self.plot_layout.panels:
+            share = self.plot_layout.get(panel.share_x_with) if panel.share_x_with else None
+            if share is not None and share.type_info.x_domain != panel.type_info.x_domain:
+                panel.share_x_with = None
+                self.logger.info(f"X-Kopplung von Panel '{panel.name}' gelöst "
+                                 f"(Hauptpanel-X ist jetzt '{main_domain}')")
 
-        # PDDF Normierungs-Button sichtbar/unsichtbar
-        if hasattr(self, 'pddf_norm_btn'):
-            is_pddf = new_plot_type == 'PDDF'
-            self.pddf_norm_btn.setVisible(is_pddf)
-            if not is_pddf:
-                self.pddf_norm_btn.setChecked(False)
-
-        # dlnI/dlnq: Glättungsfenster sichtbar/unsichtbar
-        if hasattr(self, 'dlnidlnq_smooth_spin'):
-            is_dlnidlnq = new_plot_type == 'dlnI/dlnq'
-            self.dlnidlnq_smooth_label.setVisible(is_dlnidlnq)
-            self.dlnidlnq_smooth_spin.setVisible(is_dlnidlnq)
-
-        # Significance: Fenster- und Schwellen-Felder sichtbar/unsichtbar
-        if hasattr(self, 'significance_window_spin'):
-            is_significance = new_plot_type == 'Significance'
-            self.significance_window_label.setVisible(is_significance)
-            self.significance_window_spin.setVisible(is_significance)
-            self.significance_thresholds_label.setVisible(is_significance)
-            self.significance_thresholds_edit.setVisible(is_significance)
-
-        self.update_plot()
-
-    def _on_dlnidlnq_smooth_changed(self, value):
-        """Erzwingt eine ungerade Fenstergröße für die Savitzky-Golay-Glättung"""
-        if value % 2 == 0:
-            self.dlnidlnq_smooth_spin.blockSignals(True)
-            self.dlnidlnq_smooth_spin.setValue(value + 1)
-            self.dlnidlnq_smooth_spin.blockSignals(False)
-        self.update_plot()
-
-    def _on_significance_window_changed(self, value):
-        """Erzwingt eine ungerade Fenstergröße für die gleitende Median-Glättung"""
-        if value % 2 == 0:
-            self.significance_window_spin.blockSignals(True)
-            self.significance_window_spin.setValue(value + 1)
-            self.significance_window_spin.blockSignals(False)
+        self.refresh_panel_list()
         self.update_plot()
 
     def change_color_scheme(self):
@@ -3270,46 +3191,19 @@ class ScatterPlotApp(QMainWindow):
             self.update_plot()
             self.rebuild_tree()
 
-    def _get_active_subplot_kind(self):
-        """Ermittelt, welcher Subplot-Typ beim nächsten update_plot() aktiv sein wird
-        (v7.7). Wird von den Titel- und Achsen-Dialogen genutzt, um deren
-        Subplot-Bereich passend anzuzeigen/auszublenden.
-
-        Returns:
-            'PDDF', 'ASAXS', 'Significance' oder None (kein Subplot aktiv)
-        """
-        if self.plot_type == 'PDDF':
-            return 'PDDF'
-        if (self.plot_type == 'ASAXS'
-                and getattr(self, 'asaxs_subplot_btn', None) is not None
-                and self.asaxs_subplot_btn.isChecked()):
-            return 'ASAXS'
-        if self.plot_type == 'Significance':
-            return 'Significance'
-        return None
-
-    def _get_default_sub_ylabel(self, subplot_kind):
-        """Gibt die aktuell standardmäßig verwendete Y-Achsenbeschriftung des
-        Subplots zurück (v7.7), abhängig von Umschaltern wie der PDDF-Normierung."""
-        if subplot_kind == 'PDDF':
-            pddf_norm_active = (getattr(self, 'pddf_norm_btn', None) is not None
-                                 and self.pddf_norm_btn.isChecked())
-            return 'P(r) (norm.)' if pddf_norm_active else 'P(r)'
-        if subplot_kind == 'ASAXS':
-            return '$I_{cross}$ / cm⁻¹'
-        if subplot_kind == 'Significance':
-            return '|I(q)| / σ(q)'
-        return ''
-
     def show_title_editor(self):
-        """Zeigt Titel-Editor Dialog (v7.0, v7.7: mit Subplot-Titel)"""
+        """Zeigt Titel-Editor Dialog (v7.0, v8.1: mit Titel je Panel)"""
         dialog = TitleEditorDialog(
             self,
             self.title_settings,
-            subplot_kind=self._get_active_subplot_kind()
+            panels=[(p.id, p.name, p.title) for p in self.plot_layout.panels]
         )
         if dialog.exec():
             self.title_settings = dialog.get_settings()
+            for panel_id, text in dialog.get_panel_titles().items():
+                panel = self.plot_layout.get(panel_id)
+                if panel is not None:
+                    panel.title = text
             self.update_plot()
 
     def apply_legend_order(self, legend_order):
@@ -3381,8 +3275,19 @@ class ScatterPlotApp(QMainWindow):
 
     def show_axes_settings(self):
         """Zeigt Achsen und Limits Dialog (v7.0 - jetzt mit Schriftart-Einstellungen,
-        v7.7 - jetzt auch mit Subplot-Achse für PDDF/ASAXS/Significance)"""
-        subplot_kind = self._get_active_subplot_kind()
+        v8.1 - Achsen aller weiteren Panels)"""
+        panels = []
+        for panel in self.plot_layout.panels:
+            if panel.is_main:
+                continue
+            info = panel.type_info
+            panels.append({
+                'id': panel.id, 'name': panel.name, 'type': panel.panel_type,
+                'axis': panel.axis,
+                'default_xlabel': info.xlabel,
+                'default_ylabel': info.default_ylabel(panel.options),
+                'shared_x': bool(panel.share_x_with),
+            })
         dialog = AxesSettingsDialog(
             self,
             self.custom_xlabel,
@@ -3390,14 +3295,15 @@ class ScatterPlotApp(QMainWindow):
             self.plot_type,
             self.axis_limits,
             self.font_settings,
-            subplot_kind=subplot_kind,
-            sub_axis_limits=self.sub_axis_limits,
-            sub_default_ylabel=self._get_default_sub_ylabel(subplot_kind)
+            panels=panels,
         )
         if dialog.exec():
             self.custom_xlabel, self.custom_ylabel = dialog.get_labels()
             self.axis_limits = dialog.get_axis_limits()
-            self.sub_axis_limits = dialog.get_sub_axis_limits()
+            for panel_id, axis in dialog.get_panel_axes().items():
+                panel = self.plot_layout.get(panel_id)
+                if panel is not None:
+                    panel.axis.update(axis)
             # Schriftart-Einstellungen aktualisieren
             font_updates = dialog.get_font_settings()
             self.font_settings.update(font_updates)
@@ -3434,11 +3340,33 @@ class ScatterPlotApp(QMainWindow):
                                    f"{ref_line['value']:.2f}"])
             item.setData(0, Qt.UserRole, ('reference_line', idx, ref_line))
 
+    def _attach_panel_selector(self, dialog, current_id=MAIN_ID):
+        """Fügt einem Annotations-/Referenzlinien-Dialog eine Panel-Auswahl hinzu
+        (v8.1, nur bei mehreren Panels). Gibt die Combo zurück (oder None)."""
+        if len(self.plot_layout.panels) < 2:
+            return None
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("panels.target_panel")))
+        combo = QComboBox()
+        for panel in self.plot_layout.panels:
+            combo.addItem(panel.name, panel.id)
+        combo.setCurrentIndex(max(0, combo.findData(current_id or MAIN_ID)))
+        row.addWidget(combo, 1)
+        box = dialog.layout()
+        box.insertLayout(max(0, box.count() - 1), row)  # vor den OK/Abbrechen-Buttons
+        return combo
+
+    @staticmethod
+    def _selected_panel_of(combo):
+        return combo.currentData() if combo is not None else MAIN_ID
+
     def add_annotation(self):
-        """Fügt Annotation hinzu (Version 5.2, erweitert 5.3)"""
+        """Fügt Annotation hinzu (Version 5.2, erweitert 5.3, v8.1: Ziel-Panel)"""
         dialog = AnnotationsDialog(self)
+        panel_combo = self._attach_panel_selector(dialog)
         if dialog.exec():
             annotation = dialog.get_annotation()
+            annotation['panel_id'] = self._selected_panel_of(panel_combo)
             self.annotations.append(annotation)
             self.update_annotations_tree()
             self.update_plot()
@@ -3446,8 +3374,10 @@ class ScatterPlotApp(QMainWindow):
     def add_reference_line(self):
         """Fügt Referenzlinie hinzu (Version 5.2, erweitert 5.3)"""
         dialog = ReferenceLinesDialog(self)
+        panel_combo = self._attach_panel_selector(dialog)
         if dialog.exec():
             ref_line = dialog.get_reference_line()
+            ref_line['panel_id'] = self._selected_panel_of(panel_combo)
 
             # Automatisches Label generieren, falls leer (Version 5.3)
             if not ref_line.get('label'):
@@ -3480,9 +3410,11 @@ class ScatterPlotApp(QMainWindow):
             dialog.color_button.setStyleSheet(f"background-color: {obj['color']}; border: 1px solid #555;")
             dialog.color_button.setText(obj['color'])
             dialog.rotation_spin.setValue(obj['rotation'])
+            panel_combo = self._attach_panel_selector(dialog, obj.get('panel_id'))
 
             if dialog.exec():
                 updated = dialog.get_annotation()
+                updated['panel_id'] = self._selected_panel_of(panel_combo)
                 self.annotations[idx] = updated
                 self.update_annotations_tree()
                 self.update_plot()
@@ -3500,9 +3432,11 @@ class ScatterPlotApp(QMainWindow):
             dialog.color_button.setStyleSheet(f"background-color: {obj['color']}; border: 1px solid #555;")
             dialog.color_button.setText(obj['color'])
             dialog.alpha_spin.setValue(obj['alpha'])
+            panel_combo = self._attach_panel_selector(dialog, obj.get('panel_id'))
 
             if dialog.exec():
                 updated = dialog.get_reference_line()
+                updated['panel_id'] = self._selected_panel_of(panel_combo)
                 # Automatisches Label generieren, falls leer
                 if not updated.get('label'):
                     if updated['type'] == 'vertical':
@@ -3969,11 +3903,11 @@ class ScatterPlotApp(QMainWindow):
                     'groups': [g.to_dict() for g in self.groups],
                     'unassigned': [ds.to_dict() for ds in self.unassigned_datasets],
                     'datasets_2d': [ds.to_dict() for ds in self.datasets_2d],
-                    'plot_type': self.plot_type,
+                    'plot_type': self.plot_type,  # Typ des Hauptpanels
+                    'plot_layout': self.plot_layout.to_dict(),  # v8.1: Panel-Grid
                     'stack_mode': self.stack_mode,
                     'color_scheme': self.color_scheme_combo.currentText(),
                     'axis_limits': self.axis_limits,
-                    'sub_axis_limits': self.sub_axis_limits,  # v7.7
                     'wavelength': self.wavelength,  # v6.2
                     'legend_settings': self.legend_settings,
                     'title_settings': self.title_settings,  # v7.0
@@ -4009,6 +3943,8 @@ class ScatterPlotApp(QMainWindow):
             try:
                 with open(filename, 'r', encoding='utf-8') as f:
                     session = json.load(f)
+                # v8.1: Sessions ≤ v8.0 (Plot-Typ mit festem Subplot) in ein Panel-Layout übersetzen
+                migrate_legacy_session(session)
 
                 # Tree leeren
                 self.tree.clear()
@@ -4063,8 +3999,10 @@ class ScatterPlotApp(QMainWindow):
                     item.setData(0, Qt.UserRole, ('dataset_2d', ds2d))
 
                 # Einstellungen wiederherstellen
-                self.plot_type = session.get('plot_type', 'Log-Log')
-                self.plot_type_combo.setCurrentText(self.plot_type)
+                # v8.1: Panel-Layout (enthält Plot-Typ, Achsen und Titel aller Panels)
+                self.plot_layout = PlotLayout.from_dict(session['plot_layout'])
+                self._drop_stale_panel_refs()
+                self.refresh_panel_list()
 
                 self.stack_mode = session.get('stack_mode', True)
                 self.stack_checkbox.setChecked(self.stack_mode)
@@ -4072,20 +4010,6 @@ class ScatterPlotApp(QMainWindow):
                 color_scheme = session.get('color_scheme', 'TUBAF')
                 self.color_scheme_combo.setCurrentText(color_scheme)
 
-                self.axis_limits = session.get('axis_limits', {'xmin': None, 'xmax': None,
-                                                               'ymin': None, 'ymax': None, 'auto': True,
-                                                               'yscale': None})
-                # Ensure keys exist in loaded sessions (backward compat)
-                self.axis_limits.setdefault('yscale', None)
-                self.axis_limits.setdefault('symlog_decades', 4)
-                self.axis_limits.setdefault('symlog_linscale', 1.0)
-
-                # v7.7: Subplot-Achseneinstellungen (backward compat: ältere Sessions haben das noch nicht)
-                self.sub_axis_limits = session.get('sub_axis_limits', {
-                    'xlabel': None, 'ylabel': None,
-                    'xmin': None, 'xmax': None, 'ymin': None, 'ymax': None,
-                    'auto': True, 'yscale': None
-                })
 
                 # Version 6.2: Wellenlänge für 2-Theta Plot
                 if 'wavelength' in session:
@@ -4097,7 +4021,8 @@ class ScatterPlotApp(QMainWindow):
                     self.legend_settings = session['legend_settings']
                 if 'title_settings' in session:  # v7.0
                     self.title_settings = session['title_settings']
-                    self.title_settings.setdefault('subplot_text', '')  # v7.7 backward compat
+                    # v7.7-Subplot-Titel steckt nach der Migration im Panel 'sub'
+                    self.title_settings.pop('subplot_text', None)
                 if 'grid_settings' in session:
                     self.grid_settings = session['grid_settings']
                 if 'font_settings' in session:
@@ -4116,16 +4041,12 @@ class ScatterPlotApp(QMainWindow):
                     self.current_plot_design = session['current_plot_design']
                     self.logger.debug(f"  Plot Design: {self.current_plot_design}")
 
-                # Version 5.7: Custom Achsenbeschriftungen
-                if 'custom_xlabel' in session:
-                    self.custom_xlabel = session['custom_xlabel']
-                if 'custom_ylabel' in session:
-                    self.custom_ylabel = session['custom_ylabel']
+                # Version 5.7: Custom Achsenbeschriftungen (v8.1: Teil von plot_layout)
                 if 'unit_format' in session:
                     self.unit_format = session['unit_format']
 
-                # Annotations-Tree aktualisieren (v5.3)
-                self.update_annotations_tree()
+                # Tree neu aufbauen (v8.1: inkl. Panel-Zuordnung als Tooltip)
+                self.rebuild_tree()
 
                 # Zähle fehlende Datensätze
                 missing_count = 0

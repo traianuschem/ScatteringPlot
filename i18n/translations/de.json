@@ -10,7 +10,8 @@
     "analysis": {
       "title": "Analyse",
       "gift": "P(r) berechnen (IFT/GIFT)...",
-      "verify_sidecar": "Provenance-Sidecar prüfen..."
+      "verify_sidecar": "Provenance-Sidecar prüfen...",
+      "asaxs": "ASAXS-Auswertung (I_A/I_N, Korrelation)..."
     },
     "file": {
       "title": "Datei",
@@ -59,7 +60,9 @@
     "provenance_tooltip": "GIFT-Ergebnis · record_id {record_id}",
     "unassigned": "▼ Nicht zugeordnet",
     "annotations": "▼ Annotations & Referenzlinien",
-    "section_2d": "▼ 2D-Datensätze"
+    "section_2d": "▼ 2D-Datensätze",
+    "panels_auto": "automatisch",
+    "panels_tooltip": "Panels: {panels}"
   },
 
   "2d": {
@@ -133,7 +136,10 @@
     "reset_color": "Farbe zurücksetzen",
     "set_plot_limits": "Plotgrenzen setzen...",
     "update_filepath": "Dateipfad aktualisieren...",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "show_in_panels": "🗂 Anzeigen in Panel",
+    "panels_auto": "Automatisch (passende Panels)",
+    "asaxs": "ASAXS-Auswertung..."
   },
 
   "dialogs": {
@@ -333,26 +339,6 @@
       "symlog_linscale_tooltip": "Relative Höhe des linearen Nullbereichs im Vergleich zu einer log-Dekade. Kleiner = schmalerer Nullbereich, größer = breiterer Nullbereich."
     },
 
-    "subplot": {
-      "title": "Subplot-Achse (P(r) / Cross-Term / Signifikanz)",
-      "no_subplot": "Der aktuelle Plot-Typ hat keinen Subplot. Diese Einstellungen greifen bei PDDF, ASAXS (mit aktiviertem ± Subplot) und Significance.",
-      "info_pddf": "Der P(r)-Subplot hat eine eigene, unabhängige r-Achse (nicht mit dem Hauptplot gekoppelt).",
-      "info_shared_x": "Die X-Achse dieses Subplots ist mit dem Hauptplot gekoppelt (geteilte q-Achse, log-Skala) und kann hier nicht separat verändert werden.",
-      "x_title": "X-Achse Titel:",
-      "y_title": "Y-Achse Titel:",
-      "auto_based_on_default": "Auto: '{default}'",
-      "x_min": "X-Minimum:",
-      "x_max": "X-Maximum:",
-      "y_min": "Y-Minimum:",
-      "y_max": "Y-Maximum:",
-      "auto_scaling": "Automatische Skalierung (ignoriert obige Werte)",
-      "y_scale": "Y-Achsen-Skala:",
-      "y_scale_auto": "Auto (Standard)",
-      "y_scale_linear": "Linear",
-      "y_scale_log": "Logarithmisch",
-      "reset": "Subplot-Einstellungen zurücksetzen"
-    },
-
     "font_labels": {
       "title": "Schriftart Achsenbeschriftungen",
       "family": "Schriftart:",
@@ -365,7 +351,29 @@
       "title": "Schriftart Achsen-Werte (Ticks)"
     },
 
-    "reset_default": "Auf Standard zurücksetzen"
+    "reset_default": "Auf Standard zurücksetzen",
+    "panels": {
+      "title": "Weitere Panels",
+      "no_panels": "Es gibt nur das Hauptpanel. Weitere Panels lassen sich in der Panel-Liste im Hauptfenster hinzufügen.",
+      "panel": "Panel:",
+      "info_shared_x": "Die X-Achse dieses Panels ist mit einem anderen Panel gekoppelt; X-Limits und X-Skala kommen von dort.",
+      "info_independent": "Dieses Panel hat eine eigene, unabhängige X-Achse.",
+      "x_title": "X-Achse Titel:",
+      "y_title": "Y-Achse Titel:",
+      "auto_based_on_default": "Auto: '{default}'",
+      "x_min": "X-Minimum:",
+      "x_max": "X-Maximum:",
+      "y_min": "Y-Minimum:",
+      "y_max": "Y-Maximum:",
+      "auto_scaling": "Automatische Skalierung (ignoriert obige Werte)",
+      "x_scale": "X-Achsen-Skala:",
+      "y_scale": "Y-Achsen-Skala:",
+      "scale_auto": "Auto (Standard des Panel-Typs)",
+      "scale_linear": "Linear",
+      "scale_log": "Logarithmisch",
+      "scale_symlog": "Symmetrisch logarithmisch (symlog)",
+      "reset": "Panel-Einstellungen zurücksetzen"
+    }
   },
 
   "grid": {
@@ -497,13 +505,10 @@
 
     "text_color_dialog": "Text-Farbe wählen",
     "background_color_dialog": "Hintergrund-Farbe wählen",
-
-    "subplot": {
-      "title": "Subplot-Titel",
-      "label": "Titel:",
-      "placeholder": "z.B. Signifikanz (optional)",
-      "info": "Zusätzlicher Titel oberhalb des unteren Subplot-Bereichs. Nutzt Farbe und Schriftart von oben (etwas kleiner). Der Haupttitel bleibt unabhängig davon als figurweiter Titel erhalten.",
-      "no_subplot": "Der aktuelle Plot-Typ hat keinen Subplot. Dieser Titel greift bei PDDF, ASAXS (mit aktiviertem ± Subplot) und Significance."
+    "panels": {
+      "title": "Panel-Titel",
+      "placeholder": "(optional)",
+      "info": "Eigener Titel je Panel; wird nur angezeigt, wenn mehr als ein Panel aktiv ist. Nutzt Farbe und Schriftart von oben (etwas kleiner). Der Haupttitel läuft dann als figurweiter Titel."
     }
   },
 
@@ -706,25 +711,14 @@
       "snr_errorbars_tooltip": "Subtile Fehlerbalken auf alle sichtbaren SNR-Punkte"
     },
 
-    "subplot": {
-      "title": "Plotbereich",
-      "show_in": "Anzeigen in:",
-      "both": "Hauptplot und Subplot",
-      "main": "Nur Hauptplot",
-      "sub": "Nur Subplot",
-      "pddf_both": "I(q) und P(r)",
-      "pddf_main": "Nur I(q)",
-      "pddf_sub": "Nur P(r)",
-      "tooltip": "Steuert, in welchem Axes-Bereich diese Gruppe dargestellt wird,\nwenn ein Subplot aktiv ist (ASAXS ± Subplot, PDDF)."
-    },
-
     "asaxs": {
       "title": "ASAXS",
       "term_type": "Term-Typ:",
       "none": "(keiner)",
       "normal": "Normal (I_N)",
       "cross": "Cross-Term (I_cross)",
-      "anomalous": "Anomal (I_A)"
+      "anomalous": "Anomal (I_A)",
+      "ratio": "Abgeleitet (Verhältnis/Korrelation)"
     },
 
     "pddf_role": {
@@ -735,6 +729,11 @@
       "fit": "I(q)-Fit",
       "pofr": "P(r)",
       "tooltip": "Übersteuert die automatische Dateinamen-Erkennung (is_pr_data / \"fit\" im Namen).\nKorrigiert falsch erkannte Dateien und bestimmt, ob diese Kurve im PDDF-Plot\nauf dem I(q)-Hauptplot oder dem P(r)-Subplot gezeichnet wird."
+    },
+    "panels": {
+      "title": "Panels",
+      "auto": "Automatisch (alle passenden Panels)",
+      "auto_tooltip": "Die Gruppe erscheint in allen aktiven Panels, deren Typ die Daten darstellen kann\n(z. B. P(r)-Kurven nur im P(r)-Panel). Abwählen, um die Panels selbst festzulegen."
     }
   },
 
@@ -1005,6 +1004,114 @@
       "change_location_title": "Benutzer-Config speichern unter",
       "json_filter": "JSON Files (*.json)"
     }
+  },
+
+  "panels": {
+    "title": "Panels",
+    "main": "Haupt",
+    "disabled": "aus",
+    "main_type_tooltip": "Darstellung des Hauptpanels. Weitere Panels (P(r), Significance, …) über die Panel-Liste unten.",
+    "list_tooltip": "Häkchen: Panel ein-/ausschalten. Doppelklick: Panel im Layout-Dialog bearbeiten.",
+    "item_tooltip": "{type} · Zeile {row}, Spalte {col}",
+    "add_tooltip": "Panel hinzufügen",
+    "remove_tooltip": "Ausgewähltes Panel entfernen",
+    "layout_button": "Layout…",
+    "layout_tooltip": "Grid, Panel-Typen, X-Achsen-Kopplung und Optionen bearbeiten",
+    "preset_placeholder": "Vorlage…",
+    "preset_tooltip": "Panel-Layout aus einer Vorlage übernehmen (Hauptpanel bleibt erhalten)",
+    "target_panel": "Panel:",
+    "cannot_remove_main": "Das Hauptpanel kann nicht entfernt werden.",
+    "preset": {
+      "single": "Nur Hauptpanel",
+      "main+P(r)": "Haupt + P(r) (ehem. PDDF)",
+      "main+Significance": "Haupt + Significance",
+      "main+I linear": "Haupt + I linear (ASAXS ±)",
+      "2x2": "2 × 2 Grid"
+    }
+  },
+
+  "layout_dialog": {
+    "title": "Panel-Layout",
+    "add_panel": "+ Panel",
+    "remove_panel": "− Panel entfernen",
+    "confirm_remove": "Panel '{name}' entfernen?",
+    "disabled_panels": "Deaktiviert (nicht gezeichnet): {names}",
+    "grid": {
+      "title": "Grid",
+      "rows": "Zeilen:",
+      "cols": "Spalten:",
+      "row_ratios": "Höhenverhältnis:",
+      "col_ratios": "Breitenverhältnis:",
+      "ratios_tooltip": "Kommagetrennte Verhältnisse, eines pro Zeile bzw. Spalte (z. B. 3, 1)"
+    },
+    "panel": {
+      "title": "Panel",
+      "select": "Panel:",
+      "name": "Name:",
+      "type": "Typ:",
+      "enabled": "Aktiv (wird gezeichnet)",
+      "row": "Zeile:",
+      "col": "Spalte:",
+      "rowspan": "Zeilen belegt:",
+      "colspan": "Spalten belegt:",
+      "share_x": "X-Achse teilen mit:",
+      "share_x_tooltip": "Gekoppelte X-Achse (Zoom/Limits gemeinsam). Nur Panels mit gleicher X-Größe (z. B. q) werden angeboten.",
+      "share_none": "— (unabhängig)",
+      "legend": "Legende:",
+      "legend_all": "Alle Kurven",
+      "legend_own": "Nur Kurven dieses Panels",
+      "legend_off": "Keine",
+      "apply_stack": "Stack-Faktoren der Gruppen anwenden",
+      "apply_stack_tooltip": "Multipliziert die Kurven mit dem Stack-Faktor ihrer Gruppe (wenn Stacking aktiv ist)."
+    },
+    "options": {
+      "title": "Optionen des Panel-Typs",
+      "none": "Dieser Panel-Typ hat keine weiteren Optionen.",
+      "normalize_area": "P(r) auf Fläche 1 normieren (∫P(r)dr = 1)",
+      "normalize_area_tooltip": "Ermöglicht direkten Formvergleich bei unterschiedlichen Intensitäten."
+    }
+  },
+
+  "asaxs": {
+    "title": "ASAXS-Auswertung",
+    "samples": {
+      "title": "Proben (automatisch erkannt)",
+      "sample": "Probe",
+      "redetect": "Neu erkennen",
+      "redetect_tooltip": "Geladene Datensätze erneut nach ASAXS-Termen (_IN, _IA, _Icross bzw. Term-Typ) durchsuchen"
+    },
+    "calc": {
+      "title": "Berechnung",
+      "quantity": "Größe:",
+      "q_min": "q min:",
+      "q_max": "q max:",
+      "q_auto": "auto",
+      "show_errors": "Fehlerbänder anzeigen",
+      "log_y": "Log-Skala (unten)",
+      "log_y_tooltip": "Nur wirksam, wenn alle Werte positiv sind"
+    },
+    "quantity": {
+      "ia_in": "I_A / I_N",
+      "icross_in": "I_cross / I_N",
+      "correlation": "Korrelation I_cross / 2√(I_N·I_A)"
+    },
+    "no_samples": "Keine ASAXS-Datensätze gefunden (Term-Typ I_N / I_A / I_cross).",
+    "missing_terms": "Für diese Größe fehlt: {terms}",
+    "info": {
+      "points": "Punkte: {n}",
+      "range": "q-Bereich: {qmin} … {qmax} nm⁻¹",
+      "median": "Median: {value}",
+      "interpolated": "{n} Punkte des Zählers interpoliert (unterschiedliche q-Gitter)",
+      "above_one": "⚠ |c| > 1 bei {percent} % der Punkte – Separation prüfen"
+    },
+    "apply_sample": "In Datentree übernehmen",
+    "apply_all": "Alle Proben übernehmen",
+    "apply_tooltip": "Legt die Ergebnisse als abgeleitete Datensätze in einer neuen Gruppe an (Anzeige im Ratio-Panel; wird in Sessions gespeichert)",
+    "export_ascii": "ASCII exportieren...",
+    "export_png": "PNG exportieren...",
+    "nothing_to_apply": "Keine Ergebnisse – bitte die benötigten Terme zuordnen.",
+    "applied": "{n} Datensatz/Datensätze übernommen.",
+    "group_name": "ASAXS {quantity}"
   },
 
   "common": {

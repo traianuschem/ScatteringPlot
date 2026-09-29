@@ -7,6 +7,7 @@ This dialog allows users to configure the plot title with full customization:
 - Colors (text and background)
 - Font settings
 - Enable/disable checkbox
+- Panel titles (v8.1: one optional title per plot panel)
 """
 
 from PySide6.QtWidgets import (
@@ -22,7 +23,7 @@ from i18n import tr
 class TitleEditorDialog(QDialog):
     """Dialog für Titel-Einstellungen"""
 
-    def __init__(self, parent, title_settings=None, subplot_kind=None):
+    def __init__(self, parent, title_settings=None, panels=None):
         super().__init__(parent)
         self.setWindowTitle(tr("title_editor.title"))
         self.resize(550, 560)
@@ -38,12 +39,11 @@ class TitleEditorDialog(QDialog):
                 'background_alpha': 0.8,
                 'size': 14,
                 'bold': True,
-                'italic': False,
-                'subplot_text': ''
+                'italic': False
             }
         self.title_settings = title_settings
-        # v7.7: 'PDDF', 'ASAXS', 'Significance' oder None (kein Subplot beim aktuellen Plot-Typ)
-        self.subplot_kind = subplot_kind
+        # v8.1: Liste von (panel_id, Anzeigename, aktueller Titel) aller Panels
+        self.panels = panels or []
 
         self.setup_ui()
 
@@ -156,32 +156,22 @@ class TitleEditorDialog(QDialog):
         font_group.setLayout(font_layout)
         layout.addWidget(font_group)
 
-        # Subplot-Titel (v7.7): eigener, optionaler Titel für die untere Subplot-Achse
-        # (PDDF P(r)-Plot, ASAXS-Cross-Term oder Significance) - unabhängig vom
-        # Haupttitel oben, der bei aktivem Subplot als figurweiter Titel gerendert wird.
-        subplot_group = QGroupBox(tr("title_editor.subplot.title"))
-        subplot_layout = QGridLayout()
-
-        self.subplot_title_edit = QLineEdit()
-        self.subplot_title_edit.setText(self.title_settings.get('subplot_text', ''))
-
-        if self.subplot_kind:
-            subplot_layout.addWidget(QLabel(tr("title_editor.subplot.label")), 0, 0)
-            self.subplot_title_edit.setPlaceholderText(tr("title_editor.subplot.placeholder"))
-            subplot_layout.addWidget(self.subplot_title_edit, 0, 1)
-
-            subplot_info = QLabel(tr("title_editor.subplot.info"))
-            subplot_info.setWordWrap(True)
-            subplot_layout.addWidget(subplot_info, 1, 0, 1, 2)
-        else:
-            # Aktueller Plot-Typ hat keinen Subplot -> Eingabe ausblenden, Wert aber erhalten
-            self.subplot_title_edit.setVisible(False)
-            no_subplot_label = QLabel(tr("title_editor.subplot.no_subplot"))
-            no_subplot_label.setWordWrap(True)
-            subplot_layout.addWidget(no_subplot_label, 0, 0, 1, 2)
-
-        subplot_group.setLayout(subplot_layout)
-        layout.addWidget(subplot_group)
+        # Panel-Titel (v8.1): eigener, optionaler Titel je Plot-Panel – unabhängig vom
+        # Haupttitel oben, der bei mehreren Panels als figurweiter Titel gerendert wird.
+        panel_group = QGroupBox(tr("title_editor.panels.title"))
+        panel_layout = QGridLayout()
+        self.panel_title_edits = {}
+        for row, (panel_id, name, text) in enumerate(self.panels):
+            panel_layout.addWidget(QLabel(name), row, 0)
+            edit = QLineEdit(text or '')
+            edit.setPlaceholderText(tr("title_editor.panels.placeholder"))
+            panel_layout.addWidget(edit, row, 1)
+            self.panel_title_edits[panel_id] = edit
+        panel_info = QLabel(tr("title_editor.panels.info"))
+        panel_info.setWordWrap(True)
+        panel_layout.addWidget(panel_info, len(self.panels), 0, 1, 2)
+        panel_group.setLayout(panel_layout)
+        layout.addWidget(panel_group)
 
         layout.addStretch()
 
@@ -237,6 +227,9 @@ class TitleEditorDialog(QDialog):
             'background_alpha': self.bg_alpha_spin.value() / 100.0,
             'size': self.size_spin.value(),
             'bold': self.bold_check.isChecked(),
-            'italic': self.italic_check.isChecked(),
-            'subplot_text': self.subplot_title_edit.text()
+            'italic': self.italic_check.isChecked()
         }
+
+    def get_panel_titles(self):
+        """Gibt die Panel-Titel zurück (v8.1): {panel_id: text}"""
+        return {pid: edit.text() for pid, edit in self.panel_title_edits.items()}
