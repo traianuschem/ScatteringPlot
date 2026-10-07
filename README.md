@@ -1,8 +1,8 @@
-# ScatterForge Plot v8.1.0
+# ScatterForge Plot v8.1.1
 
 **Professionelles Tool für wissenschaftliche Streudaten-Analyse mit publikationsreifer Visualisierung**
 
-![Version](https://img.shields.io/badge/version-8.1.0-blue)
+![Version](https://img.shields.io/badge/version-8.1.1-blue)
 ![Python](https://img.shields.io/badge/python-3.8+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
@@ -63,7 +63,7 @@ ScatterForge Plot ist eine Qt6-basierte Desktop-Anwendung für die professionell
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
-| **ASAXS-Auswertung** | Eigener Dialog: I_A/I_N, I_cross/I_N und Korrelation I_cross/2√(I_N·I_A) mit Fehlerfortpflanzung, automatischer Proben-Erkennung und Übernahme als abgeleitete Datensätze (Ratio-Panel, sessionfest) | ✅ **v8.1.0** |
+| **ASAXS-Auswertung** | Eigener Dialog: I_A/I_N, I_cross/I_N und Korrelation I_cross/√(I_N·I_A) mit Fehlerfortpflanzung, automatischer Proben-Erkennung und Übernahme als abgeleitete Datensätze (Ratio-Panel, sessionfest) | ✅ **v8.1.0** |
 | **Flexibles Panel-Layout** | Freies Grid aus Panels (Zeilen × Spalten, Spans, Verhältnisse), jedes ein-/ausschaltbar mit eigenem Typ (u. a. P(r), Significance, I linear), gekoppelte X-Achsen, eigene Achsen/Titel/Legende; Gruppen wählen ihre Panels; alte Sessions werden migriert | ✅ **v8.1.0** |
 | **Weitere Glatter-Auswertungen** | IFT-Arten Querschnitt p_c(r) und Dicke p_t(r), Größenverteilungen D_V(R)/D_N(R) für Kugeln, Zylinder und Lamellen; DECON: radiales Kontrastprofil aus p(r) mit exakten Überlappungsintegralen, Polydispersitäts-Scan (Mittelbach & Glatter 1998) und optimiertem Stufenmodell | ✅ **v8.0.0** |
 | **Weitere GIFT-Strukturfaktoren** | S_eff polydisperser harter Kugeln (Vrij, Schulz), klebrige harte Kugeln (Baxter), fraktales Aggregat (Teixeira), Stäbchen (Mean-Field) — validiert gegen sasmodels bzw. PY-Grenzfälle, mit Flags zur Bestimmbarkeit | ✅ **v7.14.0** |

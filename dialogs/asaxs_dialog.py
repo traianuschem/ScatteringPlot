@@ -5,7 +5,8 @@ Nicht-modaler Dialog für abgeleitete Größen aus separierten ASAXS-Termen
 (Rechnung: analysis/asaxs.py):
   - I_A / I_N          (Verhältnis anomaler zu nicht-resonanter Streuung)
   - I_cross / I_N
-  - Korrelation I_cross / (2·√(I_N·I_A))  (|c| ≤ 1 als Konsistenzcheck)
+  - Korrelation I_cross / √(I_N·I_A)  (|c| ≤ 1 als Konsistenzcheck)
+  - Cauchy-Schwarz √(I_N·I_A) / |I_cross|  (muss überall ≥ 1 sein)
 
 Proben werden automatisch aus den geladenen Datensätzen erkannt (Term-Typ und
 Dateiname-Suffix _IN/_IA/_Icross); die Zuordnung ist pro Probe korrigierbar.
@@ -28,7 +29,7 @@ from matplotlib.gridspec import GridSpec
 
 from analysis.asaxs import (
     Curve, compute, pair_asaxs_terms, QUANTITIES, QUANTITY_LABEL, QUANTITY_SUFFIX,
-    QUANTITY_CORRELATION, REQUIRED_TERMS, TERM_NORMAL, TERM_ANOMALOUS, TERM_CROSS, TERM_RATIO,
+    QUANTITY_CORRELATION, QUANTITY_CAUCHY_SCHWARZ, REQUIRED_TERMS, TERM_NORMAL, TERM_ANOMALOUS, TERM_CROSS, TERM_RATIO,
 )
 from i18n import tr
 
@@ -291,6 +292,10 @@ class AsaxsDialog(QDialog):
             if quantity == QUANTITY_CORRELATION:
                 for level in (-1.0, 1.0):
                     ax_ratio.axhline(level, color='gray', lw=0.8, ls='--')
+            if quantity == QUANTITY_CAUCHY_SCHWARZ:
+                # Zulässig ist R ≥ 1; der Bereich darunter verletzt die Ungleichung
+                ax_ratio.axhline(1.0, color='#d62728', lw=1.0, ls='--')
+                ax_ratio.axhspan(0.0, 1.0, color='#d62728', alpha=0.08, lw=0)
             ax_ratio.axhline(0.0, color='gray', lw=0.6, ls=':')
             if self.logy_check.isChecked() and np.all(result.y[np.isfinite(result.y)] > 0):
                 ax_ratio.set_yscale('log')
@@ -309,6 +314,10 @@ class AsaxsDialog(QDialog):
         frac = result.info.get('fraction_above_one')
         if frac:
             lines.append(tr("asaxs.info.above_one", percent=f"{100 * frac:.0f}"))
+        if result.quantity == QUANTITY_CAUCHY_SCHWARZ and len(result.x):
+            frac_below = result.info.get('fraction_below_one', 0.0)
+            lines.append(tr("asaxs.info.below_one", percent=f"{100 * frac_below:.0f}") if frac_below
+                         else tr("asaxs.info.cs_ok"))
         return "\n".join(lines)
 
     # ── Übernehmen / Export ──────────────────────────────────────────────────

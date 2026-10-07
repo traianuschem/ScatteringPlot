@@ -1,5 +1,22 @@
 # Changelog — Version 8.1
 
+## Version 8.1.1 — Bugfix-Release
+
+**Release Date:** 1. Oktober 2026
+
+### 🐛 Fehlerbehebungen / Verbesserungen
+
+- **ASAXS – Cauchy-Schwarz-Plot:** Neue Größe R = √(I_N·I_A) / |I_cross| im ASAXS-Dialog.
+  Aus |I_cross| ≤ √(I_N·I_A) folgt R ≥ 1 für alle q; die Linie bei R = 1 und der rot
+  hinterlegte Bereich darunter zeigen sofort, ob die Separation die Ungleichung verletzt.
+  Der Infotext nennt den Anteil der Punkte mit R < 1. Fehlerfortpflanzung, q-Bereich,
+  Übernahme als abgeleiteter Datensatz (Suffix `_CS`) und Export wie bei den übrigen Größen.
+- **ASAXS – Korrelation c korrigiert:** Der Nenner enthielt fälschlich einen Faktor 2. Bei der
+  Stuhrmann-Zerlegung I = I_N + 2f'·I_cross + (f'²+f''²)·I_A steht die 2 vor f', daher gilt
+  |I_cross| ≤ √(I_N·I_A) und c = I_cross / √(I_N·I_A) mit |c| ≤ 1. Bereits als abgeleitete
+  Datensätze übernommene Korrelationskurven sind um den Faktor 2 zu klein und müssen neu
+  berechnet werden.
+
 ## Version 8.1.0 — ScatterForge Plot (MINOR RELEASE)
 
 **Release Date:** 29. September 2026
@@ -68,7 +85,7 @@ einen ASAXS-Datensatz oder eine Gruppe):
 - **Größen:**
   - **I_A / I_N** und **I_cross / I_N** – auf dem q-Gitter von I_N; bei abweichenden
     Gittern wird der Zähler linear in log q interpoliert (nur Überlappungsbereich)
-  - **Korrelation** c = I_cross / (2·√(I_N·I_A)) – nach Cauchy-Schwarz |c| ≤ 1;
+  - **Korrelation** c = I_cross / √(I_N·I_A) – nach Cauchy-Schwarz |c| ≤ 1;
     der Dialog warnt, wenn |c| > 1 (Hinweis auf Probleme der Separation)
   - Gauß'sche Fehlerfortpflanzung, optionaler q-Bereich, Fehlerbänder, Log-Skala
 - **Vorschau:** oben die Terme (symlog, damit negative I_cross-Werte sichtbar sind),

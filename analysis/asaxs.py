@@ -7,10 +7,13 @@ resonanten (anomalen) Term I_A. Dieses Modul berechnet daraus abgeleitete Größ
 
 - Verhältnisse, z. B. I_A/I_N oder I_cross/I_N (Anteil bzw. Kontrastverhältnis der
   resonanten Streuer), auf dem q-Gitter des Nenners
-- den Korrelationskoeffizienten c = I_cross / (2·√(I_N·I_A)). Nach der
-  Cauchy-Schwarz-Ungleichung gilt |c| ≤ 1; c ≈ ±1 bedeutet, dass resonante und
-  nicht-resonante Streuung dieselbe Struktur „sehen“ (z. B. Zweiphasensystem),
-  |c| > 1 weist auf Probleme der Separation hin.
+- den Korrelationskoeffizienten c = I_cross / √(I_N·I_A). Nach der Cauchy-Schwarz-Ungleichung
+  gilt |c| ≤ 1; c ≈ ±1 bedeutet, dass resonante und nicht-resonante Streuung dieselbe
+  Struktur „sehen“ (z. B. Zweiphasensystem), |c| > 1 weist auf Probleme der Separation hin.
+- den Cauchy-Schwarz-Test R = √(I_N·I_A) / |I_cross| = 1/|c|: R ≥ 1 muss überall gelten,
+  R < 1 verletzt die Ungleichung (Messfehler, Separationsartefakt).
+  Konvention (Stuhrmann): I = I_N + 2f'·I_cross + (f'²+f''²)·I_A, die 2 steht also vor f'
+  und nicht in I_cross; sonst wäre die Schranke 2·√(I_N·I_A).
 
 Die Terme liegen i. d. R. auf demselben q-Gitter; falls nicht, wird der Zähler
 linear in log(q) auf das Gitter des Nenners interpoliert (nur im Überlappungsbereich).
@@ -32,13 +35,15 @@ TERMS = (TERM_NORMAL, TERM_ANOMALOUS, TERM_CROSS)
 QUANTITY_IA_IN = 'ia_in'
 QUANTITY_ICROSS_IN = 'icross_in'
 QUANTITY_CORRELATION = 'correlation'
-QUANTITIES = (QUANTITY_IA_IN, QUANTITY_ICROSS_IN, QUANTITY_CORRELATION)
+QUANTITY_CAUCHY_SCHWARZ = 'cauchy_schwarz'
+QUANTITIES = (QUANTITY_IA_IN, QUANTITY_ICROSS_IN, QUANTITY_CORRELATION, QUANTITY_CAUCHY_SCHWARZ)
 
 # Benötigte Terme je Größe
 REQUIRED_TERMS = {
     QUANTITY_IA_IN: (TERM_ANOMALOUS, TERM_NORMAL),
     QUANTITY_ICROSS_IN: (TERM_CROSS, TERM_NORMAL),
     QUANTITY_CORRELATION: (TERM_NORMAL, TERM_ANOMALOUS, TERM_CROSS),
+    QUANTITY_CAUCHY_SCHWARZ: (TERM_NORMAL, TERM_ANOMALOUS, TERM_CROSS),
 }
 
 # Namenssuffixe für die abgeleiteten Kurven (Dateiname/Label)
@@ -46,13 +51,15 @@ QUANTITY_SUFFIX = {
     QUANTITY_IA_IN: 'IA_IN',
     QUANTITY_ICROSS_IN: 'Icross_IN',
     QUANTITY_CORRELATION: 'corr',
+    QUANTITY_CAUCHY_SCHWARZ: 'CS',
 }
 
 # Achsentitel (MathText)
 QUANTITY_LABEL = {
     QUANTITY_IA_IN: r'$I_A \,/\, I_N$',
     QUANTITY_ICROSS_IN: r'$I_{cross} \,/\, I_N$',
-    QUANTITY_CORRELATION: r'$I_{cross} \,/\, 2\sqrt{I_N I_A}$',
+    QUANTITY_CORRELATION: r'$I_{cross} \,/\, \sqrt{I_N I_A}$',
+    QUANTITY_CAUCHY_SCHWARZ: r'$\sqrt{I_N I_A} \,/\, |I_{cross}|$',
 }
 
 _SUFFIX_RE = re.compile(r'_(icross|ia|in)(?=_|$)', re.IGNORECASE)
@@ -183,14 +190,14 @@ def ratio(num, den, quantity=QUANTITY_IA_IN, q_range=None):
 
 
 def correlation(normal, anomalous, cross, q_range=None):
-    """Korrelationskoeffizient c = I_cross / (2·√(I_N·I_A)) auf dem Gitter von I_N.
+    """Korrelationskoeffizient c = I_cross / √(I_N·I_A) auf dem Gitter von I_N.
 
     σ_c = |c| · √((σ_X/I_X)² + (σ_N/2I_N)² + (σ_A/2I_A)²); nur Punkte mit I_N, I_A > 0.
     """
     y_a, e_a, n_a = _on_grid(anomalous, normal)
     y_x, e_x, n_x = _on_grid(cross, normal)
     with np.errstate(invalid='ignore', divide='ignore'):
-        denom = 2.0 * np.sqrt(normal.y * y_a)
+        denom = np.sqrt(normal.y * y_a)
         c = y_x / denom
     keep = np.isfinite(c) & (normal.y > 0) & (y_a > 0)
     err = None
@@ -207,6 +214,31 @@ def correlation(normal, anomalous, cross, q_range=None):
                        err[keep] if err is not None else None, n_interpolated=max(n_a, n_x))
     finite = np.abs(out.y[np.isfinite(out.y)])
     out.info['fraction_above_one'] = float(np.mean(finite > 1.0)) if finite.size else 0.0
+    return out
+
+
+def cauchy_schwarz(normal, anomalous, cross, q_range=None):
+    """Cauchy-Schwarz-Test R = √(I_N·I_A) / |I_cross| auf dem Gitter von I_N.
+
+    Aus |I_cross| ≤ √(I_N·I_A) folgt R ≥ 1. σ_R = R · √((σ_N/2I_N)² + (σ_A/2I_A)² + (σ_X/I_X)²);
+    nur Punkte mit I_N, I_A > 0 und I_cross ≠ 0 (dort ist R unendlich).
+    `info['fraction_below_one']` gibt den Anteil der Punkte mit R < 1 an (Verletzung).
+    """
+    y_a, e_a, n_a = _on_grid(anomalous, normal)
+    y_x, e_x, n_x = _on_grid(cross, normal)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        r = np.sqrt(normal.y * y_a) / np.abs(y_x)
+    keep = np.isfinite(r) & (normal.y > 0) & (y_a > 0) & (y_x != 0)
+    err = None
+    if any(e is not None for e in (normal.err, e_a, e_x)):
+        with np.errstate(invalid='ignore', divide='ignore'):
+            rel = _rel_sq(normal.err, 2 * normal.y) + _rel_sq(e_a, 2 * y_a) + _rel_sq(e_x, y_x)
+            err = r * np.sqrt(rel)
+        keep &= np.isfinite(err)
+    keep &= _q_mask(normal.x, q_range)
+    out = DerivedCurve(QUANTITY_CAUCHY_SCHWARZ, normal.x[keep], r[keep],
+                       err[keep] if err is not None else None, n_interpolated=max(n_a, n_x))
+    out.info['fraction_below_one'] = float(np.mean(out.y < 1.0)) if out.y.size else 0.0
     return out
 
 
@@ -234,4 +266,5 @@ def compute(quantity, terms, q_range=None):
         return ratio(terms[TERM_ANOMALOUS], terms[TERM_NORMAL], quantity, q_range)
     if quantity == QUANTITY_ICROSS_IN:
         return ratio(terms[TERM_CROSS], terms[TERM_NORMAL], quantity, q_range)
-    return correlation(terms[TERM_NORMAL], terms[TERM_ANOMALOUS], terms[TERM_CROSS], q_range)
+    func = cauchy_schwarz if quantity == QUANTITY_CAUCHY_SCHWARZ else correlation
+    return func(terms[TERM_NORMAL], terms[TERM_ANOMALOUS], terms[TERM_CROSS], q_range)

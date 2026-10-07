@@ -1093,7 +1093,8 @@
     "quantity": {
       "ia_in": "I_A / I_N",
       "icross_in": "I_cross / I_N",
-      "correlation": "Korrelation I_cross / 2√(I_N·I_A)"
+      "correlation": "Korrelation I_cross / √(I_N·I_A)",
+      "cauchy_schwarz": "Cauchy-Schwarz √(I_N·I_A) / |I_cross|"
     },
     "no_samples": "Keine ASAXS-Datensätze gefunden (Term-Typ I_N / I_A / I_cross).",
     "missing_terms": "Für diese Größe fehlt: {terms}",
@@ -1102,7 +1103,9 @@
       "range": "q-Bereich: {qmin} … {qmax} nm⁻¹",
       "median": "Median: {value}",
       "interpolated": "{n} Punkte des Zählers interpoliert (unterschiedliche q-Gitter)",
-      "above_one": "⚠ |c| > 1 bei {percent} % der Punkte – Separation prüfen"
+      "above_one": "⚠ |c| > 1 bei {percent} % der Punkte – Separation prüfen",
+      "below_one": "⚠ √(I_N·I_A)/|I_cross| < 1 bei {percent} % der Punkte – Cauchy-Schwarz-Ungleichung verletzt",
+      "cs_ok": "✔ Cauchy-Schwarz erfüllt: √(I_N·I_A)/|I_cross| ≥ 1 für alle Punkte"
     },
     "apply_sample": "In Datentree übernehmen",
     "apply_all": "Alle Proben übernehmen",
