@@ -59,7 +59,6 @@ from core.version import __version__, get_version_string
 from dialogs.settings_dialog import PlotSettingsDialog
 from dialogs.group_dialog import CreateGroupDialog
 from dialogs.design_manager import DesignManagerDialog
-from dialogs.legend_dialog import LegendSettingsDialog
 from dialogs.legend_editor_dialog import LegendEditorDialog
 from dialogs.title_editor_dialog import TitleEditorDialog
 from dialogs.grid_dialog import GridSettingsDialog
@@ -1245,6 +1244,7 @@ class ScatterPlotApp(QMainWindow):
             label = dataset.display_label
         plot_style = dataset.get_plot_style()
         errorbar_style = getattr(dataset, 'errorbar_style', 'fill')
+        line_alpha = getattr(dataset, 'line_alpha', 1.0)
 
         # SNR-Qualitätsmarker (wenn aktiviert und Fehlerdaten vorhanden)
         if getattr(dataset, 'snr_visualization', False) and y_err is not None and len(x) > 0:
@@ -1262,16 +1262,17 @@ class ScatterPlotApp(QMainWindow):
             markerline.set_markersize(dataset.marker_size)
             stemlines.set_linewidth(dataset.line_width)
             stemlines.set_alpha(dataset.errorbar_alpha)
+            markerline.set_alpha(line_alpha)
             ax.plot([], [], color=color, marker=dataset.marker_style if dataset.marker_style else 'o',
-                    markersize=dataset.marker_size, linestyle='', label=label)
+                    markersize=dataset.marker_size, linestyle='', label=label, alpha=line_alpha)
         # Fehlerbalken plotten wenn vorhanden und aktiviert (v6.0)
         elif y_err is not None and dataset.show_errorbars:
             if errorbar_style == 'fill':
                 ax.fill_between(x, y - y_err, y + y_err, alpha=dataset.errorbar_alpha, color=color)
-                ax.plot(x, y, plot_style, color=color, label=label,
+                ax.plot(x, y, plot_style, color=color, label=label, alpha=line_alpha,
                         linewidth=dataset.line_width, markersize=dataset.marker_size)
             else:  # 'bars'
-                ax.errorbar(
+                container = ax.errorbar(
                     x, y, yerr=np.abs(y_err),
                     fmt=plot_style,
                     color=color,
@@ -1280,12 +1281,15 @@ class ScatterPlotApp(QMainWindow):
                     markersize=dataset.marker_size,
                     capsize=dataset.errorbar_capsize,
                     elinewidth=dataset.errorbar_linewidth,
-                    alpha=dataset.errorbar_alpha,
+                    alpha=line_alpha,
                     ecolor=color,
                     capthick=dataset.errorbar_linewidth
                 )
+                # Fehlerbalken/Caps behalten ihre eigene Transparenz
+                for artist in list(container.lines[1]) + list(container.lines[2]):
+                    artist.set_alpha(dataset.errorbar_alpha)
         else:
-            ax.plot(x, y, plot_style, color=color, label=label,
+            ax.plot(x, y, plot_style, color=color, label=label, alpha=line_alpha,
                     linewidth=dataset.line_width, markersize=dataset.marker_size)
 
     def _axis_label(self, override, default):
@@ -1434,8 +1438,8 @@ class ScatterPlotApp(QMainWindow):
         from matplotlib.lines import Line2D
 
         def include(dataset):
-            return (dataset.show_in_legend and dataset.data_loaded
-                    and (only is None or id(dataset) in only))
+            return (dataset.show_in_legend and getattr(dataset, 'legend_visible', True)
+                    and dataset.data_loaded and (only is None or id(dataset) in only))
 
         def dataset_handle(dataset):
             marker = dataset.marker_style if dataset.marker_style else 'o'
@@ -1447,13 +1451,17 @@ class ScatterPlotApp(QMainWindow):
                 else:
                     marker, linestyle = 'o', ''
             return Line2D([0], [0], color=dataset.color, marker=marker, linestyle=linestyle,
-                          linewidth=dataset.line_width, markersize=dataset.marker_size)
+                          linewidth=dataset.line_width, markersize=dataset.marker_size,
+                          alpha=getattr(dataset, 'line_alpha', 1.0))
 
         handles, labels = [], []
+        # Globale Legenden-Schrift (Fett/Kursiv) gilt zusätzlich zur Formatierung je Eintrag
+        all_bold = self.font_settings.get('legend_bold', False)
+        all_italic = self.font_settings.get('legend_italic', False)
 
         def add(handle, text, bold, italic):
             handles.append(handle)
-            labels.append(format_legend_text(text, bold, italic))
+            labels.append(format_legend_text(text, bold or all_bold, italic or all_italic))
 
         for group, datasets_in_order in ordered_groups:
             if not group.visible or not datasets_in_order:
@@ -1689,7 +1697,7 @@ class ScatterPlotApp(QMainWindow):
         if np.any(mask_good):
             ax.scatter(x[mask_good], y[mask_good],
                        marker=good_marker, s=marker_s, color=color, zorder=3,
-                       label=label)
+                       label=label, alpha=getattr(dataset, 'line_alpha', 1.0))
             label_shown = True
 
         if np.any(mask_poor):
@@ -2586,6 +2594,7 @@ class ScatterPlotApp(QMainWindow):
             dataset.marker_size = settings['marker_size']
             dataset.line_style = settings['line_style']
             dataset.line_width = settings['line_width']
+            dataset.line_alpha = settings['line_alpha']
             dataset.show_errorbars = settings['show_errorbars']
             dataset.errorbar_style = settings['errorbar_style']
             dataset.errorbar_capsize = settings['errorbar_capsize']
@@ -2657,13 +2666,21 @@ class ScatterPlotApp(QMainWindow):
             if 'panel_ids' in settings:
                 group.panel_ids = settings['panel_ids']
 
+            # Palette ändern: Kurvenfarben neu aus der Palette vergeben.
+            # Ohne Änderung bleiben die vorhandenen Einzelfarben erhalten.
+            scheme = settings.get('group_color_scheme')
+            if scheme is not None:
+                group.color_scheme = scheme or None
+                for dataset in group.datasets:
+                    dataset.color = None
+
             # Kurveneinstellungen auf ALLE Datasets in der Gruppe anwenden
             for dataset in group.datasets:
-                dataset.color = settings['color']
                 dataset.marker_style = settings['marker_style']
                 dataset.marker_size = settings['marker_size']
                 dataset.line_style = settings['line_style']
                 dataset.line_width = settings['line_width']
+                dataset.line_alpha = settings['line_alpha']
                 dataset.show_errorbars = settings['show_errorbars']
                 dataset.errorbar_style = settings['errorbar_style']
                 dataset.errorbar_capsize = settings['errorbar_capsize']
@@ -3162,15 +3179,8 @@ class ScatterPlotApp(QMainWindow):
         self.color_scheme_combo.addItems(self.config.get_sorted_scheme_names())
         self.update_plot()
 
-    def show_legend_settings(self):
-        """Zeigt Legenden-Einstellungen Dialog"""
-        dialog = LegendSettingsDialog(self, self.legend_settings)
-        if dialog.exec():
-            self.legend_settings = dialog.get_settings()
-            self.update_plot()
-
     def show_legend_editor(self):
-        """Zeigt erweiterten Legenden-Editor Dialog (v7.0 - konsolidiert alle Legendeneinstellungen)"""
+        """Legenden-Editor (v7.0; v8.1.1: Änderungen erst bei OK, nichts geht verloren)"""
         dialog = LegendEditorDialog(
             self,
             self.groups,
@@ -3179,15 +3189,10 @@ class ScatterPlotApp(QMainWindow):
             self.font_settings
         )
         if dialog.exec():
-            # Die Änderungen wurden direkt an den Objekten vorgenommen
-            # Reihenfolge aktualisieren (falls geändert)
-            new_order = dialog.get_legend_order()
-            self.apply_legend_order(new_order)
-            # Legendeneinstellungen aktualisieren
+            dialog.apply_entry_changes()
+            self.apply_legend_order(*dialog.get_order())
             self.legend_settings.update(dialog.get_legend_settings())
-            # Schriftart-Einstellungen aktualisieren
-            font_updates = dialog.get_font_settings()
-            self.font_settings.update(font_updates)
+            self.font_settings.update(dialog.get_font_settings())
             self.update_plot()
             self.rebuild_tree()
 
@@ -3206,65 +3211,28 @@ class ScatterPlotApp(QMainWindow):
                     panel.title = text
             self.update_plot()
 
-    def apply_legend_order(self, legend_order):
-        """Wendet die neue Legendenreihenfolge auf die Datenstrukturen an (v5.7)"""
-        # Gruppen und Datasets neu organisieren basierend auf der Legendenreihenfolge
-        new_groups = []
-        new_unassigned = []
+    def apply_legend_order(self, group_order, dataset_orders, unassigned_order):
+        """Übernimmt die Reihenfolge aus dem Legenden-Editor (v8.1.1).
 
-        # Sammle alle Gruppen aus der neuen Reihenfolge
-        seen_groups = set()
-        seen_datasets = set()
+        Sortiert nur um – Gruppen/Datensätze, die nicht in den Listen vorkommen,
+        bleiben in ihrer bisherigen Reihenfolge am Ende erhalten.
 
-        for item_data in legend_order:
-            item_type = item_data[0]
-            obj = item_data[1]
+        Args:
+            group_order: Gruppen in neuer Reihenfolge
+            dataset_orders: dict id(group) → Datensätze der Gruppe in neuer Reihenfolge
+            unassigned_order: nicht zugeordnete Datensätze in neuer Reihenfolge
+        """
+        def reordered(current, wanted):
+            ids = {id(o) for o in current}
+            head = [o for o in wanted if id(o) in ids]
+            head_ids = {id(o) for o in head}
+            return head + [o for o in current if id(o) not in head_ids]
 
-            if item_type == 'group':
-                if obj not in seen_groups:
-                    seen_groups.add(obj)
-                    new_groups.append(obj)
-            elif item_type == 'dataset':
-                # Dataset aus item_data[2] (parent group) oder None
-                parent_group = item_data[2] if len(item_data) > 2 else None
-                seen_datasets.add(obj)
-
-                if parent_group:
-                    # Dataset gehört zu einer Gruppe
-                    if parent_group not in seen_groups:
-                        seen_groups.add(parent_group)
-                        new_groups.append(parent_group)
-                else:
-                    # Unassigned dataset
-                    if obj not in new_unassigned:
-                        new_unassigned.append(obj)
-
-        # Jetzt die Gruppen-Inhalte neu ordnen
-        for item_data in legend_order:
-            item_type = item_data[0]
-
-            if item_type == 'dataset':
-                obj = item_data[1]
-                parent_group = item_data[2] if len(item_data) > 2 else None
-
-                if parent_group and parent_group in new_groups:
-                    # Stelle sicher, dass das Dataset in der richtigen Gruppe ist
-                    if obj not in parent_group.datasets:
-                        # Dataset aus alter Position entfernen
-                        for group in self.groups:
-                            if obj in group.datasets:
-                                group.datasets.remove(obj)
-                        if obj in self.unassigned_datasets:
-                            self.unassigned_datasets.remove(obj)
-
-                        # Zu neuer Gruppe hinzufügen
-                        parent_group.datasets.append(obj)
-
-        # Aktualisiere die Hauptlisten
-        self.groups = new_groups
-        self.unassigned_datasets = new_unassigned
-
-        print(f"✓ Legendenreihenfolge angewendet: {len(self.groups)} Gruppen, {len(self.unassigned_datasets)} unassigned")
+        self.groups = reordered(self.groups, group_order)
+        for group in self.groups:
+            if id(group) in dataset_orders:
+                group.datasets[:] = reordered(group.datasets, dataset_orders[id(group)])
+        self.unassigned_datasets[:] = reordered(self.unassigned_datasets, unassigned_order)
 
     def show_grid_settings(self):
         """Zeigt Grid- und Tick-Einstellungen Dialog"""

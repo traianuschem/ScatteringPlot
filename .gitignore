@@ -38,3 +38,6 @@ Thumbs.db
 
 # Session files
 *.session.json
+
+#Source and lit files
+0_Sources/

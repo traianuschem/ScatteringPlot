@@ -16,6 +16,48 @@
   |I_cross| ≤ √(I_N·I_A) und c = I_cross / √(I_N·I_A) mit |c| ≤ 1. Bereits als abgeleitete
   Datensätze übernommene Korrelationskurven sind um den Faktor 2 zu klein und müssen neu
   berechnet werden.
+- **Dialoge auf kleinen Bildschirmen:** Achsen-, Titel-, Grid- und Legenden-Dialog haben
+  einen scrollbaren Inhalt (Buttons bleiben sichtbar); Startgrößen werden auf den
+  verfügbaren Bildschirm begrenzt (`dialogs/dialog_utils.py`).
+- **Linien-Transparenz:** Neues Feld „Deckkraft“ im Kurven-/Gruppen-/Stil-Vorlagen-Dialog
+  (`DataSet.line_alpha`, sessionfest). Wirkt auf Linie und Marker (auch in der Legende);
+  die Fehlerbalken-Transparenz bleibt getrennt einstellbar. Hinweis: Im Stil „Balken“
+  wirkte die Fehlerbalken-Transparenz bisher auf die gesamte Kurve — jetzt nur noch auf
+  Balken und Caps.
+- **Gruppe bearbeiten:** Statt einer Einzelfarbe (die bei jedem Bestätigen alle
+  individuellen Kurvenfarben überschrieb) gibt es eine Farbpaletten-Auswahl. Standard
+  „Unverändert“ lässt die Kurvenfarben unangetastet.
+- **Panel-Layout:** Zellen lassen sich im Vorschau-Grid markieren und per „Zellen
+  verbinden“ zu einem Panel zusammenfassen (z. B. Zeile 1 über die ganze Breite, Zeile 2
+  ein Panel je Spalte); „Verbindung lösen“ setzt ein Panel auf eine Zelle zurück.
+  Komplett überdeckte Panels werden deaktiviert, nicht gelöscht.
+
+#### Legenden-Editor überarbeitet
+
+- **Datenverlust behoben:** OK im Legenden-Editor entfernte ausgeblendete/leere Gruppen
+  und aus der Legende genommene, nicht zugeordnete Datensätze aus der Sitzung.
+  `apply_legend_order` sortiert jetzt nur noch um.
+- **Legenden-Sichtbarkeit getrennt von der Kurve:** Neues Attribut
+  `DataSet.legend_visible` (sessionfest). Bisher blendete „In Legende anzeigen“ die ganze
+  Kurve aus (`show_in_legend` ist die Kurven-Checkbox im Datenbaum).
+- **Alle Einträge sichtbar:** Der Editor zeigt einen Baum aus Gruppen und Datensätzen mit
+  Farbfeld; ausgeblendete Einträge bleiben bearbeitbar, ausgeblendete Kurven sind grau.
+- **Umsortieren funktioniert:** Gruppen untereinander und Datensätze innerhalb ihrer Gruppe
+  (die Reihenfolge innerhalb von Gruppen wurde bisher ignoriert).
+- **Abbrechen verwirft Änderungen** – übernommen wird erst mit OK.
+- **Vorschau mit Matplotlib** statt HTML-Näherung, inkl. Fehlermeldung bei ungültiger Formel.
+- **Toolbar kontextsensitiv:** Symbole/Hoch-/Tiefstellung werden außerhalb von Formeln
+  als `$…$` eingefügt (vorher landete z. B. `\mathbf{…}` wörtlich im Plot).
+- **„Alle Einträge fett/kursiv“** wirkt jetzt tatsächlich (wurde nie angewendet).
+  Schrift-Optionen sind in den Tab „Darstellung & Schrift“ gewandert.
+- Toter `LegendSettingsDialog` entfernt; fest kodierte deutsche Texte übersetzt.
+
+#### Chemische Formeln und LaTeX in allen Beschriftungen
+
+- **`\ce{…}`** (Teilmenge von LaTeX-mhchem) in Legende, Achsentiteln, Titeln und
+  Annotationen: `\ce{H2SO4}`, `\ce{SO4^2-}`, `\ce{Fe3+}`, `\ce{CuSO4*5H2O}`,
+  `\ce{2H2 + O2 -> 2H2O}`, `\ce{A <=> B}`; auch innerhalb von `$…$` nutzbar.
+- **`*` in Formeln** (z. B. `$a*b$`) wird nicht mehr als Kursiv-Markdown umgeschrieben.
 
 ## Version 8.1.0 — ScatterForge Plot (MINOR RELEASE)
 

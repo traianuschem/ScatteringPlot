@@ -15,7 +15,7 @@ Der Dialog arbeitet auf einer Kopie des Layouts; OK ist nur bei gültigem Layout
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox, QLabel, QLineEdit,
     QComboBox, QSpinBox, QCheckBox, QPushButton, QDialogButtonBox, QTableWidget,
-    QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu, QMessageBox
+    QTableWidgetItem, QTableWidgetSelectionRange, QAbstractItemView, QHeaderView, QMenu, QMessageBox
 )
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtCore import Qt
@@ -23,6 +23,7 @@ from PySide6.QtCore import Qt
 from core.panel_types import PANEL_TYPE_ORDER
 from core.plot_layout import MAIN_ID, LEGEND_MODES
 from i18n import tr
+from dialogs.dialog_utils import fit_to_screen
 
 # Hintergrundfarben der Panels in der Grid-Vorschau
 _PREVIEW_COLORS = ['#3d6a9e', '#5b8c5a', '#9e6b3d', '#7b5ea7', '#3d8f8f', '#a14f5d', '#8a8a3d']
@@ -34,10 +35,11 @@ class PlotLayoutDialog(QDialog):
     def __init__(self, parent, layout, select_panel_id=None):
         super().__init__(parent)
         self.setWindowTitle(tr("layout_dialog.title"))
-        self.resize(900, 560)
+        fit_to_screen(self, 900, 560)
         self.layout_model = layout.copy()
         self._current_id = select_panel_id if self.layout_model.get(select_panel_id) else MAIN_ID
         self._loading = False
+        self._sel_rect = None   # markierter Zellbereich (r0, c0, r1, c1) der Vorschau
 
         root = QVBoxLayout(self)
         body = QHBoxLayout()
@@ -92,10 +94,11 @@ class PlotLayoutDialog(QDialog):
 
         self.preview = QTableWidget()
         self.preview.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.preview.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.preview.setSelectionMode(QAbstractItemView.ContiguousSelection)
         self.preview.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.preview.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.preview.cellClicked.connect(self._on_cell_clicked)
+        self.preview.itemSelectionChanged.connect(self._on_selection_changed)
         self.preview.setMinimumHeight(220)
         grid.addWidget(self.preview, 3, 0, 1, 4)
 
@@ -110,6 +113,17 @@ class PlotLayoutDialog(QDialog):
         self.remove_btn.clicked.connect(self._remove_panel)
         buttons.addWidget(self.remove_btn)
         grid.addLayout(buttons, 4, 0, 1, 4)
+
+        merge_buttons = QHBoxLayout()
+        self.merge_btn = QPushButton(tr("layout_dialog.merge_cells"))
+        self.merge_btn.setToolTip(tr("layout_dialog.merge_cells_tooltip"))
+        self.merge_btn.clicked.connect(self._merge_cells)
+        merge_buttons.addWidget(self.merge_btn)
+        self.split_btn = QPushButton(tr("layout_dialog.split_cells"))
+        self.split_btn.setToolTip(tr("layout_dialog.split_cells_tooltip"))
+        self.split_btn.clicked.connect(self._split_cells)
+        merge_buttons.addWidget(self.split_btn)
+        grid.addLayout(merge_buttons, 5, 0, 1, 4)
         return group
 
     def _build_panel_group(self):
@@ -327,7 +341,75 @@ class PlotLayoutDialog(QDialog):
         self._load_panel()
         self._refresh()
 
+    def _on_selection_changed(self):
+        if self._loading:
+            return
+        ranges = self.preview.selectedRanges()
+        if ranges:
+            r = ranges[0]
+            self._sel_rect = (r.topRow(), r.leftColumn(), r.bottomRow(), r.rightColumn())
+        else:
+            self._sel_rect = None
+        self._update_merge_buttons()
+
+    def _selection_is_multi(self):
+        rect = self._sel_rect
+        return rect is not None and (rect[2] > rect[0] or rect[3] > rect[1])
+
+    def _update_merge_buttons(self):
+        self.merge_btn.setEnabled(self._selection_is_multi())
+        panel = self._current()
+        self.split_btn.setEnabled(panel.rowspan > 1 or panel.colspan > 1)
+
+    def _merge_cells(self):
+        """Verbindet den markierten Zellbereich zu einem Panel.
+
+        Ziel ist das Hauptpanel bzw. das Panel in der linken oberen Zelle, sofern es
+        komplett im Bereich liegt; gibt es keins, wird ein neues Panel angelegt.
+        Weitere Panels, die komplett im Bereich liegen, werden deaktiviert (ihre
+        Einstellungen bleiben erhalten); teilweise überlappende Panels meldet die
+        Validierung.
+        """
+        if not self._selection_is_multi():
+            return
+        r0, c0, r1, c1 = self._sel_rect
+        lm = self.layout_model
+        rect_cells = {(r, c) for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)}
+        inside = [p for p in lm.panels if (p.enabled or p.is_main) and p.cells() <= rect_cells]
+
+        target = next((p for p in inside if p.is_main), None)
+        if target is None:
+            target = next((p for p in inside if (r0, c0) in p.cells()), None)
+        if target is None and inside:
+            target = inside[0]
+        if target is None:
+            target = lm.add_panel('Log-Log', row=r0, col=c0, rowspan=r1 - r0 + 1,
+                                  colspan=c1 - c0 + 1)
+        target.row, target.col = r0, c0
+        target.rowspan, target.colspan = r1 - r0 + 1, c1 - c0 + 1
+
+        for p in inside:
+            if p is target:
+                continue
+            p.enabled = False
+            for other in lm.panels:
+                if other.share_x_with == p.id:
+                    other.share_x_with = None
+        self._current_id = target.id
+        self._load_grid()
+        self._load_panel()
+        self._refresh()
+
+    def _split_cells(self):
+        """Setzt das gewählte Panel auf eine einzelne Zelle zurück."""
+        panel = self._current()
+        panel.rowspan = panel.colspan = 1
+        self._load_panel()
+        self._refresh()
+
     def _on_cell_clicked(self, row, col):
+        if self._selection_is_multi():
+            return  # Bereichsauswahl zum Verbinden, Panel-Auswahl nicht ändern
         for p in self.layout_model.panels:
             if (p.enabled or p.is_main) and (row, col) in p.cells():
                 self._current_id = p.id
@@ -419,6 +501,7 @@ class PlotLayoutDialog(QDialog):
 
     def _refresh(self):
         lm = self.layout_model
+        self._loading = True   # Selektionsänderungen durch das Neuaufbauen ignorieren
         self.preview.clearSpans()
         self.preview.clear()
         self.preview.setRowCount(lm.rows)
@@ -452,6 +535,15 @@ class PlotLayoutDialog(QDialog):
             item.setBackground(QBrush(color))
             if panel.rowspan > 1 or panel.colspan > 1:
                 self.preview.setSpan(panel.row, panel.col, panel.rowspan, panel.colspan)
+
+        rect = self._sel_rect
+        if rect is not None and rect[2] < lm.rows and rect[3] < lm.cols:
+            self.preview.setRangeSelected(
+                QTableWidgetSelectionRange(rect[0], rect[1], rect[2], rect[3]), True)
+        else:
+            self._sel_rect = None
+        self._loading = False
+        self._update_merge_buttons()
 
         disabled = [p.name for p in lm.panels if not (p.enabled or p.is_main)]
         errors = lm.validate()

@@ -1,0 +1,10 @@
+- Ploteinstellungsdialog zu lang, wird auf kleinem bildschirm nicht vollständig dargestellt
+- Linientransparenz lässt sich nicht einstellen
+- Gruppe bearbeiten -> Farbpalettenauswahl statt einzel Farbe, sonst wird permanent die Farbe zurückgesetzt
+- Layout subplots: Möglichkeit zellen zu verbinden um z.B. ein Plot zu machen mit Zeile 1 ein plot über gesamte breite und Zeile 2 je ein plot pro spalte
+
+
+Verbesserungen und Weiterentwicklung
+
+- Verbesserung des Legenden dialogs -> Ideen fehlen
+- Einbindung eines lokalen llm für die natürliche Sprachsteuerung?

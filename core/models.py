@@ -47,8 +47,12 @@ class DataSet:
         self.marker_style = None
         self.color = None
         self.line_width = 2
+        self.line_alpha = 1.0  # Deckkraft von Linie/Marker (v8.1.1)
         self.marker_size = 4
+        # show_in_legend steuert (historisch benannt) die Sichtbarkeit der KURVE (Baum-Checkbox);
+        # legend_visible nur den Legendeneintrag (v8.1.1)
         self.show_in_legend = True
+        self.legend_visible = True
         self.legend_bold = False
         self.legend_italic = False
 
@@ -250,6 +254,7 @@ class DataSet:
             self.line_style = style.get('line_style')
             self.marker_style = style.get('marker_style')
             self.line_width = style.get('line_width', 2)
+            self.line_alpha = style.get('line_alpha', 1.0)
             self.marker_size = style.get('marker_size', 4)
             # Fehlerbalken-Einstellungen (v6.0, erweitert v7.3.1)
             if 'show_errorbars' in style:
@@ -297,8 +302,10 @@ class DataSet:
             'marker_style': self.marker_style,
             'color': self.color,
             'line_width': self.line_width,
+            'line_alpha': self.line_alpha,
             'marker_size': self.marker_size,
             'show_in_legend': self.show_in_legend,
+            'legend_visible': self.legend_visible,
             'legend_bold': self.legend_bold,
             'legend_italic': self.legend_italic,
             'show_errorbars': self.show_errorbars,
@@ -340,8 +347,10 @@ class DataSet:
         ds.marker_style = data.get('marker_style')
         ds.color = data.get('color')
         ds.line_width = data.get('line_width', 2)
+        ds.line_alpha = data.get('line_alpha', 1.0)
         ds.marker_size = data.get('marker_size', 4)
         ds.show_in_legend = data.get('show_in_legend', True)
+        ds.legend_visible = data.get('legend_visible', True)
         ds.legend_bold = data.get('legend_bold', False)
         ds.legend_italic = data.get('legend_italic', False)
         ds.show_errorbars = data.get('show_errorbars', True)

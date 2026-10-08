@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 from i18n import tr
+from dialogs.dialog_utils import fit_to_screen, scrollable_layout
 
 
 class TitleEditorDialog(QDialog):
@@ -26,7 +27,7 @@ class TitleEditorDialog(QDialog):
     def __init__(self, parent, title_settings=None, panels=None):
         super().__init__(parent)
         self.setWindowTitle(tr("title_editor.title"))
-        self.resize(550, 560)
+        fit_to_screen(self, 550, 560)
 
         # Title settings initialisieren
         if title_settings is None:
@@ -49,7 +50,7 @@ class TitleEditorDialog(QDialog):
 
     def setup_ui(self):
         """UI aufbauen"""
-        layout = QVBoxLayout(self)
+        layout, outer_layout = scrollable_layout(self)
 
         # Titel aktivieren/deaktivieren
         self.enabled_check = QCheckBox(tr("title_editor.show_title"))
@@ -179,7 +180,7 @@ class TitleEditorDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        outer_layout.addWidget(buttons)
 
         # Initial state
         self.on_enabled_changed()

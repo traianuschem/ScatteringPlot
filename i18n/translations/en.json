@@ -437,39 +437,41 @@
     "show_frame": "Show Frame",
     "shadow": "Shadow",
     "rounded_corners": "Rounded Corners",
-    "reverse_order": "Reverse Order (stacked curves)"
+    "reverse_order": "Reverse Order (stacked curves)",
+    "reverse_order_tooltip": "Reverses the order of the legend entries – useful for stacked curves (top curve = top entry)."
   },
 
   "legend_editor": {
     "title": "Legend Editor",
-    "info": "Edit legend entries, settings, and fonts. Use the toolbar for quick LaTeX formatting.",
-
+    "info": "Order, visibility and labels of the legend entries. Changes are applied on OK.",
     "tabs": {
-      "entries": "Edit Entries",
-      "settings": "Legend Settings",
-      "font": "Font"
+      "entries": "Entries",
+      "settings": "Appearance & Font"
     },
-
     "entries": {
-      "title": "Legend Entries (in display order)",
+      "title": "Entries (in legend order)",
+      "checkbox_hint": "Checked = show entry in the legend. The curve itself stays visible; grey = curve is hidden in the data tree.",
       "move_up": "↑ Move Up",
       "move_down": "↓ Move Down",
       "edit_entry": "Edit Entry",
-      "bold": "Bold (\\mathbf{...})",
-      "italic": "Italic (\\mathit{...})",
-      "subscript": "Subscript (_{...})",
-      "superscript": "Superscript (^{...})",
-      "display_name": "Display Name:",
-      "latex_help": "LaTeX/MathText Syntax Help",
-      "preview": "Preview:",
-      "show_in_legend": "Show in Legend",
-      "formatting": "Formatting:",
-      "placeholder": "Enter a name..."
+      "bold": "Bold (**…** in text, \\mathbf{…} in formulas)",
+      "italic": "Italic (*…* in text, \\mathit{…} in formulas)",
+      "subscript": "Subscript (_{…})",
+      "superscript": "Superscript (^{…})",
+      "chem": "Chemical formula \\ce{…}, e.g. \\ce{SO4^2-}",
+      "display_name": "Display name (text, $LaTeX$ and \\ce{formulas}):",
+      "latex_help": "Syntax Help",
+      "preview": "Preview (as in the plot):",
+      "preview_error": "Formula cannot be rendered: {error}",
+      "curve_hidden": "curve hidden",
+      "curve_hidden_tooltip": "The curve is hidden in the data tree and therefore appears neither in the plot nor in the legend.",
+      "placeholder": "Enter a name …"
     },
-
     "font": {
       "title": "Legend Font",
-      "size": "Font Size:"
+      "size": "Font Size:",
+      "all_bold": "All entries bold",
+      "all_italic": "All entries italic"
     }
   },
 
@@ -631,7 +633,11 @@
       "current": "Current Color:",
       "picker": "Color Picker...",
       "quick_selection": "Quick Selection from '{scheme}':",
-      "reset": "Reset Color (Auto)"
+      "reset": "Reset Color (Auto)",
+      "group_palette": "Group color palette:",
+      "group_palette_keep": "Unchanged (keep current curve colors)",
+      "group_palette_default": "Global palette ({scheme})",
+      "group_palette_info": "A palette automatically assigns each curve in the group its own color. For one uniform group color use the group's context menu."
     },
 
     "marker": {
@@ -661,7 +667,9 @@
       "dashed": "Dashed (--)",
       "dashdot": "Dash-Dot (-.)",
       "dotted": "Dotted (:)",
-      "width": "Line Width:"
+      "width": "Line Width:",
+      "opacity": "Opacity:",
+      "opacity_tooltip": "Opacity of line and markers (1 = opaque, 0 = invisible)"
     },
 
     "columns": {
@@ -1033,6 +1041,10 @@
   "layout_dialog": {
     "title": "Panel layout",
     "add_panel": "+ Panel",
+    "merge_cells": "Merge cells",
+    "merge_cells_tooltip": "Merge the selected cells (drag with the mouse) into one panel. Panels lying completely inside the range are disabled.",
+    "split_cells": "Unmerge",
+    "split_cells_tooltip": "Resets the selected panel to a single cell.",
     "remove_panel": "− Remove panel",
     "confirm_remove": "Remove panel '{name}'?",
     "disabled_panels": "Disabled (not drawn): {names}",

@@ -10,14 +10,156 @@ Version: 7.0
 import re
 
 
-def preprocess_mathtext(text):
+# ── Chemische Formeln: \ce{...} (Teilmenge von LaTeX-mhchem, v8.1.1) ────────────
+
+_CE_ARROWS = {
+    '<=>': r'\rightleftharpoons',
+    '<->': r'\leftrightarrow',
+    '->': r'\rightarrow',
+    '<-': r'\leftarrow',
+}
+
+
+def _read_script_group(token, i):
+    """Liest das Argument nach ^ oder _ ab Position i: {…}, Ladung (z. B. 2+, -)
+    oder ein einzelnes Zeichen. Gibt (Inhalt, neue Position) zurück."""
+    if i >= len(token):
+        return '', i
+    if token[i] == '{':
+        depth, j = 0, i
+        while j < len(token):
+            if token[j] == '{':
+                depth += 1
+            elif token[j] == '}':
+                depth -= 1
+                if depth == 0:
+                    return token[i + 1:j], j + 1
+            j += 1
+        return token[i + 1:], len(token)
+    m = re.match(r'\d*[+-]|\d+|[A-Za-z]+|.', token[i:])
+    return m.group(0), i + len(m.group(0))
+
+
+def _convert_ce_token(token):
+    """Wandelt ein Leerzeichen-freies Formel-Token um (z. B. 'Fe2+', 'SO4^2-', '2H2O')."""
+    if token in _CE_ARROWS:
+        return _CE_ARROWS[token]
+    out = []
+    i = 0
+    # Stöchiometrischer Koeffizient am Anfang bleibt normal (2H2O, 1/2O2)
+    m = re.match(r'\d+(?:[./]\d+)?', token)
+    if m:
+        out.append(m.group(0))
+        i = m.end()
+    while i < len(token):
+        ch = token[i]
+        prev = token[i - 1] if i > 0 else ''
+        if ch in '^_':
+            content, i = _read_script_group(token, i + 1)
+            out.append(f'{ch}{{{content}}}')
+        elif ch == '\\':
+            # LaTeX-Befehl unverändert übernehmen (\alpha, \cdot, …)
+            m = re.match(r'\\[A-Za-z]+|\\.', token[i:])
+            out.append(m.group(0))
+            i += len(m.group(0))
+            if i < len(token) and token[i].isalnum():
+                out.append(' ')
+        elif ch.isdigit() and (prev.isalpha() or (prev and prev in ')]')):
+            m = re.match(r'\d+', token[i:])
+            digits = m.group(0)
+            j = i + len(digits)
+            if j < len(token) and token[j] in '+-' and j == len(token) - 1:
+                # Ladung am Token-Ende: Fe2+ → Fe^{2+}
+                out.append(f'^{{{digits}{token[j]}}}')
+                i = j + 1
+            else:
+                out.append(f'_{{{digits}}}')
+                i = j
+        elif ch in '+-' and i == len(token) - 1 and (prev.isalnum() or (prev and prev in ')]')):
+            out.append(f'^{{{ch}}}')  # Na+ → Na^{+}
+            i += 1
+        elif ch in '*·':
+            out.append(r'{\cdot}')  # Hydrat: CuSO4*5H2O
+            i += 1
+        else:
+            out.append(ch)
+            i += 1
+    return ''.join(out)
+
+
+def convert_ce(formula):
+    r"""Wandelt eine mhchem-ähnliche Formel in MathText um (ohne umgebende $).
+
+    Unterstützt: Indizes (H2O), Ladungen (Na+, Fe3+, SO4^2-), explizite ^{…}/_{…},
+    Koeffizienten (2H2O), Hydrate (CuSO4*5H2O), Pfeile (->, <-, <=>, <->),
+    Zustände ((aq), (s)) und LaTeX-Befehle (\alpha).
+
+    >>> convert_ce('SO4^2-')
+    '\\mathrm{SO_{4}^{2-}}'
     """
+    tokens = formula.strip().split()
+    return r'\mathrm{' + r'\ '.join(_convert_ce_token(t) for t in tokens) + '}'
+
+
+def _find_ce(text, start=0):
+    """Findet das nächste \\ce{…} (mit verschachtelten Klammern).
+    Gibt (Anfang, Ende, Inhalt) oder None zurück."""
+    idx = text.find('\\ce{', start)
+    if idx < 0:
+        return None
+    depth = 0
+    for j in range(idx + 3, len(text)):
+        if text[j] == '{':
+            depth += 1
+        elif text[j] == '}':
+            depth -= 1
+            if depth == 0:
+                return idx, j + 1, text[idx + 4:j]
+    return None
+
+
+def expand_ce(text):
+    r"""Ersetzt alle \ce{…} durch MathText. Außerhalb von $…$ wird die Formel in
+    $…$ eingeschlossen, innerhalb einer Formel direkt eingesetzt."""
+    if not text or '\\ce{' not in text:
+        return text
+    result, pos = [], 0
+    while True:
+        found = _find_ce(text, pos)
+        if found is None:
+            break
+        start, end, content = found
+        before = text[pos:start]
+        result.append(before)
+        in_math = _count_unescaped_dollars(''.join(result)) % 2 == 1
+        converted = convert_ce(content)
+        result.append(converted if in_math else f'${converted}$')
+        pos = end
+    result.append(text[pos:])
+    return ''.join(result)
+
+
+def _count_unescaped_dollars(text):
+    return len(re.findall(r'(?<!\\)\$', text))
+
+
+def is_in_math(text, position):
+    """True, wenn `position` in `text` innerhalb eines $…$-Bereichs liegt."""
+    return _count_unescaped_dollars(text[:position]) % 2 == 1
+
+
+_MATH_SEGMENT = re.compile(r'(?<!\\)\$(?:[^$\\]|\\.)+?(?<!\\)\$')
+
+
+def preprocess_mathtext(text):
+    r"""
     Konvertiert einfache Formatierungssyntax in MathText-Format.
 
     Unterstützt:
     - **text** → Fettdruck ($\mathbf{text}$)
     - *text* → Kursiv ($\mathit{text}$)
-    - Bereits vorhandenes MathText bleibt unverändert ($...$)
+    - \\ce{H2SO4} → chemische Formel (v8.1.1)
+    - Bereits vorhandenes MathText bleibt unverändert ($...$), auch ein * darin
     - Verkettungen: **text $formula$ text**
 
     Args:
@@ -119,11 +261,23 @@ def preprocess_mathtext(text):
         result.append(text[pos:])
         return ''.join(result)
 
+    text = expand_ce(text)
+
+    # Formel-Inhalte schützen, damit * und ** darin (z. B. $a*b$) nicht als
+    # Markdown interpretiert werden; die Platzhalter bleiben $…$-Bereiche.
+    protected = []
+
+    def _protect(match):
+        protected.append(match.group(0))
+        return f'$\x00{len(protected) - 1}\x00$'
+
+    text = _MATH_SEGMENT.sub(_protect, text)
+
     # Erst ** verarbeiten, dann *
     text = process_bold_with_mathtext(text)
     text = process_italic_with_mathtext(text)
 
-    return text
+    return re.sub(r'\$\x00(\d+)\x00\$', lambda m: protected[int(m.group(1))], text)
 
 
 def format_legend_text(text, bold=False, italic=False):
@@ -222,6 +376,11 @@ def get_syntax_help_text():
 • <code>$\\pm$</code> → ± (Plus-Minus)<br>
 • <code>$\\times$</code> → × (Mal)<br>
 • <code>$\\cdot$</code> → · (Punkt)<br><br>
+
+<b>Chemische Formeln (wie LaTeX-mhchem):</b><br>
+• <code>\\ce{H2SO4}</code> → H₂SO₄ &nbsp; <code>\\ce{SO4^2-}</code> → SO₄²⁻ &nbsp; <code>\\ce{Fe3+}</code> → Fe³⁺<br>
+• <code>\\ce{CuSO4*5H2O}</code> → CuSO₄·5H₂O &nbsp; <code>\\ce{2H2 + O2 -> 2H2O}</code><br>
+• Beliebiges LaTeX/MathText in <code>$...$</code>, z. B. <code>$\\mathrm{Fe_3O_4}$</code><br><br>
 
 <b>Kombinationen:</b><br>
 • <code>**Messung** mit $\\alpha$</code><br>

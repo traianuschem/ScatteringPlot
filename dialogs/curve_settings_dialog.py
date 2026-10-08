@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from i18n import tr
+from dialogs.dialog_utils import fit_to_screen
 
 
 class CurveSettingsDialog(QDialog):
@@ -96,7 +97,7 @@ class CurveSettingsDialog(QDialog):
         else:
             self.setWindowTitle(tr("curve_settings.title", dataset=dataset.name))
 
-        self.resize(600, 700)
+        fit_to_screen(self, 600, 700)
 
         # Scrollbarer Inhalt
         scroll = QScrollArea(self)
@@ -139,8 +140,31 @@ class CurveSettingsDialog(QDialog):
             self.preset_name_edit = None
             self.preset_desc_edit = None
 
-        # ── FARBE (nicht im preset_mode) ──────────────────────────────────
-        if not preset_mode:
+        # ── FARBPALETTE (Gruppen-Bearbeitung) ─────────────────────────────
+        # Eine Einzelfarbe würde die individuellen Kurvenfarben bei jedem Bestätigen
+        # überschreiben – daher Palettenauswahl; Standard: Farben unverändert lassen.
+        self.group_palette_combo = None
+        if group is not None and not preset_mode:
+            palette_group = QGroupBox(tr("curve_settings.color.title"))
+            palette_layout = QGridLayout()
+            palette_layout.addWidget(QLabel(tr("curve_settings.color.group_palette")), 0, 0)
+            self.group_palette_combo = QComboBox()
+            self.group_palette_combo.addItem(tr("curve_settings.color.group_palette_keep"), None)
+            self.group_palette_combo.addItem(
+                tr("curve_settings.color.group_palette_default",
+                   scheme=getattr(group, 'color_scheme', None) or current_color_scheme or ''), '')
+            for scheme_name in self.color_schemes:
+                self.group_palette_combo.addItem(scheme_name, scheme_name)
+            palette_layout.addWidget(self.group_palette_combo, 0, 1)
+            palette_info = QLabel(tr("curve_settings.color.group_palette_info"))
+            palette_info.setWordWrap(True)
+            palette_info.setStyleSheet("color: #888; font-style: italic;")
+            palette_layout.addWidget(palette_info, 1, 0, 1, 2)
+            palette_group.setLayout(palette_layout)
+            layout.addWidget(palette_group)
+
+        # ── FARBE (nicht im preset_mode, nicht bei Gruppen) ───────────────
+        if not preset_mode and group is None:
             color_group = QGroupBox(tr("curve_settings.color.title"))
             color_layout = QVBoxLayout()
 
@@ -233,6 +257,15 @@ class CurveSettingsDialog(QDialog):
         self.line_width_spin.setSingleStep(0.5)
         self.line_width_spin.setValue(float(getattr(dataset, 'line_width', 2.0)))
         line_layout.addWidget(self.line_width_spin, 1, 1)
+
+        line_layout.addWidget(QLabel(tr("curve_settings.line.opacity")), 2, 0)
+        self.line_alpha_spin = QDoubleSpinBox()
+        self.line_alpha_spin.setRange(0.0, 1.0)
+        self.line_alpha_spin.setSingleStep(0.1)
+        self.line_alpha_spin.setDecimals(2)
+        self.line_alpha_spin.setValue(float(getattr(dataset, 'line_alpha', 1.0)))
+        self.line_alpha_spin.setToolTip(tr("curve_settings.line.opacity_tooltip"))
+        line_layout.addWidget(self.line_alpha_spin, 2, 1)
 
         line_group.setLayout(line_layout)
         layout.addWidget(line_group)
@@ -665,6 +698,7 @@ class CurveSettingsDialog(QDialog):
             'marker_size': self.marker_size_spin.value(),
             'line_style': self.line_combo.currentData(),
             'line_width': self.line_width_spin.value(),
+            'line_alpha': self.line_alpha_spin.value(),
             'show_errorbars': self.show_errorbars_check.isChecked(),
             'errorbar_style': self.errorbar_style_combo.currentData(),
             'errorbar_capsize': self.errorbar_capsize_spin.value(),
@@ -690,7 +724,11 @@ class CurveSettingsDialog(QDialog):
             )
         else:
             # Datensatz-spezifische Felder
-            result['color'] = self.selected_color
+            if self.group_palette_combo is not None:
+                # None = Farben unverändert; '' = globale Palette; sonst Palettenname
+                result['group_color_scheme'] = self.group_palette_combo.currentData()
+            else:
+                result['color'] = self.selected_color
             result['data_term'] = (
                 self.asaxs_term_combo.currentData()
                 if self.asaxs_term_combo is not None else ''

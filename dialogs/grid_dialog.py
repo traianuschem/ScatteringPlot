@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 from i18n import tr
+from dialogs.dialog_utils import fit_to_screen, scroll_wrap
 
 
 class GridSettingsDialog(QDialog):
@@ -20,7 +21,7 @@ class GridSettingsDialog(QDialog):
     def __init__(self, parent, grid_settings):
         super().__init__(parent)
         self.setWindowTitle(tr("grid.title"))
-        self.resize(500, 600)
+        fit_to_screen(self, 500, 600)
         self.grid_settings = grid_settings.copy()
 
         layout = QVBoxLayout(self)
@@ -32,13 +33,13 @@ class GridSettingsDialog(QDialog):
         grid_tab = QWidget()
         grid_tab_layout = QVBoxLayout(grid_tab)
         self.setup_grid_tab(grid_tab_layout)
-        tabs.addTab(grid_tab, tr("grid.tabs.grid"))
+        tabs.addTab(scroll_wrap(grid_tab), tr("grid.tabs.grid"))
 
         # Tab 2: Tick-Einstellungen
         tick_tab = QWidget()
         tick_tab_layout = QVBoxLayout(tick_tab)
         self.setup_tick_tab(tick_tab_layout)
-        tabs.addTab(tick_tab, tr("grid.tabs.ticks"))
+        tabs.addTab(scroll_wrap(tick_tab), tr("grid.tabs.ticks"))
 
         layout.addWidget(tabs)
 

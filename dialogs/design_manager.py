@@ -769,6 +769,7 @@ def _build_preset_dummy(style_name, style):
     dummy.line_style = style.get('line_style', '-')
     dummy.line_width = float(style.get('line_width', 2.0))
     dummy.marker_size = float(style.get('marker_size', 4.0))
+    dummy.line_alpha = float(style.get('line_alpha', 1.0))
     dummy.show_errorbars = style.get('show_errorbars', True)
     dummy.errorbar_style = style.get('errorbar_style', 'fill')
     dummy.errorbar_capsize = float(style.get('errorbar_capsize', 3.0))
@@ -801,6 +802,7 @@ def _open_style_preset_editor(parent, style_name, config, refresh_callback, plot
             'line_style':         settings['line_style'],
             'marker_style':       settings['marker_style'],
             'line_width':         settings['line_width'],
+            'line_alpha':         settings['line_alpha'],
             'marker_size':        settings['marker_size'],
             'show_errorbars':     settings['show_errorbars'],
             'errorbar_style':     settings['errorbar_style'],

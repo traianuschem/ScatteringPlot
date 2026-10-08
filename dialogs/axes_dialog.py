@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from utils.mathtext_formatter import get_syntax_help_text, preprocess_mathtext
 from i18n import tr
+from dialogs.dialog_utils import fit_to_screen, scrollable_layout
 
 
 class AxesSettingsDialog(QDialog):
@@ -20,7 +21,7 @@ class AxesSettingsDialog(QDialog):
                  font_settings=None, panels=None):
         super().__init__(parent)
         self.setWindowTitle(tr("axes.title"))
-        self.resize(650, 900)
+        fit_to_screen(self, 650, 900)
 
         # Font settings initialisieren
         if font_settings is None:
@@ -34,7 +35,7 @@ class AxesSettingsDialog(QDialog):
         self.panels = [dict(p, axis=dict(p['axis'])) for p in (panels or [])]
         self._current_panel_index = None
 
-        layout = QVBoxLayout(self)
+        layout, outer_layout = scrollable_layout(self)
 
         # Info
         info_label = QLabel(tr("axes.info"))
@@ -320,11 +321,11 @@ class AxesSettingsDialog(QDialog):
 
         layout.addStretch()
 
-        # Buttons
+        # Buttons (außerhalb des Scrollbereichs)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        outer_layout.addWidget(buttons)
 
     def reset_labels(self):
         """Setzt Labels auf Standard zurück"""

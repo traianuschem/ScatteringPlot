@@ -437,39 +437,41 @@
     "show_frame": "Rahmen anzeigen",
     "shadow": "Schatten",
     "rounded_corners": "Abgerundete Ecken",
-    "reverse_order": "Reihenfolge invertieren (gestackte Kurven)"
+    "reverse_order": "Reihenfolge invertieren (gestackte Kurven)",
+    "reverse_order_tooltip": "Kehrt die Reihenfolge der Legendeneinträge um – nützlich bei gestackten Kurven (oberste Kurve = oberster Eintrag)."
   },
 
   "legend_editor": {
     "title": "Legenden-Editor",
-    "info": "Bearbeiten Sie die Legendeneinträge, Einstellungen und Schriftarten. Verwenden Sie die Toolbar für schnelle LaTeX-Formatierung.",
-
+    "info": "Reihenfolge, Sichtbarkeit und Beschriftung der Legendeneinträge. Änderungen werden erst mit OK übernommen.",
     "tabs": {
-      "entries": "Einträge bearbeiten",
-      "settings": "Legenden-Einstellungen",
-      "font": "Schriftart"
+      "entries": "Einträge",
+      "settings": "Darstellung & Schrift"
     },
-
     "entries": {
-      "title": "Legendeneinträge (in Anzeigereihenfolge)",
+      "title": "Einträge (in Legenden-Reihenfolge)",
+      "checkbox_hint": "Häkchen = Eintrag in der Legende anzeigen. Die Kurve selbst bleibt sichtbar; grau = Kurve ist im Datenbaum ausgeblendet.",
       "move_up": "↑ Nach oben",
       "move_down": "↓ Nach unten",
       "edit_entry": "Eintrag bearbeiten",
-      "bold": "Fett (\\mathbf{...})",
-      "italic": "Kursiv (\\mathit{...})",
-      "subscript": "Subscript (_{...})",
-      "superscript": "Superscript (^{...})",
-      "display_name": "Anzeigename:",
-      "latex_help": "LaTeX/MathText Syntax-Hilfe",
-      "preview": "Vorschau:",
-      "show_in_legend": "In Legende anzeigen",
-      "formatting": "Formatierung:",
-      "placeholder": "Geben Sie einen Namen ein..."
+      "bold": "Fett (**…** im Text, \\mathbf{…} in Formeln)",
+      "italic": "Kursiv (*…* im Text, \\mathit{…} in Formeln)",
+      "subscript": "Tiefgestellt (_{…})",
+      "superscript": "Hochgestellt (^{…})",
+      "chem": "Chemische Formel \\ce{…}, z. B. \\ce{SO4^2-}",
+      "display_name": "Anzeigename (Text, $LaTeX$ und \\ce{Formeln}):",
+      "latex_help": "Syntax-Hilfe",
+      "preview": "Vorschau (wie im Plot):",
+      "preview_error": "Formel kann nicht dargestellt werden: {error}",
+      "curve_hidden": "Kurve ausgeblendet",
+      "curve_hidden_tooltip": "Die Kurve ist im Datenbaum ausgeblendet und erscheint daher weder im Plot noch in der Legende.",
+      "placeholder": "Namen eingeben …"
     },
-
     "font": {
-      "title": "Legenden-Schriftart",
-      "size": "Schriftgröße:"
+      "title": "Legenden-Schrift",
+      "size": "Schriftgröße:",
+      "all_bold": "Alle Einträge fett",
+      "all_italic": "Alle Einträge kursiv"
     }
   },
 
@@ -631,7 +633,11 @@
       "current": "Aktuelle Farbe:",
       "picker": "Farbwähler...",
       "quick_selection": "Schnellauswahl aus '{scheme}':",
-      "reset": "Farbe zurücksetzen (Auto)"
+      "reset": "Farbe zurücksetzen (Auto)",
+      "group_palette": "Farbpalette der Gruppe:",
+      "group_palette_keep": "Unverändert (aktuelle Kurvenfarben behalten)",
+      "group_palette_default": "Globale Palette ({scheme})",
+      "group_palette_info": "Eine Palette weist jeder Kurve der Gruppe automatisch eine eigene Farbe zu. Für eine einheitliche Gruppenfarbe das Kontextmenü der Gruppe verwenden."
     },
 
     "marker": {
@@ -661,7 +667,9 @@
       "dashed": "Gestrichelt (--)",
       "dashdot": "Strich-Punkt (-.)",
       "dotted": "Gepunktet (:)",
-      "width": "Linien-Breite:"
+      "width": "Linien-Breite:",
+      "opacity": "Deckkraft:",
+      "opacity_tooltip": "Deckkraft von Linie und Markern (1 = deckend, 0 = unsichtbar)"
     },
 
     "columns": {
@@ -1033,6 +1041,10 @@
   "layout_dialog": {
     "title": "Panel-Layout",
     "add_panel": "+ Panel",
+    "merge_cells": "Zellen verbinden",
+    "merge_cells_tooltip": "Markierte Zellen (Auswahl mit der Maus aufziehen) zu einem Panel verbinden. Panels, die komplett im Bereich liegen, werden deaktiviert.",
+    "split_cells": "Verbindung lösen",
+    "split_cells_tooltip": "Setzt das gewählte Panel auf eine einzelne Zelle zurück.",
     "remove_panel": "− Panel entfernen",
     "confirm_remove": "Panel '{name}' entfernen?",
     "disabled_panels": "Deaktiviert (nicht gezeichnet): {names}",
